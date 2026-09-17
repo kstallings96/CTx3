@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CTx3</title>
+<meta name="description" content="Three computational-thinking tools for one class session.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=Karla:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" id="brand" title="Five taps exports the local event buffer">
+    <b>Day Three Station</b><span>CT tools pilot · demo</span>
+  </div>
+  <span class="mode" id="modepill"><span class="dot"></span><span id="modetext">checking…</span></span>
+  <div class="daysel">
+    <label for="daypick">day</label>
+    <select id="daypick"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select>
+  </div>
+  <span class="pc" id="pcchip">KTQ47</span>
+  <button class="tbtn" id="resetcode">Reset code</button>
+  <button class="tbtn" id="hubbtn">Hub</button>
+</header>
+
+<div class="shell">
+  <main class="stage" id="stage"></main>
+  <aside class="rail">
+    <section class="card">
+      <div class="railhead"><h4>Event stream</h4><span class="count" id="evcount">0 events</span></div>
+      <div class="stream" id="stream"></div>
+    </section>
+    <section class="card">
+      <div class="railhead"><h4>Derived on last attempt</h4></div>
+      <div class="derived" id="derived"><span class="k">no attempt yet</span><span class="v">—</span></div>
+    </section>
+    <section class="card">
+      <div class="railhead"><h4>Facilitator</h4></div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="toggle" id="offbtn" aria-pressed="false">
+          <span class="switch" id="offsw" aria-pressed="false"></span>
+          <span>Force offline stand-in</span>
+        </button>
+        <p class="note" id="modenote">—</p>
+        <hr class="hr">
+        <button class="btn ghost sm" id="exportbtn">Show JSON export</button>
+        <textarea class="jsonbox" id="jsonbox" readonly hidden></textarea>
+        <p class="note">The real build downloads this file. Downloads are blocked inside the artifact sandbox, so here it is shown for copying.</p>
+        <hr class="hr">
+        <button class="btn ghost sm" id="clearbtn">Clear local buffer</button>
+      </div>
+    </section>
+  </aside>
+</div>
+<p class="footer">Demo build. Events buffer to <span class="kbd">localStorage</span> exactly as the real build does before sync; nothing leaves this page except model calls. When a live model is available the page calls it on the viewer's own Claude account with caching off, so repeats really are repeats. Otherwise every reply comes from a deterministic stand-in and is labelled as one. Authored to <span class="kbd">SPEC-find-the-rule.md</span>, <span class="kbd">SPEC-prompt-golf.md</span>, <span class="kbd">SPEC-literal-genie.md</span> and <span class="kbd">EVENTS.md</span>.</p>
+<script type="module" src="/src/app.js"></script>
+</body>
+</html>
