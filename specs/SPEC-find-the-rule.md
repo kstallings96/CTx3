@@ -28,7 +28,40 @@ features that chase abstraction or debugging — other tools carry those.
 The 12-probe cap is the mechanism. Unlimited probing produces chatter;
 scarcity produces deliberate queries, which is the behaviour being measured.
 
-## The probe builder — Level 1
+## Support phases — see DEVELOPMENTAL-RANGE.md
+
+**This replaces the previous level/scaffold arrangement, which was
+confounded.** The old spec put the slot palette at Levels 1–2 and free text at
+Level 3, varying support and rule difficulty together — a failure at Level 3
+could be the harder rule or the missing scaffold, with no way to tell.
+
+Instead: **two rules of the same tier**, run back to back.
+
+**High support:** slot palette for probe construction, hypothesis field
+visible. `scaffoldsActive: ["slotPalette","hypothesisField"]`.
+
+**Low support:** free text probes, no hypothesis field, a *different rule of
+the same tier*. `scaffoldsActive: []`.
+
+Rule difficulty held constant, support varied. High first, always.
+
+Step sequence, emitted as `stepReached`:
+
+1. Sends probes.
+2. Varies exactly one feature from the previous probe, deliberately.
+3. States a hypothesis before committing.
+4. Designs a probe that would *disconfirm* the current hypothesis.
+5. Commits a rule that correctly predicts held-out cases.
+
+Step 4 is computable under the slot palette — a probe is disconfirming if its
+slot values are ones the stated hypothesis predicts should behave differently.
+In free text it needs hand-coding; flag those with `stepScoringExact: false`.
+
+Note that step 3 is unavailable in the low-support phase by construction,
+since the hypothesis field is gone. That is intended: the drop it produces is
+part of what the range is measuring. Do not "fix" it by keeping the field.
+
+## The probe builder — high support phase
 
 Detecting whether a free-text probe varies exactly one feature from the
 previous probe is not reliably automatable. So constrain the interface at
@@ -50,17 +83,27 @@ hand-coding on a sample.
 
 ## The rules ladder
 
-Three levels, increasing in relational complexity.
+Three tiers, increasing in relational complexity. **Each student gets two
+rules from the same tier** — one in each support phase.
 
-**Level 1 — lexical.** The bot never uses the letter E. Surface-detectable,
-confirmable in two or three probes, builds confidence.
+**Lexical.** Never uses the letter E. Exactly seven words. Never says "the".
+Surface-detectable, confirmable in two or three probes, builds confidence.
 
-**Level 2 — categorical.** The bot always works an animal into its answer.
-Requires noticing a pattern across responses rather than within one.
+**Categorical.** Always works an animal in. Always includes exactly one
+number. Requires noticing a pattern across responses rather than within one.
 
-**Level 3 — conditional.** The bot only refuses when asked the same thing
-twice. This is where systematic probers separate from guessers, because it
-cannot be found without deliberately repeating a probe.
+**Conditional.** Refuses when asked the same thing twice. Contradicts your
+last message. **This tier is a ceiling item** — relating a condition to a
+response across instances is structurally an abstract mapping, which Fischer
+places at 14–16 under optimal conditions. Predict most 13-year-olds fail it
+unsupported. Use it in the high-support phase or not at all, and do not treat
+failure there as a finding about the student.
+
+Cut the rule bank to **four rules total** for the pilot — two lexical, two
+categorical — so that with n=14 you get several students per rule and can say
+something about how strategy varies at fixed difficulty. Eleven rules across
+fourteen students confounds every cross-student comparison with rule
+difficulty. Keep the rest banked for spring.
 
 Author each rule as a system prompt plus a deterministic post-check, so the
 bot cannot accidentally violate its own rule. If the model output violates

@@ -16,6 +16,36 @@ lower wins. Opens with a round fixing someone else's broken prompt.
 **Abstraction**, via minimality pressure. **Debugging**, via the clinic round.
 Both are instrumented; see the outcomes section for which signal serves which.
 
+## Support phases — see DEVELOPMENTAL-RANGE.md
+
+This tool measures developmental range, not gain. Two phases, high support
+first, on comparable targets.
+
+**High support (round 3):** both winning prompts from rounds 1 and 2 remain
+visible on screen throughout. `supportCondition: high`,
+`scaffoldsActive: ["priorPromptsVisible"]`.
+
+**Low support (round 4):** a fourth target, prior prompts hidden, no
+comparison material. `supportCondition: low`, `scaffoldsActive: []`.
+
+Round 4 is new and it is the measurement. Do not cut it for time — cut the
+30-minute expansion instead, which is above ceiling anyway (see below).
+
+The tool emits `stepReached` on every `attempt_evaluated`, scored by a pure
+function implementing this sequence:
+
+1. Produces any prompt that passes the target.
+2. Reduces word count on a later attempt for the same target.
+3. Reuses a structural element from an earlier winning prompt on a new target.
+4. Names a structural commonality between two winning prompts
+   (`comparison_response` coded S).
+5. Applies the named structure to a novel target unaided (round 4).
+
+**Step 4 is the abstraction measure, not the expansion round.** The 30-minute
+expansion requires coordinating two abstractions, which is an abstract mapping
+and above ceiling for most 13-year-olds. Expect near-total failure there and
+do not treat it as the outcome.
+
 ## Session shape — 15 minutes
 
 | Phase | Time | What happens |

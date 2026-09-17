@@ -1,0 +1,139 @@
+# Deploying CTx3
+
+Same Supabase + Vercel treatment as Manifest, with one addition: a serverless
+function holding the model key.
+
+The app runs fine with nothing configured — every network call becomes a no-op,
+events stay in `localStorage`, and the model half of Two Machines plays
+pre-recorded runs labelled as recordings. These steps add the backend.
+
+**I can't create accounts or log in on your behalf, so steps 1, 2, 5 and 6 are
+yours. Everything else is already wired.**
+
+---
+
+## 1. Create the Supabase project
+
+1. At <https://supabase.com/dashboard>, create a project.
+2. Pick a region near the school; save the database password somewhere safe
+   (this app never needs it).
+3. Wait for provisioning to finish.
+
+## 2. Create the tables
+
+Open **SQL Editor**, paste [`supabase/schema.sql`](supabase/schema.sql), run it.
+Safe to re-run.
+
+Then confirm RLS is actually on — the one check worth doing by hand:
+
+```sql
+select tablename, rowsecurity from pg_tables
+where schemaname = 'public' and tablename in ('sessions','events');
+```
+
+Both rows must show `rowsecurity = true`. If they don't, students can read each
+other's data.
+
+## 3. Get the keys
+
+**Project Settings → API**:
+
+- **Project URL** → `VITE_SUPABASE_URL`
+- **anon / public** key → `VITE_SUPABASE_ANON_KEY`
+
+The anon key is *meant* to be public; it ships in the client bundle and anyone
+can read it from devtools. RLS is what protects the data.
+
+> **Never** put the `service_role` key in this app, in `.env`, or in the repo.
+> It bypasses RLS completely. Use it only from your own machine when pulling
+> data for analysis.
+
+## 4. Test locally
+
+```bash
+cp .env.example .env.local   # fill in the two VITE_ values
+npm install
+npm run dev
+```
+
+Enter a roster code and play a session. In Supabase → **Table Editor** you
+should see one `sessions` row and a stream of `events` rows with `seq` starting
+at 1 and `support_condition` populated on every one.
+
+Note the `/api/complete` route does **not** run under `npm run dev` — use
+`npx vercel dev` if you want to exercise the model locally.
+
+## 5. The model key
+
+Two Machines calls a real model for its right-hand column. The key cannot ship
+in the bundle, so it goes in a Vercel environment variable with **no `VITE_`
+prefix** — anything `VITE_`-prefixed is inlined into the client and would be
+public.
+
+In the Vercel dashboard, **Settings → Environment Variables**:
+
+| Name | Value | Scope |
+|---|---|---|
+| `OPENROUTER_API_KEY` | your OpenRouter key | Production, Preview |
+| `OPENROUTER_MODEL` | e.g. `openai/gpt-4o-mini` | Production, Preview |
+| `VITE_SUPABASE_URL` | project URL | all three |
+| `VITE_SUPABASE_ANON_KEY` | anon key | all three |
+
+The `VITE_` ones are build-time, so **redeploy after adding them**.
+
+Cost is not the constraint here. A class of 14 running Two Machines is roughly
+twenty short calls for the whole period — cents, on any cheap model. Set a low
+spend cap on the OpenRouter key anyway; a stuck loop is the only real risk, and
+`api/complete.js` already limits each participant code to 40 calls a minute.
+
+## 6. Deploy
+
+Connect the GitHub repo in the Vercel dashboard (**Add New → Project → import
+`kstallings96/CTx3`**). Framework preset **Vite**; the rest is in `vercel.json`.
+Push to `main` deploys.
+
+Or from this directory:
+
+```bash
+npx vercel --prod
+```
+
+---
+
+## Study-day checklist
+
+- `https://<your-app>.vercel.app/?day=3` — the facilitator sets the day; the
+  student never chooses it
+- `?reset` on any URL clears the device for the next student, including
+  anything they had queued but unsent
+- Open Two Machines on the projector machine **before** the period and run one
+  cell, to confirm the model responds and to wake Supabase
+- Free Supabase projects pause after about a week idle and take a minute or two
+  to wake. Wake it the morning of, and **test the wake path at least once** —
+  otherwise the first student hits a dead endpoint
+- Check the top-right pill says **live model**. If it says *offline stand-in*,
+  the key is missing or wrong and Two Machines will play recordings
+
+## Pulling the data
+
+With the service_role key, from your own machine, never from the app. Starter
+queries — including the developmental-range calculation — are at the bottom of
+[`supabase/schema.sql`](supabase/schema.sql).
+
+Then recompute every derived field from the raw log, which is how the step
+sequences stay revisable:
+
+```bash
+npm run rescore -- export.json --check --csv rows.csv
+```
+
+`--check` compares what the tools stored at emit time against a fresh
+recomputation. They run the same code, so any disagreement is a real bug — a
+tool that failed to capture a raw input — not drift to shrug at.
+
+## If a device never reached the network
+
+Tap the **CTx3** header five times, or use **Show JSON export** in the
+facilitator panel. That surfaces everything the device still holds, including
+events that never flushed. Copy it out and feed it to `npm run rescore`. It is
+the last resort in the resilience chain, not the plan.

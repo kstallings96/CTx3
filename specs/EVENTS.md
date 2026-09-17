@@ -19,23 +19,42 @@ unanswerable if each tool describes student behaviour in its own vocabulary.
 4. No free-text field ever contains a student's name. If a student types
    their name into a prompt, that is data and it stays, but no field is
    *designed* to hold identity.
+5. **Every event carries `supportCondition`.** It is `high | low | na`. This
+   is not optional and not per-tool. See DEVELOPMENTAL-RANGE.md — the whole
+   measurement framework depends on being able to split any analysis by it.
 
 ## Core spine
 
-Every tool emits all of these.
+Every tool emits all of these. Every event additionally carries
+`supportCondition` and `participantCode`.
 
 ```ts
 session_start       { participantCode, tool, day, deviceId }
+phase_start         { phaseId, supportCondition, scaffoldsActive[] }
 task_start          { taskId, round }
 attempt_submitted   { attemptId, taskId, artifact, msSinceLastAttempt }
-attempt_evaluated   { attemptId, outcome, failureType }
+attempt_evaluated   { attemptId, outcome, failureType, stepReached }
 attempt_abandoned   { attemptId }
 support_used        { kind }
 comparison_shown    { itemA, itemB }
 comparison_response { text }
-task_complete       { taskId, msElapsed, attemptCount }
+facilitator_helped  { note }
+task_complete       { taskId, msElapsed, attemptCount, stepReached }
+phase_complete      { phaseId, highestStepReached }
 session_end         { reason }
 ```
+
+`scaffoldsActive` is the explicit list of supports available in this phase —
+e.g. `["counters","assist","hypothesisField"]` or `[]`. Record what was on,
+not just the condition label, because the label is an interpretation and the
+list is a fact.
+
+`facilitator_helped` exists because a facilitator leaning over during a
+low-support phase destroys the measurement. Direct intervention by another
+person is Vygotsky's ZPD, not optimal level, and its ceiling is higher.
+Facilitators are instructed not to intervene during low-support phases; when
+it happens anyway, log it so the analysis can drop that phase rather than
+silently treating contaminated data as functional level.
 
 `artifact` is whatever the student produced — prompt text, probe text, a board
 state, an instruction sequence. Store it verbatim. Truncation loses the thing
@@ -55,28 +74,39 @@ Attached to `attempt_submitted`. Computed client-side at submission.
 | `msFromFailureToNextAttempt` | time between the last `attempt_evaluated` with outcome `fail` and this submission | debugging |
 | `targetedEdit` | boolean — did the edit intersect the region implicated in the failure | debugging |
 | `consecutiveFailures` | count of failed attempts on this task since the last pass | persistence |
+| `stepReached` | highest ordinal step in this tool's sequence satisfied by this attempt | developmental range |
 
 `targetedEdit` is exact only where the fault span is known in advance, which
 means the Broken Prompt Clinic round. Elsewhere it is inferred and should be
 treated as weaker evidence. Record which it is: add `targetedEditExact:
 boolean`.
 
+`stepReached` is the field that makes range measurable. Pass/fail gives no
+range — you need an ordinal sequence. Each tool's sequence is defined in
+DEVELOPMENTAL-RANGE.md and must be implemented as a pure scoring function
+over the attempt, testable in isolation.
+
+At analysis time, one derived quantity per student per tool:
+
+```
+developmentalRange = highestStep(supportCondition: high)
+                   − highestStep(supportCondition: low)
+```
+
+This is the primary outcome of the pilot. Not gain.
+
 ## What each construct is measured by
 
 | Construct | Primary signal | Tool |
 |---|---|---|
-| Hypothesis testing | single-feature probe proportion; hypothesis revision count | Find the Rule |
-| Abstraction | word count trajectory; `comparison_response` coding; transfer round | Prompt Golf |
+| Hypothesis testing | step sequence; single-feature probe proportion | Find the Rule |
+| Abstraction | step sequence; word count trajectory; `comparison_response` coding | Prompt Golf |
 | Debugging | `targetedEdit`, `msFromFailureToNextAttempt`, `consecutiveFailures` | Prompt Golf (clinic round) |
-| Decomposition | step count and reorder-vs-reword across revisions | Two Machines |
-| Stochastic reasoning | distinct outputs across five identical runs | Two Machines |
-| Constraint reasoning | `liveOptionsAtCommit` | Manifest, Mosaic |
+| Decomposition | step count and reorder-vs-reword across revisions | Two Machines (class-level) |
+| Stochastic reasoning | distinct outputs across five identical runs | Two Machines (class-level) |
+| Constraint reasoning | step sequence; `liveOptionsAtCommit` | Manifest, Mosaic |
 | Stochastic reasoning | random block adoption | RowdyRobo Vac |
-
-Two Machines is the concrete referent for the stochasticity section below: it
-holds the artifact constant by construction and shows the variance directly,
-rather than inferring it from hash collisions. Use its `run_executed` rows to
-calibrate baseline variance before reading variance flags from the other tools.
+| **Developmental range** | **`highestStep` high minus low, per tool** | **all hands-on tools** |
 
 ## The stochasticity confound
 
