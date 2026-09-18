@@ -1,6 +1,7 @@
 import { log, flushNow, bufferedCount, exportJSON, clearBuffer, startSession, hasBackend } from "./lib/events.js";
 import { askModel, modelAvailable } from "./lib/model.js";
 import { pseudonym, GRADE } from "./roster.js";
+import { subject, freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
 import { sha256hex } from "./lib/sha256.js";
 
@@ -907,214 +908,26 @@ function wirePG() {
 }
 
 /* ============================ tool 3 · Word4Word ============================ */
-/* Build a snowman by writing pseudocode. Three verbs, numbered lines, and a
+/* Build it by writing pseudocode. Named parts, numbered lines, and a
    scene that renders one line at a time so the room watches a plan break at
    the exact step it breaks.
 
    This is the only place in the week that carries TEKS 8.1(A) — decompose a
    real-world problem into structured parts using pseudocode — which is why the
    task has a right answer and the failures have locations. */
-const W4W_TASK = {
-  title: "Build a snowman",
-  vagueSeed: "build a snowman",
-  preciseSeed: "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball",
-  suffix: "Reply with numbered steps only, one per line. Keep it under 40 words.",
-};
-const SIZES = ["big", "medium", "small"];
-/* Face and arms are the target. Hat, buttons and scarf are free decoration the
-   checker ignores — which gives a real model somewhere harmless to vary, so
-   five snowmen that all match but wear different hats reads as variance
-   rather than as five different degrees of wrong. */
-const FEATURES = ["face", "arms", "hat", "buttons", "scarf"];
-const TARGET = { stack: ["big", "medium", "small"], face: "small", arms: "medium" };
+/* The subject depends on which half of the day you are in: the projector 2x2
+   runs the mascot, where a right answer exists and the class can judge it
+   together; the hands-on build runs the student's own monster, where the
+   target is on their paper and nothing is graded. See src/w4w.js. */
+const w4wSubject = () => (W4W.mode === "solo" ? "monster" : "knight");
+const w4wTask = () => subject(w4wSubject());
 
-/* Pre-recorded genuine model runs, played when the network is down. Labelled. */
-const W4W_TAPE = {
-  vague: [
-    "1. Roll a large snowball for the base.\n2. Roll a medium ball and stack it on the base.\n3. Roll a small ball and stack it on top.\n4. Add a face to the small ball.\n5. Add stick arms to the middle.",
-    "1. Make three snowballs.\n2. Put them on top of each other.\n3. Decorate it.",
-    "1. Roll a big ball.\n2. Roll a medium ball.\n3. Roll a small ball.\n4. Stack the small on the medium.\n5. Stack the medium on the big.\n6. Add a face to the small ball.",
-    "1. Roll a small ball.\n2. Roll a medium ball.\n3. Roll a big ball.\n4. Stack the medium on the small.\n5. Stack the big on the medium.\n6. Add a face and arms.",
-    "1. Roll three balls of different sizes.\n2. Stack largest to smallest.\n3. Add a face to the top ball.\n4. Add arms to the middle ball.\n5. Add a hat.",
-  ],
-  precise: [
-    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball",
-    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball\n8. ADD a hat to the small ball",
-    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD arms to the medium ball\n7. ADD a face to the small ball",
-    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball\n8. ADD buttons to the big ball",
-    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball\n8. ADD a scarf to the medium ball",
-  ],
-};
-
-/* ---- the scene -------------------------------------------------------- */
-const freshScene = () => ({ rolled: [], stack: [], features: {}, floating: [] });
-
-/* One line of pseudocode against the scene. Returns what happened, in the
-   machine's own cheerful voice, plus whether it could act at all. */
-/* "a face" but "arms" — the machine should not sound broken while being wooden. */
-const art = (f) => (f === "arms" || f === "buttons" ? f : "a " + f);
-function w4wStep(scene, line) {
-  const t = String(line || "").replace(/^\s*\d+[.)]\s*/, "").trim().toLowerCase();
-  const size = () => SIZES.find((z) => new RegExp("\\b" + z + "\\b").test(t))
-    || (/\blarge\b|\bbiggest\b|\bbase\b/.test(t) ? "big" : /\bsmallest\b|\bhead\b|\btop\b/.test(t) ? "small" : null);
-
-  if (/\broll\b|\bmake\b/.test(t)) {
-    const count = (t.match(/\bthree\b|\b3\b/) ? 3 : 1);
-    if (count === 3 && !size()) {
-      // "roll three balls" — three balls, no sizes given, so three the same.
-      scene.rolled.push("medium", "medium", "medium");
-      return { ok: true, msg: "I rolled 3 balls. You did not say what size, so they are all the same." };
-    }
-    const z = size();
-    if (!z) { scene.rolled.push("medium"); return { ok: true, msg: "I rolled a ball. You did not say what size." }; }
-    scene.rolled.push(z);
-    return { ok: true, msg: "I rolled a " + z + " ball." };
-  }
-
-  if (/\bstack\b|\bput\b|\bplace\b/.test(t)) {
-    // Read the two balls in SENTENCE order, not list order. "the medium on the
-    // big" means medium goes on top; taking them in size order would silently
-    // invert every correct instruction a student writes.
-    const m = t.match(/\b(big|medium|small|large|head|base)\b[\s\S]*?\bon\b[\s\S]*?\b(big|medium|small|large|head|base)\b/);
-    if (!m) return { ok: false, msg: "Okay!" };      // "stack them up" names nothing
-    const norm = (w) => ({ large: "big", base: "big", head: "small" }[w] || w);
-    const top = norm(m[1]), bottom = norm(m[2]);
-    const have = (z) => scene.rolled.includes(z) || scene.stack.includes(z);
-    if (!have(top) || !have(bottom))
-      return { ok: false, msg: "Okay!", missing: !have(top) ? top : bottom };
-    if (!scene.stack.includes(bottom)) scene.stack.push(bottom);
-    if (!scene.stack.includes(top)) scene.stack.push(top);
-    return { ok: true, msg: "I put the " + top + " ball on the " + bottom + " ball." };
-  }
-
-  if (/\badd\b|\bgive\b|\bdecorate\b/.test(t)) {
-    const feat = FEATURES.find((fe) => new RegExp("\\b" + fe + "\\b").test(t))
-      || (/\beyes?\b|\bnose\b|\bcarrot\b|\bmouth\b/.test(t) ? "face" : /\bstick/.test(t) ? "arms" : null);
-    if (!feat) return { ok: false, msg: "Okay!" };
-    const z = size();
-    if (!z) { scene.floating.push(feat); return { ok: true, msg: "I added " + art(feat) + ". You did not say which ball, so it is floating." }; }
-    if (!scene.stack.includes(z)) { scene.floating.push(feat); return { ok: true, msg: "I added " + art(feat) + " where the " + z + " ball would be. There is no " + z + " ball up there yet." }; }
-    scene.features[feat] = z;
-    return { ok: true, msg: "I added " + art(feat) + " to the " + z + " ball." };
-  }
-  return { ok: false, msg: "Okay!" };
-}
-
-/* Run every line. Deterministic: same pseudocode in, same scene out. */
-function w4wRun(text) {
-  const scene = freshScene();
-  const lines = String(text || "").split("\n").map((l) => l.trim()).filter(Boolean);
-  const log = [];
-  let firstDead = null;
-  lines.forEach((line, i) => {
-    const r = w4wStep(scene, line);
-    if (!r.ok && firstDead === null) firstDead = i;
-    log.push({ i, line, ...r });
-  });
-  return { scene, log, lines, firstDead };
-}
-
-/* Does the scene match the target? Named mismatches so the failure has a
-   location the class can point at. */
-function w4wCheck(scene) {
-  const miss = [];
-  const st = scene.stack;
-  if (st.length !== 3) miss.push(st.length ? "only " + st.length + " ball" + (st.length === 1 ? "" : "s") + " stacked" : "nothing is stacked");
-  else if (st.join(",") !== TARGET.stack.join(",")) miss.push("stacked " + st.join(" on ") + " — wrong way up");
-  if (scene.features.face !== TARGET.face) miss.push(scene.features.face ? "face on the " + scene.features.face + " ball" : "no face on the head");
-  if (scene.features.arms !== TARGET.arms) miss.push(scene.features.arms ? "arms on the " + scene.features.arms + " ball" : "no arms on the middle");
-  if (scene.floating.length) miss.push(scene.floating.join(" and ") + " floating with nothing to attach to");
-  return { matched: miss.length === 0, miss };
-}
-
-/* What did the model fill in that the class never said? This is the whole
-   difference between the two machines, so it gets counted and shown. */
-function w4wInferred(classText, modelText) {
-  const said = String(classText || "").toLowerCase();
-  const got = String(modelText || "").toLowerCase();
-  const out = [];
-  if (!SIZES.some((z) => said.includes(z)) && SIZES.some((z) => got.includes(z))) out.push("what size each ball is");
-  if (!/\bon\b/.test(said) && /\bon\b/.test(got)) out.push("what goes on what");
-  const saidWhere = FEATURES.some((f) => said.includes(f)) && SIZES.some((z) => said.includes(z));
-  if (!saidWhere && FEATURES.some((f) => got.includes(f)) && SIZES.some((z) => got.includes(z))) out.push("which ball the face goes on");
-  const saidSteps = /^\s*\d+[.)]/m.test(said);
-  if (!saidSteps && /^\s*\d+[.)]/m.test(got)) out.push("that it should be numbered steps at all");
-  return out;
-}
-
-/* ---- drawing ----------------------------------------------------------- */
-const BALL_R = { big: 46, medium: 34, small: 24 };
-function snowmanSVG(scene) {
-  const P = [];
-  const groundY = 178;
-  // unstacked balls sit on the ground, left to right
-  let x = 34;
-  scene.rolled.filter((z) => !scene.stack.includes(z)).forEach((z) => {
-    const r = BALL_R[z] || 30;
-    P.push(`<circle cx="${x + r}" cy="${groundY - r}" r="${r}" fill="var(--surface-3)" stroke="var(--ink-2)" stroke-width="2"/>`);
-    x += r * 2 + 8;
-  });
-  // the tower
-  let y = groundY;
-  const centres = {};
-  scene.stack.forEach((z) => {
-    const r = BALL_R[z] || 30;
-    y -= r;
-    centres[z] = { cx: 150, cy: y, r };
-    P.push(`<circle cx="150" cy="${y}" r="${r}" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.5"/>`);
-    y -= r - 4;
-  });
-  const at = (z) => centres[z];
-  if (scene.features.face && at(scene.features.face)) {
-    const c = at(scene.features.face);
-    P.push(`<circle cx="${c.cx - 9}" cy="${c.cy - 5}" r="3" fill="var(--ink)"/><circle cx="${c.cx + 9}" cy="${c.cy - 5}" r="3" fill="var(--ink)"/>`);
-    P.push(`<polygon points="${c.cx},${c.cy + 2} ${c.cx + 20},${c.cy + 6} ${c.cx},${c.cy + 9}" fill="var(--amber)"/>`);
-    P.push(`<path d="M${c.cx - 9} ${c.cy + 13} q9 7 18 0" fill="none" stroke="var(--ink)" stroke-width="1.8"/>`);
-  }
-  if (scene.features.arms && at(scene.features.arms)) {
-    const c = at(scene.features.arms);
-    P.push(`<line x1="${c.cx - c.r}" y1="${c.cy}" x2="${c.cx - c.r - 28}" y2="${c.cy - 18}" stroke="var(--amber)" stroke-width="3" stroke-linecap="round"/>`);
-    P.push(`<line x1="${c.cx + c.r}" y1="${c.cy}" x2="${c.cx + c.r + 28}" y2="${c.cy - 18}" stroke="var(--amber)" stroke-width="3" stroke-linecap="round"/>`);
-  }
-  if (scene.features.hat && at(scene.features.hat)) {
-    const c = at(scene.features.hat);
-    P.push(`<rect x="${c.cx - 26}" y="${c.cy - c.r - 5}" width="52" height="5" fill="var(--ink)"/><rect x="${c.cx - 15}" y="${c.cy - c.r - 26}" width="30" height="22" fill="var(--ink)"/>`);
-  }
-  if (scene.features.scarf && at(scene.features.scarf)) {
-    const c = at(scene.features.scarf);
-    P.push(`<rect x="${c.cx - c.r}" y="${c.cy - c.r - 2}" width="${c.r * 2}" height="8" fill="var(--fail)"/>`);
-  }
-  if (scene.features.buttons && at(scene.features.buttons)) {
-    const c = at(scene.features.buttons);
-    [-12, 2, 16].forEach((d) => P.push(`<circle cx="${c.cx}" cy="${c.cy + d}" r="3.5" fill="var(--ink)"/>`));
-  }
-  // anything with nothing to attach to hangs in the air, which is the point
-  scene.floating.forEach((f, i) => {
-    P.push(`<polygon points="212,${52 + i * 22} 234,${56 + i * 22} 212,${60 + i * 22}" fill="var(--amber)"/>`);
-    P.push(`<text x="240" y="${62 + i * 22}" font-family="var(--mono)" font-size="10" fill="var(--fail)">${f}?</text>`);
-  });
-  const empty = !scene.rolled.length && !scene.stack.length && !scene.floating.length;
-  // The viewBox follows the build instead of being fixed at 200 tall.
-  // Nothing stops a student stacking five balls, and a fixed box silently
-  // cropped the top of the tower -- so the one thing they most need to look
-  // at, whether it came out the shape they meant, was the thing cut off.
-  // `y` is where the tower stopped; hats and floating labels go above it.
-  const top = Math.min(y - 34, 0);
-  const h = groundY + 14 - top;
-  return `<svg class="mon" viewBox="0 ${top} 300 ${h}" preserveAspectRatio="xMidYMax meet"
-      role="img" aria-label="what these instructions built">
-    <line x1="0" y1="${groundY}" x2="300" y2="${groundY}" stroke="var(--line-2)" stroke-width="1.5"/>
-    ${P.join("")}
-    ${empty ? `<text x="150" y="${groundY - 70}" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--muted)">nothing was built</text>` : ""}
-  </svg>`;
-}
-
-/* ---- state -------------------------------------------------------------- */
+const SUBJECTS_KNIGHT_SEED = subject("knight").vagueSeed;
 const W4W = {
   mode: "solo",                 // solo = hands-on, class = the projector 2x2
   executor: "literal", which: "vague",
-  vague: W4W_TASK.vagueSeed, precise: "",
-  draft: W4W_TASK.vagueSeed,    // the student's own pseudocode
+  vague: SUBJECTS_KNIGHT_SEED, precise: "",
+  draft: "",                    // the student's own pseudocode, their own monster
   runs: [], running: false, ctl: null, speed: 700, N: 5,
   log: [], attempts: [], prevLines: null, prevMatched: null,
   scene: freshScene(), stepLog: [], playing: false, timer: null, cursor: -1,
@@ -1137,7 +950,7 @@ function w4wRevision(lines) {
 function w4wPlay() {
   if (W4W.playing) return;
   const text = $("w4wfield").value;
-  const { lines } = w4wRun(text);
+  const { lines } = w4wRun(text, w4wSubject());
   if (!lines.length) return;
   W4W.scene = freshScene(); W4W.stepLog = []; W4W.cursor = -1; W4W.playing = true;
   const revisionType = w4wRevision(lines);
@@ -1153,17 +966,28 @@ function w4wPlay() {
   const beat = () => {
     if (i >= lines.length) {
       W4W.playing = false;
-      const chk = w4wCheck(W4W.scene);
+      const chk = w4wCheck(W4W.scene, w4wSubject());
       const dead = W4W.stepLog.findIndex((x) => !x.ok);
-      emit("instruction_executed", { matched: chk.matched, mismatch: chk.miss, failurePoint: dead < 0 ? null : dead, quadrant: "solo" });
-      emit("attempt_evaluated", { attemptId: id, outcome: chk.matched ? "pass" : "fail", failureType: chk.matched ? null : "target_not_met",
-        matched: chk.matched, prevMatched: W4W.prevMatched });
-      W4W.attempts.push({ text: lines.join(" / "), revisionType, matched: chk.matched, miss: chk.miss, numbered: isNumbered(text) });
+      // The monster has no target -- it is on the student's paper -- so there
+      // is nothing to be right about and `matched` comes back null. What is
+      // recorded instead is observable: which parts were placed, and what was
+      // named before there was anything to attach it to. Emitting a "fail"
+      // here would be scoring a build against a monster nobody drew.
+      const prec = w4wPrecision(W4W.scene, text);
+      emit("instruction_executed", { matched: chk.matched, graded: chk.graded, mismatch: chk.miss,
+        partsPlaced: chk.placed, partsFloating: [...new Set(W4W.scene.floating)], ...prec,
+        failurePoint: dead < 0 ? null : dead, quadrant: "solo" });
+      emit("attempt_evaluated", { attemptId: id, partsPlaced: chk.placed,
+        partsFloating: [...new Set(W4W.scene.floating)], ...prec,
+        outcome: !chk.graded ? "recorded" : chk.matched ? "pass" : "fail",
+        failureType: !chk.graded ? null : chk.matched ? null : "target_not_met",
+        matched: chk.matched, graded: chk.graded, prevMatched: W4W.prevMatched });
+      W4W.attempts.push({ text: lines.join(" / "), revisionType, matched: chk.matched, miss: chk.miss, placed: chk.placed, numbered: isNumbered(text) });
       W4W.prevMatched = chk.matched;
       renderW4W(); return;
     }
     W4W.cursor = i;
-    W4W.stepLog.push({ i, ...w4wStep(W4W.scene, lines[i]) });
+    W4W.stepLog.push({ i, ...w4wStep(W4W.scene, lines[i], w4wSubject()) });
     emit("walkthrough_step", { stepIndex: i, line: lines[i], effect: W4W.stepLog[i].msg, quadrant: "solo" });
     i++; renderW4W();
     W4W.timer = setTimeout(beat, W4W.speed);
@@ -1187,15 +1011,15 @@ async function w4wRunFive() {
     let out = null, src = "literal";
     if (W4W.executor === "literal") { out = text; await new Promise((r) => setTimeout(r, 260)); }
     else {
-      try { out = await ask(text + "\n\n" + W4W_TASK.suffix, { signal: W4W.ctl.signal }); } catch (e) { break; }
+      try { out = await ask(text + "\n\n" + w4wTask().suffix, { signal: W4W.ctl.signal }); } catch (e) { break; }
       if (out == null) { out = W4W_TAPE[W4W.which][k % 5]; src = "recording"; } else src = "live";
     }
     if (!W4W.running) break;
-    const { scene } = w4wRun(out);
-    const chk = w4wCheck(scene);
+    const { scene } = w4wRun(out, w4wSubject());
+    const chk = w4wCheck(scene, w4wSubject());
     const first = W4W.runs[0].out;
     W4W.runs[k] = { out, src, scene, chk, same: k > 0 && first != null && out.trim() === first.trim(),
-      inferred: src === "literal" ? [] : w4wInferred(text, out) };
+      inferred: src === "literal" ? [] : w4wInferred(text, out, w4wSubject()) };
     emit("run_executed", { participantCode: null, instructionId, runIndex: k + 1, output: out.slice(0, 60),
       sameAsRun1: k === 0 ? null : W4W.runs[k].same, matched: chk.matched, inferredCount: W4W.runs[k].inferred.length, quadrant });
     renderW4W();
@@ -1214,7 +1038,9 @@ function renderW4W() {
     <div class="spread"><div><span class="eyebrow">Tool 3 · decomposition + stochastic reasoning</span>
       <h1 style="font-size:24px;margin-top:2px">Word4Word</h1></div>
       <span class="eyebrow">${W4W.mode === "solo" ? "your own build" : "projector · whole class"}</span></div>
-    <p class="lede">Write the steps for building a snowman. The machine does <b>word for word</b> what you wrote, one line at a time — no more, and nothing you left out.</p>
+    <p class="lede">${W4W.mode === "solo"
+      ? "Write the steps that build <b>your</b> monster — the one on your page. The machine does <b>word for word</b> what you wrote, one line at a time: no more, and nothing you left out."
+      : "One instruction, four ways. The machine does <b>word for word</b> what the line says; the model fills in whatever you left out."}</p>
     <div class="row">
       <button class="btn sm ${W4W.mode === "solo" ? "" : "ghost"}" data-w4wmode="solo">Build your own</button>
       <button class="btn sm ${W4W.mode === "class" ? "" : "ghost"}" data-w4wmode="class">The four cells</button>
@@ -1230,24 +1056,34 @@ function renderW4W() {
   // vocabulary was supposed to be the work. They type what they mean and the
   // machine does what they typed.
 
+  const subj = w4wTask();
   const goal = `
     <div class="goal">
       <span class="eyebrow">what you are building</span>
-      <p><b>Three balls stacked biggest at the bottom, a face on the head, arms on the middle.</b></p>
-      <p class="hint">A hat, buttons or a scarf are yours to add or leave out — they are not checked.</p>
+      <p><b>${esc(subj.goal)}</b></p>
+      <p class="hint">${esc(subj.goalNote)}</p>
     </div>`;
 
   let body = "";
   if (W4W.mode === "solo") {
-    const chk = w4wCheck(W4W.scene);
+    const chk = w4wCheck(W4W.scene, w4wSubject());
     const last = W4W.attempts[W4W.attempts.length - 1];
     body = `
     <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
       ${goal}
       <div class="scene">
-        <div>${snowmanSVG(W4W.scene)}
-          ${!W4W.playing && W4W.stepLog.length ? `<div class="${chk.matched ? "shrink" : "banner"}" style="margin-top:10px">
-            ${chk.matched ? "<div><b>✓</b><span>it matches</span></div>" : `<span>✗</span><div>${esc(chk.miss.join("; "))}</div>`}</div>` : ""}
+        <div>${sceneSVG(W4W.scene, w4wSubject())}
+          ${!W4W.playing && W4W.stepLog.length ? (
+            !chk.graded
+              // Nothing to be right about. Say what it did and let the student
+              // hold it up against their own page, which is the real check.
+              ? `<div class="${chk.miss.length ? "banner" : "how"}" style="margin-top:10px">
+                  ${chk.miss.length
+                    ? `<span>!</span><div>${esc(chk.miss.join("; "))} — did you mean to name it before the part it goes on?</div>`
+                    : `<div><b>✓</b>Built ${chk.placed.length} part${chk.placed.length === 1 ? "" : "s"}: ${esc(chk.placed.join(", "))}. Does it look like your drawing?</div>`}</div>`
+              : `<div class="${chk.matched ? "shrink" : "banner"}" style="margin-top:10px">
+                  ${chk.matched ? "<div><b>✓</b><span>it matches</span></div>" : `<span>✗</span><div>${esc(chk.miss.join("; "))}</div>`}</div>`
+          ) : ""}
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
           <span class="eyebrow">your steps · one per line, starting with a number</span>
@@ -1269,11 +1105,14 @@ function renderW4W() {
     </section>
     ${W4W.attempts.length ? `<section class="card pad" style="display:flex;flex-direction:column;gap:9px">
       <span class="eyebrow">your tries</span>
-      <div class="scroller"><table class="ftable"><thead><tr><th>#</th><th>Steps (verbatim)</th><th>Numbered</th><th>Revision</th><th>Result</th></tr></thead><tbody>
+      <div class="scroller"><table class="ftable"><thead><tr><th>#</th><th>Steps (verbatim)</th><th>Numbered</th><th>Revision</th><th>What it built</th></tr></thead><tbody>
         ${W4W.attempts.map((a, i) => `<tr><td style="font-family:var(--mono)">${i + 1}</td>
           <td style="font-family:var(--mono);font-size:11.5px">${esc(a.text)}</td>
           <td>${a.numbered ? "yes" : "no"}</td><td style="font-family:var(--mono);font-size:11px">${a.revisionType}</td>
-          <td style="color:${a.matched ? "var(--pass)" : "var(--fail)"}">${a.matched ? "matched" : esc(a.miss[0] || "missed")}</td></tr>`).join("")}
+          <td style="color:${a.matched === null ? "var(--ink-2)" : a.matched ? "var(--pass)" : "var(--fail)"}">${
+            a.matched === null
+              ? (a.miss.length ? esc(a.miss[0]) : esc((a.placed || []).join(", ") || "nothing"))
+              : a.matched ? "matched" : esc(a.miss[0] || "missed")}</td></tr>`).join("")}
       </tbody></table></div></section>` : ""}`;
   } else {
     const cell = (ex, wh) => {
@@ -1281,7 +1120,7 @@ function renderW4W() {
       const on = W4W.executor === ex && W4W.which === wh;
       return `<button class="qcell${on ? " on" : ""}${row ? " ran" : ""}" data-w4wex="${ex}" data-w4wwh="${wh}">
         <span class="qv">${row ? (row.distinct === 1 ? "the same answer" : row.distinct + " different answers") : "not run yet"}</span>
-        <span class="qs">${row ? row.matched + " of " + row.runs + " built the snowman" : "·"}</span></button>`;
+        <span class="qs">${row ? row.matched + " of " + row.runs + " drew the mascot" : "·"}</span></button>`;
     };
     const done = W4W.runs.filter((r) => r.out);
     const uniq = new Set(done.map((r) => r.out.trim()));
@@ -1298,7 +1137,7 @@ function renderW4W() {
       <div class="row"><span class="eyebrow">machine</span>
         ${["literal", "model"].map((e) => `<button class="btn sm ${W4W.executor === e ? "" : "ghost"}" data-w4wex2="${e}">${e === "literal" ? "Word4Word" : "Real model"}</button>`).join("")}
         <span class="hint">${W4W.executor === "literal"
-          ? "Does exactly what the line says. Same words in, same snowman out, five times."
+          ? "Does exactly what the line says. Same words in, same drawing out, five times."
           : liveOn() ? "A real model, caching off, so a repeat really is a repeat." : "No live model here, so this plays five <b>pre-recorded</b> real runs, labelled on each card."}</span>
       </div>
       <div class="tmins">
@@ -1323,17 +1162,17 @@ function renderW4W() {
         if (!r.out) return `<div class="run waiting"><div class="n"><span>run ${i + 1}</span><span>…</span></div><div class="txt">waiting</div></div>`;
         return `<div class="run ${i === 0 || r.same ? "same" : "diff"}">
           <div class="n"><span>run ${i + 1}${r.src === "recording" ? " · recording" : ""}</span><span>${i === 0 ? "first" : r.same ? "same as run 1" : "different"}</span></div>
-          ${snowmanSVG(r.scene)}
+          ${sceneSVG(r.scene, "knight")}
           ${r.inferred.length ? `<div class="reading">filled in ${r.inferred.length}: ${esc(r.inferred.join("; "))}</div>` : ""}
           <div class="txt" style="font-family:var(--mono);font-size:11.5px">${esc(r.out)}</div>
-          <div class="qs2" style="color:${r.chk.matched ? "var(--pass)" : "var(--fail)"}">${r.chk.matched ? "✓ built the snowman" : "✗ " + esc(r.chk.miss[0])}</div></div>`;
+          <div class="qs2" style="color:${r.chk.matched ? "var(--pass)" : "var(--fail)"}">${r.chk.matched ? "✓ drew the mascot" : "✗ " + esc(r.chk.miss[0] || "nothing was drawn")}</div></div>`;
       }).join("")}</div>` : ""}
       ${done.length >= 2 ? `<div class="tally">
         <div><b>${done.length}</b><span>identical asks</span></div>
         <div><b style="color:${uniq.size > 1 ? "var(--accent)" : "var(--muted)"}">${uniq.size}</b><span>different answers</span></div>
-        <div><b style="color:${done.filter((r) => r.chk.matched).length === done.length ? "var(--pass)" : "var(--fail)"}">${done.filter((r) => r.chk.matched).length}</b><span>built the snowman</span></div>
+        <div><b style="color:${done.filter((r) => r.chk.matched).length === done.length ? "var(--pass)" : "var(--fail)"}">${done.filter((r) => r.chk.matched).length}</b><span>drew the mascot</span></div>
         <div style="margin-left:auto;max-width:40ch"><p class="hint">${W4W.executor === "literal"
-          ? "The same instruction gives the same snowman every time. So whatever is wrong is in the <b>instruction</b>."
+          ? "The same instruction gives the same drawing every time. So whatever is wrong is in the <b>instruction</b>."
           : done.some((r) => r.inferred.length)
             ? "This machine filled in steps nobody wrote. That is why it looks smarter — and why you cannot tell which parts were yours."
             : "Nothing left to fill in, so it varies only in the parts that do not matter."}</p></div>
@@ -1374,7 +1213,7 @@ function wireW4W() {
     W4W.precise = pr.value;
     document.querySelectorAll('[data-w4wwh2="precise"]').forEach((b) => b.disabled = false);
     const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText(); };
-  const seed = $("w4wseed"); if (seed) seed.onclick = () => { W4W.precise = W4W_TASK.preciseSeed; W4W.which = "precise"; W4W.runs = []; renderW4W(); };
+  const seed = $("w4wseed"); if (seed) seed.onclick = () => { W4W.precise = w4wTask().preciseSeed; W4W.which = "precise"; W4W.runs = []; renderW4W(); };
   document.querySelectorAll("[data-w4wex2]").forEach((b) => b.onclick = () => {
     if (W4W.running || W4W.executor === b.dataset.w4wex2) return;
     emit("quadrant_switched", { participantCode: null, from: w4wQuadrant(), to: b.dataset.w4wex2 + "-" + W4W.which });
@@ -1402,7 +1241,7 @@ function wireW4W() {
 const TOOLS = [
   { id: "ftr", path: "find-the-rule", name: "Find the Rule", day: 3, con: "hypothesis testing", built: true, blurb: "Build questions from pills, find the one hidden rule the partner is following, then commit and test it." },
   { id: "pg", path: "prompt-golf", name: "Prompt Golf", day: 3, con: "abstraction · debugging", built: true, blurb: "Hit the target in as few words as possible. Opens by fixing someone else's broken prompt." },
-  { id: "w4w", path: "word4word", name: "Word4Word", day: 2, con: "decomposition · pseudocode", built: true, tag: "day 2", blurb: "Write the steps to build a snowman. It does word for word what you wrote — no more, and nothing you left out." },
+  { id: "w4w", path: "word4word", name: "Word4Word", day: 2, con: "decomposition · pseudocode", built: true, tag: "day 2", blurb: "Draw your own monster, then write the steps that build it. The machine does word for word what you wrote — no more, and nothing you left out." },
 ];
 function renderHub() {
   $("stage").innerHTML = `

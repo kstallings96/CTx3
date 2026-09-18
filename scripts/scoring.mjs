@@ -93,6 +93,34 @@ export const STEP_TABLE = {
   /* Word4Word. TEKS 8.1(A): decompose a real-world problem into structured
      parts using pseudocode. Scored on the hands-on phase only; the projector
      cells carry no participant code and contribute no steps. */
+  /* The hands-on build is the student's OWN monster, drawn on paper first, so
+     there is no target and nothing to mark right. These steps score the shape
+     of the instructions instead of their agreement with a picture nobody
+     chose -- which is what decomposition means here anyway.
+
+     THIS IS A CHAIN, AND IT HAS TO BE. An earlier version scored "repairs a
+     failure by adding a step" as step 3 and "by reordering" as step 4, with
+     "produces a working build" as 5. That is not a ladder: the two repairs
+     are alternatives, not successive achievements, and a student who got it
+     right on the first try reached 5 without either -- scoring a 2 on the
+     consecutive measure, BELOW a student who had to fix a mistake. The
+     measure was rewarding failure-then-recovery over competence.
+
+     Each step here strictly contains the one before it, so the Guttman
+     assumption is true by construction rather than by hope:
+
+       2 numbered
+       3 = 2 + nothing left floating
+       4 = 3 + at least four distinct parts
+       5 = 4 + said how many or said where
+
+     "Nothing floating" is the load-bearing observation: a part named before
+     the part it hangs off has nowhere to go, and the machine draws it hanging
+     in the air. Getting to zero floating parts IS getting the order right.
+
+     Repair behaviour did not disappear -- `revisionType` is on every attempt
+     and is worth its own analysis. It just is not an ordinal step, because it
+     is not on the same axis as the rest. */
   "word4word": [
     { step: 1, id: "instructs", label: "Writes an instruction the machine acts on at all",
       needs: ["artifact"],
@@ -100,18 +128,26 @@ export const STEP_TABLE = {
     { step: 2, id: "numbered", label: "Writes it as numbered steps, one action per line",
       needs: ["numbered"],
       test: (c) => c.numbered === true },
-    { step: 3, id: "adds-step", label: "Fixes a failure by adding the missing step",
-      needs: ["revisionType", "matched", "prevMatched"],
-      test: (c) => c.revisionType === "added_step" && c.matched === true && c.prevMatched === false },
-    { step: 4, id: "reorders", label: "Fixes a failure by putting the steps in the right order",
-      needs: ["revisionType", "matched", "prevMatched"],
-      test: (c) => c.revisionType === "reordered" && c.matched === true && c.prevMatched === false },
-    { step: 5, id: "builds", label: "Produces a working instruction unaided",
-      needs: ["matched", "taskId"],
-      test: (c) => c.matched === true && c.taskId === "w4w-solo" },
+    { step: 3, id: "orders", label: "Orders the steps so every part has something to attach to",
+      needs: ["numbered", "partsFloating", "partsPlaced"],
+      test: (c) => c.numbered === true && built(c) },
+    { step: 4, id: "elaborates", label: "Builds something with at least four distinct parts",
+      needs: ["numbered", "partsFloating", "partsPlaced"],
+      test: (c) => c.numbered === true && built(c) && (c.partsPlaced || []).length >= 4 },
+    { step: 5, id: "specifies", label: "Says how many, or says where — not just which part",
+      needs: ["numbered", "partsFloating", "partsPlaced", "usedCounts", "usedPlacement"],
+      test: (c) => c.numbered === true && built(c) && (c.partsPlaced || []).length >= 4
+        && (c.usedCounts === true || c.usedPlacement === true) },
   ],
 };
 
+/* Nothing left hanging in the air, and something was actually drawn. Falls
+   back to `matched` so a log recorded against the old target-based build
+   still rescores rather than silently scoring zero. */
+const built = (c) =>
+  c.partsFloating != null
+    ? c.partsFloating.length === 0 && (c.partsPlaced || []).length > 0
+    : c.matched === true;
 /* ----------------------------------------------------------------- scoring */
 /**
  * Pure. What did THIS attempt satisfy?
@@ -212,6 +248,15 @@ export function replay(events) {
       revisionType: p.revisionType ?? null,
       matched: (evaluated && evaluated.payload.matched) ?? null,
       prevMatched: st.lastMatched ?? null,
+      // Word4Word's hands-on build has no target -- the student drew it -- so
+      // there is no `matched` to score against. These are what it has
+      // instead, and they are observations rather than grades.
+      graded: (evaluated && evaluated.payload.graded) ?? null,
+      partsPlaced: p.partsPlaced ?? (evaluated && evaluated.payload.partsPlaced) ?? null,
+      partsFloating: p.partsFloating ?? (evaluated && evaluated.payload.partsFloating) ?? null,
+      prevFloating: st.lastFloating ?? null,
+      usedCounts: p.usedCounts ?? (evaluated && evaluated.payload.usedCounts) ?? null,
+      usedPlacement: p.usedPlacement ?? (evaluated && evaluated.payload.usedPlacement) ?? null,
       slotValues: p.slotValues ?? null,
       singleFeatureVariation: p.singleFeatureVariation ?? null,
       disconfirmingProbe: p.disconfirmingProbe ?? null,
@@ -239,6 +284,7 @@ export function replay(events) {
 
     st.lastArtifact = p.artifact;
     if (evaluated && evaluated.payload.matched !== undefined) st.lastMatched = evaluated.payload.matched;
+    if (ctx.partsFloating != null) st.lastFloating = ctx.partsFloating;
     if (pass === true) { st.consecutiveFailures = 0; st.lastFailAt = null;
       if (st.bestPassWords == null || ctx.wordCount < st.bestPassWords) st.bestPassWords = ctx.wordCount;
       winners[taskId] = p.artifact; }
