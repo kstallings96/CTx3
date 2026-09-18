@@ -144,51 +144,73 @@ create index if not exists events_support_idx on events (support_condition);
 -- are deliberately no select/update/delete policies for anon. You read with
 -- the service_role key from your own machine, never from an app.
 -- ---------------------------------------------------------------------
-alter table sessions enable row level security;
-alter table events   enable row level security;
+-- Enable RLS only on relations that are actually TABLES.
+--
+-- This is a DO block rather than four plain ALTERs because `leaderboard`
+-- turned out to be a view and the plain version died on it with 42809. A
+-- schema file that has to be run against a database someone else's instrument
+-- built should not assume it knows what kind of object a name refers to.
+do $$
+declare r record;
+begin
+  for r in
+    select c.relname
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relkind = 'r'                       -- ordinary tables only
+      -- sessions and events only. `scores` is RowdyRoboVac's, it already
+      -- works, and the leaderboard view depends on exactly how it is set up
+      -- today -- so this file reads it in the checks below and changes
+      -- nothing about it.
+      and c.relname in ('sessions', 'events')
+  loop
+    execute format('alter table public.%I enable row level security', r.relname);
+    execute format('drop policy if exists anon_insert_%I on public.%I', r.relname, r.relname);
+    execute format(
+      'create policy anon_insert_%I on public.%I for insert to anon with check (true)',
+      r.relname, r.relname);
+    raise notice 'RLS on, INSERT-only policy applied: %', r.relname;
+  end loop;
+end $$;
 
-drop policy if exists anon_insert_sessions on sessions;
-create policy anon_insert_sessions on sessions for insert to anon with check (true);
-
-drop policy if exists anon_insert_events on events;
-create policy anon_insert_events on events for insert to anon with check (true);
-
--- Confirm RLS is actually on. Both rows must show rowsecurity = true.
+-- Confirm RLS is actually on. Every row must show rowsecurity = true.
 --
 --   select tablename, rowsecurity from pg_tables
---   where schemaname = 'public' and tablename in ('sessions','events');
+--   where schemaname = 'public' and tablename in ('sessions','events','scores');
 
--- ---------------------------------------------------------------------
--- RowdyRoboVac's leaderboard
---
--- RowdyRoboVac reads a leaderboard with the anon key, so this database is no
--- longer insert-only across the board. Keep that exception narrow and
--- deliberate: SELECT is granted on THIS TABLE ONLY, it holds nothing but a
--- display name and a score, and no policy anywhere grants select on sessions
--- or events. Check that after every schema change.
---
--- The create is skipped on a project that already has this table, whatever
--- shape it is in; only the policies below are (re)applied.
--- ---------------------------------------------------------------------
-create table if not exists leaderboard (
-  id bigserial primary key,
-  display_name text not null,
-  score int not null,
-  created_at timestamptz not null default now()
-);
-alter table leaderboard enable row level security;
-
-drop policy if exists anon_insert_leaderboard on leaderboard;
-create policy anon_insert_leaderboard on leaderboard for insert to anon with check (true);
-
-drop policy if exists anon_read_leaderboard on leaderboard;
-create policy anon_read_leaderboard on leaderboard for select to anon using (true);
-
--- The check that matters once a read policy exists anywhere. Only
--- leaderboard/SELECT may appear:
+-- The check that matters, and the one to re-run after ANY schema change.
+-- Only INSERT policies may appear. A SELECT policy on sessions, events or
+-- scores means one student can read another's data -- and now another
+-- instrument's too, which is the one real cost of sharing a database.
 --
 --   select tablename, policyname, cmd from pg_policies
 --   where schemaname = 'public' order by tablename, cmd;
+
+-- Reading is supposed to happen through the leaderboard view and nowhere
+-- else. Confirm no other view leaks a base table:
+--
+--   select table_name from information_schema.views
+--   where table_schema = 'public';
+
+-- ---------------------------------------------------------------------
+-- RowdyRoboVac's leaderboard -- DELIBERATELY NOT TOUCHED
+--
+-- `leaderboard` is a VIEW, not a table. Rows go into an insert-only `scores`
+-- table; the view projects display_name, score and created_at out of it and
+-- nothing else, so the end screen can read scores back without `session_id`
+-- ever being exposed. A view cannot have RLS enabled on it -- that is what
+--
+--   ERROR 42809: ALTER action ENABLE ROW SECURITY cannot be performed on
+--   relation "leaderboard" / This operation is not supported for views
+--
+-- means, and an earlier version of this file tried to do exactly that. The
+-- view is already built, already correct, and belongs to RowdyRoboVac. CTx3
+-- neither reads nor writes it. Leave it alone.
+--
+-- The consequence for this database is the one thing worth carrying forward:
+-- readable data exists here, via that view. So the check below is not
+-- "nothing is readable", it is "only the leaderboard view is".
+-- ---------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------
 -- Migrating a further instrument into this database

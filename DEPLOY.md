@@ -38,7 +38,8 @@ originally assumed**, which is worth knowing before you run anything:
 | `sessions.id` | `uuid` — RowdyRoboVac's session id | unchanged |
 | `sessions` | `first_name`, `last_initial`, `grade`, `user_agent`, `screen_w`, `screen_h`, `started_at` | plus `instrument`, `participant_code`, `device_id`, `day`, `meta` |
 | `events` | `session_id`, `seq`, `type`, `payload`, `client_ts`, `server_ts` | plus `instrument`, `tool`, `participant_code`, `device_id`, `support_condition` |
-| `leaderboard` | `display_name`, `score`, `created_at`, no `id` | unchanged |
+| `scores` | RowdyRoboVac's, insert-only | untouched |
+| `leaderboard` | a **VIEW** over `scores`, exposing `display_name`, `score`, `created_at` and nothing else | untouched |
 
 `supabase/schema.sql` has been rewritten as a migration that fits it. Three
 things it does deliberately:
@@ -56,6 +57,26 @@ things it does deliberately:
    silently fail to start.
 3. **Nothing is dropped, renamed or retyped.** Every statement is `if not
    exists` or `add column if not exists`. Safe to re-run.
+4. **RLS is applied through a `DO` block that skips anything that is not an
+   ordinary table**, and it touches only `sessions` and `events`. The first
+   version of this file tried to `alter table leaderboard enable row level
+   security` and died with `42809: this operation is not supported for
+   views` — `leaderboard` is a view over an insert-only `scores` table, which
+   is how RowdyRoboVac's end screen reads scores back without ever exposing
+   `session_id`. That design is correct and this file now leaves both the
+   view and `scores` completely alone.
+
+Because that view exists, **this database is not read-proof and was never
+meant to be**. The check to run after any schema change is not "nothing is
+readable" but "only the leaderboard view is":
+
+```sql
+select tablename, policyname, cmd from pg_policies
+where schemaname = 'public' order by tablename, cmd;
+```
+
+Only `INSERT` may appear. A `SELECT` policy on `sessions`, `events` or
+`scores` means one student can read another's data.
 
 If `create unique index` fails, it is because duplicate rows already exist
 that the index would forbid. Send me the error rather than forcing it.
