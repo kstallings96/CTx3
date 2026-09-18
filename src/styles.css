@@ -308,3 +308,9 @@ mark{background:var(--pass-soft);color:var(--pass);border-radius:2px;padding:0 3
 .tally > div{display:flex;flex-direction:column;line-height:1.15}
 .tally b{font-family:var(--mono);font-size:25px;font-weight:600;font-variant-numeric:tabular-nums}
 .tally span{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+
+/* The activity-password field. Same box as the participant code, but a
+   password is typed as words, not read off a card -- the wide letter-spacing
+   that helps with ABC12 makes a typed word hard to check. */
+.codein.pw { letter-spacing: .12em; font-size: 22px; }
+.codein.pw::placeholder { letter-spacing: .12em; }

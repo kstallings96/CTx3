@@ -10,6 +10,12 @@
  * the viewer's own Claude when it finds one, so nothing here needs to patch
  * behaviour — it only moves bytes.
  *
+ * `npm run demo` builds with --mode demo, which blanks the Supabase env vars
+ * (.env.demo) so the artifact cannot write to the study database. The check
+ * at the bottom of this file enforces that, because the day someone runs
+ * `npm run build && node scripts/bundle-demo.mjs` by hand is the day a
+ * published demo starts filing rows against real participant codes.
+ *
  * Keeping one source of truth matters more than it sounds: the alternative is
  * hand-syncing two copies, and the copy people look at drifts from the copy
  * that ships.
@@ -43,4 +49,14 @@ ${body.trim()}
 ${readFileSync(join(dist, js), "utf8")}
 </script>
 `);
+
+/* A published demo that can write to the study database would file rows
+   against real participant codes from anyone who opens the link. Refuse. */
+const written = readFileSync(out, "utf8");
+const leak = written.match(/https?:\/\/[a-z0-9-]+\.supabase\.co|sb_(publishable|secret)_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/);
+if (leak) {
+  console.error("REFUSING: the demo carries a live credential (" + leak[0].slice(0, 32) + "…).");
+  console.error("Build it with `npm run demo`, which uses --mode demo to blank them.");
+  process.exit(3);
+}
 console.log("wrote " + out);

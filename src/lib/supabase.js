@@ -105,14 +105,39 @@ export async function insertEvents(events) {
 export function beaconEvents(events) {
   if (!url || !anonKey || events.length === 0) return false;
   if (typeof navigator.sendBeacon !== "function") return false;
+  // `fetch` with keepalive, NOT sendBeacon.
+  //
+  // sendBeacon cannot set headers, so the key had to go in the query string,
+  // and a beacon is sent with credentials mode 'include'. Supabase answers
+  // with `Access-Control-Allow-Origin: *`, and a wildcard is not allowed for a
+  // credentialed request — so the browser blocked every one of these and the
+  // last events of every session were lost without a trace. keepalive fetch
+  // is the modern replacement: it outlives the page the same way, and it
+  // takes headers, so this is an ordinary authenticated insert.
+  //
+  // The limit is 64KB across all in-flight keepalive requests. A trimmed tail
+  // that arrives beats a full one that is dropped, and anything left behind is
+  // still in localStorage for the next load to flush.
+  const send = (rows) =>
+    fetch(`${url}/rest/v1/events`, {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(rows),
+    }).catch(() => {});
+
   try {
-    const blob = new Blob([JSON.stringify(eventRows(events))], { type: "application/json" });
-    // PostgREST takes the anon key as a query param, which sendBeacon needs
-    // since it cannot set headers.
-    return navigator.sendBeacon(
-      `${url}/rest/v1/events?apikey=${encodeURIComponent(anonKey)}`,
-      blob,
-    );
+    let rows = eventRows(events);
+    while (rows.length > 1 && JSON.stringify(rows).length > 60000) {
+      rows = rows.slice(-Math.ceil(rows.length / 2));
+    }
+    send(rows);
+    return true;
   } catch {
     return false;
   }

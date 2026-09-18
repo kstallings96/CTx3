@@ -24,79 +24,41 @@ database makes it a `group by`.
 It also halves the study-day risk: a free project pauses after about a week
 idle, and one project is one thing to wake on the morning of instead of three.
 
-### Which of your two projects to use
+### The project
 
-**The one RowdyRoboVac already writes to.** Not a preference — the rule is to
-move the thing with no data and no deployment toward the thing that has both.
-CTx3 has zero rows and is not deployed, so repointing it is two environment
-variables and a redeploy. RowdyRoboVac is a live Godot export behind a GitHub
-Action, with rows already in its tables; repointing *it* means a config change,
-a re-export, and an existing dataset left behind in a project you then have to
-keep alive anyway.
+Settled: **`jfitzhyrtrurrvhifums`** — the one RowdyRoboVac already writes to.
+CTx3 had no rows and no deployment, so repointing it was two environment
+variables; RowdyRoboVac is a live Godot export behind a GitHub Action.
 
-If RowdyRoboVac has not actually collected anything yet, either project works —
-take the emptier one and delete the other to free the slot.
+Its tables are already there and **their shape is not the one this repo
+originally assumed**, which is worth knowing before you run anything:
 
-Send me the **Project URL** and the **anon key** (Project Settings → API) for
-whichever one you pick. Not the database password, and not the service_role
-key.
+| | what is there | what CTx3 needs |
+|---|---|---|
+| `sessions.id` | `uuid` — RowdyRoboVac's session id | unchanged |
+| `sessions` | `first_name`, `last_initial`, `grade`, `user_agent`, `screen_w`, `screen_h`, `started_at` | plus `instrument`, `participant_code`, `device_id`, `day`, `meta` |
+| `events` | `session_id`, `seq`, `type`, `payload`, `client_ts`, `server_ts` | plus `instrument`, `tool`, `participant_code`, `device_id`, `support_condition` |
+| `leaderboard` | `display_name`, `score`, `created_at`, no `id` | unchanged |
 
-Then, in that project:
+`supabase/schema.sql` has been rewritten as a migration that fits it. Three
+things it does deliberately:
 
-1. Run `supabase/schema.sql` (step 2 below). It is additive — `create table if
-   not exists`, `create index if not exists`, `drop policy` / `create policy` —
-   so it will not disturb RowdyRoboVac's existing rows. It does **not** add the
-   columns RowdyRoboVac's tables are missing if those tables already exist with
-   a different shape; if the run errors, paste the error and I will write the
-   `alter table` statements to reconcile them.
-2. Backfill `instrument` on anything already there:
-   `update sessions set instrument = 'rowdyrobo' where instrument is null;`
-   (and the same on `events`), so the old rows are separable from the new ones.
+1. **`instrument` is added with a default of `'rowdyrobo'`.** RowdyRoboVac's
+   `backend.gd` does not send the column and now does not have to — its
+   inserts keep working untouched. No GDScript edit, no re-export, no Action
+   run. (The earlier plan of adding two lines to `backend.gd` is off the
+   table; this is strictly less risk.) CTx3 always sends it explicitly.
+2. **Dedup is two partial indexes, not one.** The instruments identify a
+   session differently — RowdyRoboVac by uuid, CTx3 by code plus device. A
+   single index over a COALESCE of both would have had to treat a null
+   participant code as a value, and then every RowdyRoboVac session row would
+   collide with every other one and the second student of the day would
+   silently fail to start.
+3. **Nothing is dropped, renamed or retyped.** Every statement is `if not
+   exists` or `add column if not exists`. Safe to re-run.
 
-Only if you are starting fresh instead:
-
-1. At <https://supabase.com/dashboard>, create a project.
-2. Pick a region near the school; save the database password somewhere safe
-   (this app never needs it).
-3. Wait for provisioning to finish.
-
-Rows are told apart by `instrument` (`ctx3`, `mosaic`, …) and, on events,
-`tool` (the activity inside that app). Both are in the dedup keys — without
-that, two instruments on the same device would both start at `seq 1` and the
-second one's rows would be rejected as duplicates and lost.
-
-### Bringing the other instruments in
-
-**RowdyRoboVac** is the easy one and the useful one. It already has a full
-Supabase backend with its own durable queue, and `Scripts/app_config.gd`
-fetches credentials from `/config.json` on the deployed origin at runtime —
-built precisely so it can be repointed without re-exporting. Moving it here is
-**editing one file in its repo**. No Godot, no rebuild.
-
-Two things to know before you do:
-
-1. **Its rows have a different shape.** It keys events on a session uuid
-   rather than a code and device. The table carries both — `session_id` is
-   nullable and sits in the dedup key — so it can keep writing exactly what it
-   writes today. The only GDScript change needed is adding
-   `"instrument": "rowdyrobo"` to the two row dictionaries in `backend.gd`;
-   two lines, and the GitHub Action re-exports on push.
-2. **It reads a leaderboard with the anon key**, so this database is no longer
-   insert-only across the board. The exception is scoped to that one table and
-   nothing else grants select — verify with the `pg_policies` query in
-   `supabase/schema.sql` after any schema change.
-
-**The thing that actually blocks joining RowdyRoboVac data is neither of
-those.** It collects first name, last initial and grade, and no participant
-code — so its rows cannot be joined to anything regardless of which database
-they sit in. That retrofit (read `?pc=` from the URL, write it on the session
-row) is the work worth doing, and it is worth doing whether or not the
-backends ever merge.
-
-**Mosaic and Manifest** can move in later the same way: add `instrument`, put
-their identifying columns in `meta`. Until then their tiles link out and the
-join happens at analysis time on the code, exactly as ARCHITECTURE.md says.
-Nothing forces either migration before the pilot.
+If `create unique index` fails, it is because duplicate rows already exist
+that the index would forbid. Send me the error rather than forcing it.
 
 ## 1b. Identifying data on minors
 
@@ -133,7 +95,12 @@ What the code cannot do for you, and you have to do:
 ## 2. Create the tables
 
 Open **SQL Editor**, paste [`supabase/schema.sql`](supabase/schema.sql), run it.
-Safe to re-run.
+Safe to re-run, and safe on the existing RowdyRoboVac tables — see the table
+above for what it changes.
+
+**Until you run it, CTx3 writes nothing.** The client is wired and correct; the
+inserts come back `PGRST204 Could not find the 'day' column of 'sessions'`.
+That is the only thing standing between here and live data.
 
 Then confirm RLS is actually on — the one check worth doing by hand:
 
@@ -149,8 +116,11 @@ other's data.
 
 **Project Settings → API**:
 
-- **Project URL** → `VITE_SUPABASE_URL`
-- **anon / public** key → `VITE_SUPABASE_ANON_KEY`
+- **Project URL** → `VITE_SUPABASE_URL` — `https://jfitzhyrtrurrvhifums.supabase.co`
+- **anon / publishable** key → `VITE_SUPABASE_ANON_KEY` — the `sb_publishable_…` one
+
+Both are already in `.env.local` here, which is gitignored. They still have to
+be set in the Vercel dashboard (step 5) — that part is yours.
 
 The anon key is *meant* to be public; it ships in the client bundle and anyone
 can read it from devtools. RLS is what protects the data.
@@ -240,13 +210,58 @@ The hub build now also keeps the address bar honest: entering a tool from a
 tile pushes that tool's URL, and Back returns to the hub. So you can read a
 tool's URL straight off the screen instead of looking it up here.
 
-**These paths are not a security boundary.** A student who types
-`/word4word` reaches Word4Word, and the roster code is the only real gate. For
-a 14-student pilot that is proportionate: the point is that the station in
-front of them offers one activity, not that the other two are locked. If you
-want them genuinely locked, say so and I will add a per-tool passphrase — but
-it is a facilitator-typed passphrase on a shared device, not authentication,
-and it is worth being honest with the IRB about which one you have.
+## Activity passwords
+
+Every tool is behind a password. The sequence a student sees is **sign in,
+password, activity**.
+
+- On a **pinned URL**, only that tool's password is accepted.
+- On the **hub URL**, the prompt takes any of the three and sends the student
+  to the one it belongs to — so on `/` the password *is* how the activity gets
+  chosen. That is the same three steps with no tile-picking in between.
+
+The passwords as shipped:
+
+| Tool | Password |
+|---|---|
+| Find the Rule | `compass` |
+| Prompt Golf | `lantern` |
+| Word4Word | `harbor` |
+
+**Change them before the pilot** — they are in a public repo's history now:
+
+```bash
+npm run passwords -- ftr=<word> pg=<word> w4w=<word>
+```
+
+That rewrites `src/passwords.js` with a salted SHA-256 of each word; the words
+themselves are never written to disk. `npm run passwords` with no arguments
+shows which tools are set. Rebuild and redeploy for a change to reach
+students. Setting a tool to an empty string removes its password and the tool
+opens straight away.
+
+Behaviour worth knowing on a study day:
+
+- An unlock is remembered on the device until `?reset`, so a student who
+  reloads mid-activity is **not** locked out of their own work.
+- Three wrong tries disables the button for three seconds. A pause, not a
+  lockout — a student who cannot spell the word still gets in.
+- `gate_failed` and `gate_unlocked` are logged, with the tool and the try
+  count and **never the typed text**. A student stuck at the gate for four
+  minutes is visible in the data afterwards.
+
+**Be honest about what this is.** The digests ship in the client bundle, and a
+dictionary word behind a single SHA-256 is minutes of work for an adult with a
+wordlist. It stops a student who opens devtools out of curiosity; it does not
+stop one who is trying. It is hashed rather than plaintext so the words are
+not sitting in a public GitHub repo at a glance — that is all. What it is
+genuinely for is making the facilitator the one who decides when the room
+starts, and keeping a class off Thursday's tool on Tuesday. **Do not describe
+it to the IRB as access control.**
+
+The same goes for the paths: a student who types `/word4word` reaches
+Word4Word's password prompt, not Word4Word. The password is the gate; the URL
+just decides which one they are asked for.
 
 ## Study-day checklist
 
@@ -262,6 +277,15 @@ and it is worth being honest with the IRB about which one you have.
   otherwise the first student hits a dead endpoint
 - Check the top-right pill says **live model**. If it says *offline stand-in*,
   the key is missing or wrong and Word4Word will play recordings
+
+## The shareable demo
+
+`npm run demo` builds with `--mode demo`, which blanks the Supabase variables
+via `.env.demo` so the published artifact **cannot write to the study
+database**. `scripts/bundle-demo.mjs` refuses to write a demo containing a
+`supabase.co` URL or a key, so building it the wrong way fails loudly rather
+than quietly publishing something that files rows against real participant
+codes. Never publish the output of a plain `npm run build`.
 
 ## Pulling the data
 

@@ -1,10 +1,12 @@
 import { log, flushNow, bufferedCount, exportJSON, clearBuffer, startSession, hasBackend } from "./lib/events.js";
 import { askModel, modelAvailable } from "./lib/model.js";
 import { ROSTER } from "./roster.js";
+import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
+import { sha256hex } from "./lib/sha256.js";
 
 /* ============================ shared ============================ */
 const LS = "d3station.v2";
-const S = { code: "", first: "", initial: "", pinned: null, day: 3, screen: "hub", tool: "hub", events: [], seq: 0,
+const S = { code: "", first: "", initial: "", pinned: null, unlocked: [], gateFor: null, gateTries: 0, day: 3, screen: "hub", tool: "hub", events: [], seq: 0,
   support: "na", phaseId: null, phaseScaffolds: [],
   forceOffline: false, brandTaps: 0, lastAttempt: null, deviceId: "dev-" + Math.random().toString(36).slice(2, 8) };
 const nowISO = () => new Date().toISOString();
@@ -37,10 +39,11 @@ function phaseComplete(highestStepReached) {
   emit("phase_complete", { phaseId: S.phaseId, highestStepReached });
   S.phaseId = null;
 }
-function save() { try { localStorage.setItem(LS, JSON.stringify({ code: S.code, day: S.day, seq: S.seq, events: S.events.slice(-400) })); } catch (e) {} }
+function save() { try { localStorage.setItem(LS, JSON.stringify({ code: S.code, day: S.day, seq: S.seq, unlocked: S.unlocked, events: S.events.slice(-400) })); } catch (e) {} }
 function load() {
   try { const d = JSON.parse(localStorage.getItem(LS) || "null"); if (!d) return;
     if (d.code) S.code = d.code; if (d.day) S.day = d.day;
+    if (Array.isArray(d.unlocked)) S.unlocked = d.unlocked;
     if (Array.isArray(d.events)) { S.events = d.events; S.seq = d.seq || d.events.length; }
   } catch (e) {}
 }
@@ -1422,6 +1425,53 @@ function renderHub() {
   </section>`;
   document.querySelectorAll("[data-tool]").forEach((b) => b.onclick = () => go(b.dataset.tool));
 }
+function renderGate() {
+  const t = S.gateFor ? TOOLS.find((x) => x.id === S.gateFor) : null;
+  $("stage").innerHTML = `
+  <section class="card pad" style="display:flex;flex-direction:column;gap:16px">
+    <div><span class="eyebrow">Signed in as ${esc(S.code)}</span>
+      <h1 style="font-size:27px;margin-top:3px">${t ? esc(t.name) : "Activity password"}</h1></div>
+    <p class="lede">${t
+      ? "Your teacher will give you the password for this activity."
+      : "Your teacher will give you a password. It opens the activity the class is doing today."}</p>
+    <div class="codewrap">
+      <input class="codein pw" id="pwfield" type="password" maxlength="32" autocomplete="off"
+        spellcheck="false" placeholder="••••••" aria-label="Activity password">
+      <p class="hint" id="pwmsg">Capital letters do not matter.</p>
+      <div class="row"><button class="btn" id="pwgo">Open</button></div>
+      <p class="note">Nothing you type here is recorded. The password only decides which activity opens.</p>
+    </div>
+  </section>`;
+  const f = $("pwfield"), msg = $("pwmsg");
+  f.focus();
+  f.onkeydown = (e) => { if (e.key === "Enter") $("pwgo").click(); };
+  $("pwgo").onclick = () => {
+    const hit = toolForPassword(f.value);
+    if (!hit) {
+      S.gateTries++;
+      // Never the typed text -- a student who types their own name into the
+      // wrong box should not have put it in the event log.
+      emit("gate_failed", { tool: S.gateFor || "any", tries: S.gateTries });
+      msg.textContent = S.gateTries >= 3
+        ? "Still not right. Ask your teacher to read it out again."
+        : "That is not the password for today. Check the board and try again.";
+      msg.style.color = "var(--fail)";
+      f.select();
+      if (S.gateTries >= 3) {
+        // A pause, not a lockout. Slow down guessing without stranding a
+        // student who simply cannot spell the word.
+        const btn = $("pwgo"); btn.disabled = true;
+        setTimeout(() => { if ($("pwgo")) $("pwgo").disabled = false; }, 3000);
+      }
+      return;
+    }
+    if (!S.unlocked.includes(hit)) S.unlocked.push(hit);
+    save();
+    emit("gate_unlocked", { tool: hit, tries: S.gateTries + 1 });
+    S.gateTries = 0;
+    go(hit);
+  };
+}
 function renderCode() {
   $("stage").innerHTML = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:16px">
@@ -1466,7 +1516,9 @@ function renderCode() {
     // is no path by which they reach an event payload.
     startSession(v, S.deviceId, S.day, { first_name: first, last_initial: initial });
     emit("session_start", { participantCode: v, tool: "hub", day: S.day, deviceId: S.deviceId, recorded: false });
-    go(S.pinned || "hub");
+    // Sign in, then password, then activity.
+    S.gateFor = S.pinned;
+    go(S.pinned || "gate");
   };
 }
 
@@ -1498,6 +1550,34 @@ function pinnedTool() {
    against. The demo runs on both, so every call is guarded. */
 const canRoute = () => location.protocol === "http:" || location.protocol === "https:";
 
+/**
+ * Activity passwords.
+ *
+ * The sequence a student sees is sign in, password, activity. The password is
+ * what makes the facilitator, rather than the student, the one who decides
+ * when the room starts — and it keeps a class off Thursday's tool on Tuesday.
+ *
+ * Every route into a tool passes through go(), and go() checks here, so the
+ * URL, a hub tile and a restored screen are all gated by the same line. An
+ * unlock is remembered for the device until ?reset, because a student who
+ * reloads mid-activity must not be locked out of their own work.
+ *
+ * On a pinned URL only that tool's password is accepted. On the hub the
+ * prompt takes any of the three and sends you to the one it belongs to, so
+ * the password chooses the activity.
+ *
+ * What this is worth is written down in passwords.js. It is a speed bump.
+ */
+const digestFor = (tool, word) => sha256hex(PASSWORD_SALT + ":" + tool + ":" + String(word).trim().toLowerCase());
+const needsPassword = (tool) => Boolean(PASSWORDS[tool]);
+const unlocked = (tool) => !needsPassword(tool) || S.unlocked.includes(tool);
+/* Which tool this word opens, or null. */
+function toolForPassword(word) {
+  if (!String(word).trim()) return null;
+  const only = S.gateFor ? [S.gateFor] : TOOLS.map((t) => t.id);
+  return only.find((id) => PASSWORDS[id] && PASSWORDS[id] === digestFor(id, word)) || null;
+}
+
 /* "Back to hub" is a lie on a pinned device -- there is no hub to go back to.
    The facilitator's hand-off control is Reset code, in the topbar. */
 function wireBackHub() {
@@ -1508,16 +1588,19 @@ function wireBackHub() {
 
 function go(screen, opts) {
   W4W.running = false; W4W.playing = false; clearTimeout(W4W.timer);
+  // The one gate check. Everything that enters a tool comes through here.
+  if (IDS.has(screen) && !unlocked(screen)) { S.gateFor = screen; screen = "gate"; }
   // Leaving a TOOL is a session_end. Leaving the sign-in screen is not -- it
   // used to fire one at the same millisecond as the sign-in session_start,
   // which made every log open with an instant orphan close.
-  const leavingTool = S.screen !== "hub" && S.screen !== "code";
+  const leavingTool = S.screen !== "hub" && S.screen !== "code" && S.screen !== "gate";
   if (leavingTool && screen !== S.screen) emit("session_end", { reason: "navigated_away" });
   S.screen = screen;
-  S.tool = { hub: "hub", code: "hub", ftr: "find-the-rule", pg: "prompt-golf", w4w: "word4word" }[screen] || "hub";
+  S.tool = { hub: "hub", code: "hub", gate: "hub", ftr: "find-the-rule", pg: "prompt-golf", w4w: "word4word" }[screen] || "hub";
   window.scrollTo({ top: 0, behavior: "instant" });
   if (screen === "hub") renderHub();
   else if (screen === "code") renderCode();
+  else if (screen === "gate") renderGate();
   else if (screen === "ftr") { emit("session_start", { tool: "find-the-rule", day: S.day, deviceId: S.deviceId }); FTR.pair = "lexical"; FTR.leg = 0; ftrStart(RULE_PAIRS.lexical[0], "high"); }
   else if (screen === "pg") { emit("session_start", { tool: "prompt-golf", day: S.day, deviceId: S.deviceId });
     phaseStart("pg-high", "high", ["priorPromptsVisible", "wordCountLive", "targetChecklist"]);
@@ -1584,7 +1667,7 @@ function start(snap) {
   if (qs.has("reset")) {
     try { localStorage.removeItem(LS); } catch (e) {}
     clearBuffer();
-    S.events = []; S.seq = 0; S.code = ""; S.first = ""; S.initial = ""; S.screen = "code";
+    S.events = []; S.seq = 0; S.code = ""; S.first = ""; S.initial = ""; S.unlocked = []; S.screen = "code";
     // Keep the path and the ?tool= fallback -- the device is still this
     // station's device -- and drop everything else.
     const keep = new URLSearchParams();
