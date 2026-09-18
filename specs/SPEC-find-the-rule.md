@@ -180,3 +180,53 @@ proportion of single-feature probes at Level 1; meta-query rate.
 - What happens at 12 probes with no hypothesis written? Forced commit, or a
   nudge at probe 9?
 - Is the demo the same bot the student then probes, or a different one?
+
+
+## The order is not the student's to choose
+
+`FTR_SEQUENCE` in `src/rules.js` is the whole progression and the tool walks
+it on its own:
+
+| | Rule | Support |
+|---|---|---|
+| 1 | never uses the letter E | with help |
+| 2 | never uses a word longer than four letters | on your own |
+| 3 | always includes exactly one number | with help |
+| 4 | always works a colour into its answer | on your own |
+
+Two lexical rules, then two categorical ones, each pair run with support and
+then without. Difficulty is held constant within a pair and support is the
+only thing that varies — which is the entire basis of the developmental-range
+measure. A student who picked their own order would be comparing two numbers
+that do not mean the same thing, and fourteen students who each picked would
+give fourteen incomparable trajectories.
+
+There is no rule chooser in the interface. The only control is **Next**.
+
+## `npm run check:rules`
+
+The rule has to be true of **every** reply the partner can produce. If one
+reply in forty breaks it, the student doing the task properly — reading
+closely, hunting a counterexample — is the one who gets it wrong.
+
+"Every" is four rules x forty-eight question combinations x three or four
+interchangeable frames, plus the held-out cases and the free-text path. No
+hand-check covers that, and one did not: `short_words` shipped with frames
+containing "course", "every" and "wrong", and **twenty-five of fifty-eight
+replies broke the very rule they were meant to demonstrate**.
+
+The check enforces three things, and `npm run demo` will not publish without
+it passing:
+
+1. **The rule holds** for every reply, from every route into the generator.
+2. **No stock phrase** accounts for more than a third of a rule's replies —
+   if every answer ends "— a solid 10", students name the tail instead of the
+   rule. (This is how that bug was caught the first time, by hand.)
+3. **The judge reads what students write**, including the phrasings the
+   interface's own starter chips invite. It refused "It always has a number"
+   while offering "It always…" as a chip, which is broken twice over.
+
+It also checks that no two rules in the set are satisfied by the same
+answers — the test that would have caught `no_the`, which was undiscoverable
+next to `no_e` because "the" contains an E.
+

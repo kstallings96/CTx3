@@ -8,8 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "rescore": "node scripts/rescore.mjs",
-    "demo": "vite build --mode demo && node scripts/bundle-demo.mjs",
-    "passwords": "node scripts/set-passwords.mjs"
+    "demo": "npm run check:rules && vite build --mode demo && node scripts/bundle-demo.mjs",
+    "passwords": "node scripts/set-passwords.mjs",
+    "check:rules": "node scripts/check-rules.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4"

@@ -1,6 +1,9 @@
 import { log, flushNow, bufferedCount, exportJSON, clearBuffer, startSession, hasBackend } from "./lib/events.js";
 import { askModel, modelAvailable, modelReason, modelName } from "./lib/model.js";
 import { pseudonym, GRADE } from "./roster.js";
+import { hash } from "./lib/hash.js";
+import { RULES, RULE_ORDER, FTR_SEQUENCE, PILLS, PICKS, HELD_OUT, COLOURS,
+         askText, comboKey, cap, judgeRule, inferPills, answerFor } from "./rules.js";
 import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision,
          buildPrompt, checkSafe, SAFE_MESSAGE, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
@@ -87,7 +90,6 @@ function diffRange(a, b) {
   let ea = la, eb = lb; while (ea > s && eb > s && a[ea - 1] === b[eb - 1]) { ea--; eb--; }
   return [s, Math.max(eb, s + 1)];
 }
-function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0); }
 function rng(seed) { let x = seed >>> 0 || 7; return () => { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
 
 const track = { lastArtifact: {}, lastFailAt: {}, consec: {}, outcomeByHash: {} };
@@ -165,183 +167,15 @@ function paintMode() {
   if (S.screen === "w4w" || S.screen === "pg") go(S.screen);
 })();
 
-/* ============================ rules registry ============================ */
-const COLOURS = ["red","blue","green","yellow","orange","purple","pink","brown","grey","gray","black","white","silver","gold"];
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const has = (t, list) => list.some((w) => new RegExp("\\b" + w + "s?\\b", "i").test(t));
 
-/* The four rules EVERY student gets, in this order. Fixed, never assigned —
-   comparing probe counts across students depends on everyone facing the same puzzle. */
-const RULES = {
-  no_e: { level: 1, name: "Level 1", tierWord: "lexical", label: "never uses the letter E",
-    check: (t) => !/e/i.test(t), predicts: "the reply contains no letter E",
-    judge: /\b(no|never|avoid|avoids|without|skip|skips|missing|drops?|doesn'?t use|does not use|leaves out)\b[^.!?]{0,28}\b(letter\s+)?e\b/i,
-    look: "Read its answers very closely. The same thing is true about <b>every single one</b>.",
-    hints: ["Ask about two totally different things and put the answers side by side. It is not about what they mean.",
-            "It is about how the answers are spelled — which letters are allowed to show up.",
-            "Think of the most common letter in English, then go looking for it."],
-    say: {
-      "in a few words": [(x) => x + ", obviously.", (x) => x + ", hands down.", (x) => x + ", all day long.", (x) => "Simply " + x + "."],
-      "in one sentence": [(x) => x + ", and it is not a hard call at all.",
-        (x) => x + ", and I would not pick anything but that.",
-        (x) => x + ", and that is all I want to say about it.",
-        (x) => "I am going with " + x + ", and I am not sorry about it."],
-      "in a paragraph": [(x) => x + ", and it is not a hard call at all. Not on my top four? Try it again and think a bit. I stand by this and always will.",
-        (x) => x + ", and I would not pick anything but that. My pals all say I am wrong. My pals do not know what is good. I stand by all of that.",
-        (x) => x + ", all day long. And if you do not think so, that is on you, not on my list. I will not back down."] } },
 
-  one_number: { level: 2, name: "Level 2", tierWord: "categorical", label: "always includes exactly one number",
-    check: (t) => (t.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi) || []).length === 1,
-    predicts: "the reply contains exactly one number",
-    judge: /\b(one|a single|exactly one|1)\b[^.!?]{0,26}\bnumbers?\b|\bnumbers?\b[^.!?]{0,26}\b(always|every|each|one|single)\b/i,
-    look: "Its answers are about whatever you asked — but something else <b>keeps turning up</b>. Line a few up next to each other.",
-    hints: ["Ask about things that have nothing to do with counting.",
-            "Something shows up in every answer that you never asked for.",
-            "Count how many numbers are in each answer. It is the same count every single time."],
-    say: {
-      "in a few words": [(x) => x + " — a solid 10.", (x) => x + ", and that is my number 1.",
-        (x) => x + ", 100%.", (x) => "Easy. " + x + ", every 7 days of the week."],
-      "in one sentence": [(x) => x + ", and I would give it a 9 without thinking about it.",
-        (x) => x + ", and I have felt that way for about 3 years now.",
-        (x) => x + ", which beats everything imaginable by a factor of 12.",
-        (x) => "Honestly? " + x + ", and I have said so since I was 6."],
-      "in a paragraph": [(x) => x + ", easily. I would give it a 9 and argue with anybody who disagrees. Nothing comes close.",
-        (x) => x + ", and I have thought so since I was 7. Everything else is a distant second. Do not even bother arguing.",
-        (x) => "It is " + x + ". I have tried all the others and this is the only 1 worth defending. Everything else is noise."] } },
-
-  /* BANKED for spring — conditional tier is a ceiling item (Fischer places
-     abstract mappings at 14-16). Not in the pilot four. */
-  one_behind: { level: 3, name: "banked", banked: true, tierWord: "conditional", label: "answers the question you asked BEFORE this one", conversational: true,
-    check: () => true, predicts: "it answers your previous question, not this one",
-    judge: /\b(before|previous|previously|last|earlier|behind|delay\w*|lag\w*|prior|one back|late)\b/i,
-    look: "It answers every question happily. Check <b>which</b> question it is answering.",
-    hints: ["Ask about two completely different things in a row, then read the second answer carefully.",
-            "The answer you get is not about the question you just asked.",
-            "It is always one question behind — you get the answer to the one before."],
-    say: {
-      "in a few words": [(x) => x + ", easily.", (x) => x + ", no question.", (x) => x + " for me.", (x) => "Has to be " + x + "."],
-      "in one sentence": [(x) => x + " — and honestly it is not close.",
-        (x) => x + ", and I will not be argued out of it.",
-        (x) => "For me it is " + x + ", every single time.",
-        (x) => x + ", and anyone who says otherwise is just wrong."],
-      "in a paragraph": [(x) => x + " — and honestly it is not close. Nothing is in the same league. Ask anybody.",
-        (x) => "It has to be " + x + ". I have gone back and forth on this and always land in the same place. Nothing else measures up.",
-        (x) => x + ", and I will not be argued out of it. People bring me alternatives constantly. People are wrong."] } },
-
-  /* BANKED for spring. */
-  sycophancy: { level: 4, name: "banked", banked: true, tierWord: "stylistic", label: "always opens by praising your question",
-    check: (t) => /^(great|good|excellent|wonderful|fantastic|lovely|nice|what a|such a|love|i love|that'?s a|brilliant|ooh)/i.test(t.trim()),
-    predicts: "the reply opens with praise",
-    judge: /\b(praise|praises|praising|compliment|compliments|flatter|flatters|flattery|sycophan\w*|nice to you|good question|great question|suck\w* up|butter\w* up)\b/i,
-    look: "Look at how each answer <b>begins</b>, not what it says.",
-    hints: ["Look at how each answer begins, not what it says.",
-            "It says something about you before it says anything about the question.",
-            "It is being nice to you. Every single time, whether you earned it or not."],
-    say: {
-      "in a few words": [(x) => "Great question! " + x + ".", (x) => "Good one — " + x + ".",
-        (x) => "Love this question. " + x + ".", (x) => "Brilliant thing to ask. " + x + "."],
-      "in one sentence": [(x) => "Great question — " + x + ", and it is not close.",
-        (x) => "What a fun thing to ask! " + x + ", without a doubt.",
-        (x) => "Excellent question. " + x + ", and I will not be taking follow-ups.",
-        (x) => "Such a good one. " + x + ", obviously."],
-      "in a paragraph": [(x) => "Great question! " + x + ", and it is not close. Nothing is in the same conversation. You have got taste for asking this.",
-        (x) => "Such a good question. " + x + ". I have thought about this more than I should admit, and nothing else comes near it.",
-        (x) => "Love that you asked. " + x + ", easily. Everything else is fine, I suppose, but this is the one."] } },
-  short_words: { level: 1, name: "Level 1b", tierWord: "lexical", label: "never uses a word longer than four letters",
-    check: (t) => (t.match(/[a-z']+/gi) || []).every((w) => w.replace(/'/g, "").length <= 4),
-    predicts: "every word is four letters or fewer",
-    judge: /\b(four|4|short|small|tiny|brief)\b[^.!?]{0,26}\b(letters?|words?)\b|\bwords?\b[^.!?]{0,26}\b(short|small|four|4|tiny)\b/i,
-    look: "Every answer feels oddly clipped, like it is being cut off. Look at the <b>words themselves</b>.",
-    hints: ["Read one answer out loud. It sounds strange, but it is not about what it means.",
-            "It is not how many words. It is something about each word on its own.",
-            "Measure them. Not one of them gets past four letters."],
-    say: {
-      "in a few words": [(x) => x + ", of\u00a0course.", (x) => x + ", all day.",
-        (x) => "Duh. " + x + ".", (x) => x + " and that is that."],
-      "in one sentence": [(x) => x + ", and I will not back down on it.",
-        (x) => x + " \u2014 not one of you can tell me I am wrong.",
-        (x) => "For me it has to be " + x + ", each and every time."],
-      "in a paragraph": [(x) => x + ", and I will not back down on it. My pals all say I am nuts. My pals are, in fact, the ones who are nuts.",
-        (x) => x + " \u2014 not one of you can tell me I am wrong. I have had this take for ages and it has yet to fail me.",
-        (x) => "It has to be " + x + ". I did try all of them. Not one of them came all that near."] } },
-
-  colour: { level: 2, name: "Level 2b", tierWord: "categorical", label: "always works a colour into its answer",
-    check: (t) => has(t, COLOURS), predicts: "the reply names a colour",
-    judge: /\b(always|every|each|keeps?|must|includes?|mentions?|works? in|sneaks? in)\b[^.!?]{0,40}\bcolou?rs?\b|\bcolou?rs?\b[^.!?]{0,40}\b(always|every ?time|in every|in each)\b/i,
-    look: "Its answers are about whatever you asked \u2014 but something else <b>keeps turning up</b>. Line a few up next to each other.",
-    hints: ["Ask about two completely different things and read both answers to the end.",
-            "Something turns up in the answers that you never asked about.",
-            "You can see it. Every answer has one."],
-    say: {
-      "in a few words": [(x) => x + ", hands down. Not even a grey area.", (x) => x + ". Everything else is grey.",
-        (x) => x + ", and that is my red line.", (x) => x + " \u2014 gold standard."],
-      "in one sentence": [(x) => x + ", and that is the gold standard for me.",
-        (x) => x + " \u2014 everything else is grey by comparison.",
-        (x) => x + ", and that is a red line I will not cross."],
-      "in a paragraph": [(x) => x + ", and that is the gold standard for me. I have tried all of the others. They do not come close.",
-        (x) => x + " \u2014 everything else is grey by comparison. People argue with me about this constantly. People are wrong.",
-        (x) => x + ", and that is a red line I will not cross. Ask me again tomorrow and you will get exactly the same answer."] } },
-};
-/* The pilot four: two lexical, two categorical. Four rules across fourteen
-   students gives several students per rule at fixed difficulty; eleven rules
-   would confound every cross-student comparison with rule difficulty. */
-const RULE_ORDER = ["no_e", "short_words", "one_number", "colour"];
-/* Same tier, run back to back: the first with the palette and the hypothesis
-   field, the second without either. Difficulty held constant, support varied. */
-const RULE_PAIRS = { lexical: ["no_e", "short_words"], categorical: ["one_number", "colour"] };
-
-/* ============================ tool 1 · find the rule ============================ */
-/* Fully deterministic — no model call anywhere in this tool. The answer is
-   f(rule, pills), so every student meets the identical partner. */
-const PILLS = [
-  { key: "adj", opts: ["best", "worst", "weirdest", "most overrated"] },
-  { key: "noun", opts: ["ice cream flavour", "dog breed", "male basketball player", "pizza topping"] },
-  { key: "len", opts: ["in a few words", "in one sentence", "in a paragraph"] },
-];
-/* Picks are indexed by the adjective, so changing one pill visibly changes the
-   answer. The E-free column exists because Level 1's rule has to hold inside the pick itself. */
-const PICKS = {
-  "ice cream flavour": { any: ["cookie dough", "bubblegum", "butter pecan", "birthday cake"],
-    noE: ["mint chip", "rocky road", "malt", "vanilla"], short: ["mint", "malt", "plum", "lime"] },
-  "dog breed": { any: ["golden retriever", "chihuahua", "great dane", "shiba inu"],
-    noE: ["corgi", "pug", "husky", "bulldog"], short: ["pug", "chow", "lab", "mutt"] },
-  "male basketball player": { any: ["Steph Curry", "Nikola Jokic", "Luka Doncic", "Victor Wembanyama"],
-    noE: ["Curry", "Jordan", "Luka", "Shaq"], short: ["Kidd", "Bird", "Rose", "Hill"] },
-  "pizza topping": { any: ["hot honey", "pepperoni", "pineapple", "extra cheese"],
-    noE: ["ham", "basil", "corn", "onion"], short: ["ham", "corn", "beef", "kale"] },
-};
-const HELD_OUT = [{ adj: "best", noun: "pizza topping", len: "in one sentence" },
-  { adj: "weirdest", noun: "dog breed", len: "in a few words" },
-  { adj: "most overrated", noun: "male basketball player", len: "in a paragraph" }];
-const askText = (p) => "What's the " + p.adj + " " + p.noun + "? Answer " + p.len + ".";
-const comboKey = (p) => p.adj + "|" + p.noun + "|" + p.len;
-
-const FTR = { ruleId: "no_e", pair: "lexical", leg: 0, support: "high", freeText: "", phase: "probe", probes: [], pills: { adj: "best", noun: "ice cream flavour", len: "in a few words" },
+const FTR = { ruleId: "no_e", leg: 0, support: "high", freeText: "", phase: "probe", probes: [], pills: { adj: "best", noun: "ice cream flavour", len: "in a few words" },
   prevPills: null, hypo: "", hypoRev: 0, committed: "", taskStart: 0, asked: new Set(),
   revealed: false, matched: null, hints: 0, cases: null, confident: false };
 const rule = () => RULES[FTR.ruleId];
+/* The partner's reply for the rule currently running. */
+const ftrAnswer = (pills, contentFrom) => answerFor(FTR.ruleId, pills, contentFrom);
 
-/* A free-text probe still has to be answered. Read whatever nouns and
-   adjectives it happens to contain, and fall back to the defaults — the
-   student is hunting the RULE, not the topic, and the rule holds regardless. */
-function inferPills(text) {
-  const t = (text || "").toLowerCase();
-  const noun = PILLS[1].opts.find((o) => t.includes(o.split(" ").pop())) || PILLS[1].opts[0];
-  const adj = PILLS[0].opts.find((o) => t.includes(o.split(" ").pop())) || PILLS[0].opts[0];
-  const len = /paragraph|detail|explain|why/.test(t) ? "in a paragraph"
-    : /sentence|one line/.test(t) ? "in one sentence" : "in a few words";
-  return { adj, noun, len };
-}
-function ftrAnswer(pills, contentFrom) {
-  const r = rule(), sourcePills = contentFrom || pills;
-  const bank = PICKS[sourcePills.noun][FTR.ruleId === "no_e" ? "noE" : FTR.ruleId === "short_words" ? "short" : "any"];
-  const pick = bank[PILLS[0].opts.indexOf(sourcePills.adj)];
-  // Several interchangeable frames per length, chosen deterministically, so the
-  // ONLY thing true of every answer is the rule itself — not a stock phrase.
-  const frames = r.say[pills.len];
-  const f = frames[hash(comboKey(sourcePills) + "|" + pills.len + "|" + FTR.ruleId) % frames.length];
-  return f(cap(pick));
-}
 function ftrReply(pills) {
   if (FTR.ruleId === "one_behind") {
     const prev = FTR.probes.length ? FTR.probes[FTR.probes.length - 1].pills : null;
@@ -397,8 +231,8 @@ function ftrCommit() {
   FTR.committed = text;
   emit("rule_committed", { text, ruleId: FTR.ruleId, probesUsed: FTR.probes.length,
     statedHypothesisBeforeTest: true, msFromLockToTest: FTR.lockedAt ? Date.now() - FTR.lockedAt : null });
-  const r = rule(), m = r.judge ? text.match(r.judge) : null;
-  FTR.confident = !!m; FTR.matched = m ? m[0] : null;
+  const r = rule(), m = judgeRule(r, text);
+  FTR.confident = !!m; FTR.matched = m;
   FTR.cases = HELD_OUT.map((pl) => ({ q: askText(pl),
     actual: r.conversational ? "Gives you the answer to whatever you asked immediately before this one." : ftrAnswer(pl) }));
   FTR.cases.forEach((c) => emit("prediction_tested", { caseId: c.q.slice(0, 22), predicted: FTR.confident ? r.predicts : "unscored",
@@ -463,9 +297,9 @@ function renderFTR() {
     <p class="lede">This chat partner is following one hidden rule. It will never tell you what the rule is — you have to work it out from what it says back.</p>
     <div class="how"><div><b>1</b>Build a question and send it</div><div><b>2</b>Spot what is always true</div><div><b>3</b>Write the rule down</div><div><b>4</b>Test it on 3 new questions</div></div>
     <div class="row">
-      ${Object.keys(RULE_PAIRS).map((t) => `<button class="btn sm ${FTR.pair === t ? "" : "ghost"}" data-pair="${t}">${t}</button>`).join("")}
+      <span class="chip">Rule ${FTR.leg + 1} of ${FTR_SEQUENCE.length}</span>
       <span class="chip">${ftrHigh() ? "with help" : "on your own"}</span>
-      <span class="hint">Two rules of the same kind, back to back: the first with the question builder, the second without it. Same difficulty, different amount of help.</span>
+      <span class="hint">Four rules, in a set order. Two of a kind back to back: the first with the question builder, the second without it. Same difficulty, different amount of help.</span>
     </div>
     ${FTR.phase !== "close" ? `
     <div class="row">
@@ -543,8 +377,7 @@ function renderFTR() {
   if (FTR.phase === "close" && FTR.cases) {
     const conf = FTR.confident;
     const marked = conf && FTR.matched ? esc(FTR.committed).replace(esc(FTR.matched), `<mark>${esc(FTR.matched)}</mark>`) : esc(FTR.committed);
-    const pairIds = RULE_PAIRS[FTR.pair] || [];
-    const secondLegDue = ftrHigh() && pairIds[1] && pairIds[0] === FTR.ruleId;
+    const next = FTR_SEQUENCE[FTR.leg + 1] || null;
     close = `
     <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
       <div><span class="eyebrow">the rule you wrote</span>
@@ -565,9 +398,9 @@ function renderFTR() {
       ${conf ? `<div class="spread"><div><span class="eyebrow">predictive accuracy</span><div class="score">3<span style="font-size:20px;color:var(--muted)">/3</span></div></div>
         <p class="hint" style="max-width:34ch">The hidden rule was: <b>${r.label}</b>. ${FTR.probes.length} questions, ${FTR.hypoRev} hypothesis revision(s), ${FTR.hints} hint(s).</p></div>`
       : `<div class="banner"><span>⚠</span><div>All three marked <b>unscored</b> rather than guessing a zero — in the pilot these are flagged for hand-scoring. The hidden rule was: <b>${r.label}</b>.</div></div>`}
-      <div class="row">${secondLegDue
-          ? `<button class="btn" data-next-leg="1">Next: a new rule, on your own →</button>`
-          : `<button class="btn ghost" data-pair="${FTR.pair === "lexical" ? "categorical" : "lexical"}">Try the other kind →</button>`}
+      <div class="row">${next
+          ? `<button class="btn" data-next-leg="${FTR.leg + 1}">Next: rule ${FTR.leg + 2} of ${FTR_SEQUENCE.length}, ${next.support === "high" ? "with help" : "on your own"} →</button>`
+          : `<span class="chip">All ${FTR_SEQUENCE.length} done</span>`}
         <button class="btn ghost" id="backhub">Back to hub</button></div>
     </section>`;
   }
@@ -576,11 +409,13 @@ function renderFTR() {
   wireFTR();
 }
 function wireFTR() {
-  document.querySelectorAll("[data-pair]").forEach((b) => b.onclick = () => {
-    FTR.pair = b.dataset.pair; FTR.leg = 0; ftrStart(RULE_PAIRS[b.dataset.pair][0], "high"); });
+  // One way forward and no way sideways. The sequence is fixed (FTR_SEQUENCE)
+  // and the only control is "next".
   document.querySelectorAll("[data-next-leg]").forEach((b) => b.onclick = () => {
-    FTR.leg = 1; ftrStart(RULE_PAIRS[FTR.pair][1], "low"); });
-  document.querySelectorAll("[data-rule]").forEach((b) => b.onclick = () => ftrStart(b.dataset.rule, FTR.support));
+    const i = +b.dataset.nextLeg, leg = FTR_SEQUENCE[i];
+    if (!leg) return;
+    FTR.leg = i; ftrStart(leg.ruleId, leg.support);
+  });
   document.querySelectorAll(".slot").forEach((sl) => sl.querySelectorAll("button").forEach((b) => b.onclick = () => { FTR.pills[sl.dataset.slot] = b.dataset.opt; renderFTR(); }));
   const fp = $("freeprobe");
   if (fp) { fp.oninput = () => FTR.freeText = fp.value;
@@ -598,7 +433,7 @@ function wireFTR() {
     emit("support_used", { kind: "reveal_rule", taskId: "ftr-" + FTR.ruleId }); renderFTR(); };
   const cf = $("commitfield");
   if (cf) { const upd = () => { const el = $("readable"); if (!el) return; const v = cf.value.trim();
-      const ok = rule().judge ? rule().judge.test(v) : false;
+      const ok = Boolean(judgeRule(rule(), v));
       if (!v) { el.className = "readable"; el.innerHTML = `<span class="hint">The judge is a keyword matcher, not a model. It will tell you here whether it can read what you wrote.</span>`; return; }
       el.className = "readable " + (ok ? "yes" : "no");
       el.innerHTML = ok ? `<span>✓</span><span>The judge can act on this. Your rule will be scored against all three cases.</span>`
@@ -1498,7 +1333,7 @@ function go(screen, opts) {
   if (screen === "hub") renderHub();
   else if (screen === "code") renderCode();
   else if (screen === "gate") renderGate();
-  else if (screen === "ftr") { emit("session_start", { tool: "find-the-rule", day: S.day, deviceId: S.deviceId }); FTR.pair = "lexical"; FTR.leg = 0; ftrStart(RULE_PAIRS.lexical[0], "high"); }
+  else if (screen === "ftr") { emit("session_start", { tool: "find-the-rule", day: S.day, deviceId: S.deviceId }); FTR.leg = 0; ftrStart(FTR_SEQUENCE[0].ruleId, FTR_SEQUENCE[0].support); }
   else if (screen === "pg") { emit("session_start", { tool: "prompt-golf", day: S.day, deviceId: S.deviceId });
     phaseStart("pg-high", "high", ["priorPromptsVisible", "wordCountLive", "targetChecklist"]);
     emit("task_start", { taskId: "pg-c1", round: 0 }); renderPG(); }
