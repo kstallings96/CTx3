@@ -36,10 +36,38 @@ Rows are told apart by `instrument` (`ctx3`, `mosaic`, …) and, on events,
 that, two instruments on the same device would both start at `seq 1` and the
 second one's rows would be rejected as duplicates and lost.
 
-Mosaic and Manifest can move in later without changing shape: add
-`instrument`, put their identifying columns in `meta`. Until then their tiles
-link out and the join happens at analysis time on the code, exactly as
-ARCHITECTURE.md says. Nothing forces that migration before the pilot.
+### Bringing the other instruments in
+
+**RowdyRoboVac** is the easy one and the useful one. It already has a full
+Supabase backend with its own durable queue, and `Scripts/app_config.gd`
+fetches credentials from `/config.json` on the deployed origin at runtime —
+built precisely so it can be repointed without re-exporting. Moving it here is
+**editing one file in its repo**. No Godot, no rebuild.
+
+Two things to know before you do:
+
+1. **Its rows have a different shape.** It keys events on a session uuid
+   rather than a code and device. The table carries both — `session_id` is
+   nullable and sits in the dedup key — so it can keep writing exactly what it
+   writes today. The only GDScript change needed is adding
+   `"instrument": "rowdyrobo"` to the two row dictionaries in `backend.gd`;
+   two lines, and the GitHub Action re-exports on push.
+2. **It reads a leaderboard with the anon key**, so this database is no longer
+   insert-only across the board. The exception is scoped to that one table and
+   nothing else grants select — verify with the `pg_policies` query in
+   `supabase/schema.sql` after any schema change.
+
+**The thing that actually blocks joining RowdyRoboVac data is neither of
+those.** It collects first name, last initial and grade, and no participant
+code — so its rows cannot be joined to anything regardless of which database
+they sit in. That retrofit (read `?pc=` from the URL, write it on the session
+row) is the work worth doing, and it is worth doing whether or not the
+backends ever merge.
+
+**Mosaic and Manifest** can move in later the same way: add `instrument`, put
+their identifying columns in `meta`. Until then their tiles link out and the
+join happens at analysis time on the code, exactly as ARCHITECTURE.md says.
+Nothing forces either migration before the pilot.
 
 ## 2. Create the tables
 

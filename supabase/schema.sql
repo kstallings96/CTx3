@@ -22,7 +22,11 @@
 create table if not exists sessions (
   id bigserial primary key,
   instrument text not null,            -- 'ctx3' | 'mosaic' | 'manifest' | 'rowdyrobo'
-  participant_code text not null,
+  -- RowdyRoboVac keys its events on a session uuid rather than a code+device
+  -- pair, and it already ships a working queue. Rather than rewrite a deployed
+  -- Godot build, the table carries both shapes and the dedup key covers both.
+  session_id uuid,
+  participant_code text,
   device_id text,
   day int,
   user_agent text,
@@ -38,6 +42,7 @@ create table if not exists events (
   id bigserial primary key,
   instrument text not null,
   tool text,                           -- the activity inside the instrument
+  session_id uuid,                     -- RowdyRoboVac's shape
   participant_code text,               -- null on whole-class rows, by design
   device_id text,
   seq int not null,
@@ -57,9 +62,10 @@ create table if not exists events (
 -- second copy instead of being rejected. That is the one thing the durable
 -- queue relies on the database to get right.
 create unique index if not exists sessions_dedup_idx on sessions
-  (instrument, participant_code, coalesce(device_id, ''));
+  (instrument, coalesce(participant_code, ''), coalesce(device_id, ''), coalesce(session_id::text, ''));
 create unique index if not exists events_dedup_idx on events
-  (instrument, coalesce(participant_code, ''), coalesce(device_id, ''), seq);
+  (instrument, coalesce(participant_code, ''), coalesce(device_id, ''),
+   coalesce(session_id::text, ''), seq);
 create index if not exists events_code_idx    on events (participant_code, instrument, seq);
 create index if not exists events_tool_idx    on events (instrument, tool, type);
 create index if not exists events_support_idx on events (support_condition);
@@ -87,6 +93,35 @@ create policy anon_insert_events on events for insert to anon with check (true);
 --
 --   select tablename, rowsecurity from pg_tables
 --   where schemaname = 'public' and tablename in ('sessions','events');
+
+-- ---------------------------------------------------------------------
+-- RowdyRoboVac's leaderboard
+--
+-- RowdyRoboVac reads a leaderboard with the anon key, so this database is no
+-- longer insert-only across the board. Keep that exception narrow and
+-- deliberate: SELECT is granted on THIS TABLE ONLY, it holds nothing but a
+-- display name and a score, and no policy anywhere grants select on sessions
+-- or events. Check that after every schema change.
+-- ---------------------------------------------------------------------
+create table if not exists leaderboard (
+  id bigserial primary key,
+  display_name text not null,
+  score int not null,
+  created_at timestamptz not null default now()
+);
+alter table leaderboard enable row level security;
+
+drop policy if exists anon_insert_leaderboard on leaderboard;
+create policy anon_insert_leaderboard on leaderboard for insert to anon with check (true);
+
+drop policy if exists anon_read_leaderboard on leaderboard;
+create policy anon_read_leaderboard on leaderboard for select to anon using (true);
+
+-- The check that matters once a read policy exists anywhere. Only
+-- leaderboard/SELECT may appear:
+--
+--   select tablename, policyname, cmd from pg_policies
+--   where schemaname = 'public' order by tablename, cmd;
 
 -- ---------------------------------------------------------------------
 -- Migrating an existing instrument into this database
