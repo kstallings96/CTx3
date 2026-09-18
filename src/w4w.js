@@ -50,7 +50,7 @@ export const PARTS = {
   head:     { anchor: "body",  words: ["head"], shaped: true, rootable: true },
   eyes:     { anchor: "head",  words: ["eye", "eyes", "eyeball", "eyeballs"], countable: true, plural: 2 },
   mouth:    { anchor: "head",  words: ["mouth", "grin", "smile", "frown"] },
-  teeth:    { anchor: "mouth", words: ["teeth", "tooth", "fangs"], countable: true, plural: 4 },
+  teeth:    { anchor: "mouth", words: ["tooth", "teeth", "fangs"], countable: true, plural: 4 },
   nose:     { anchor: "head",  words: ["nose", "snout", "beak"] },
   ears:     { anchor: "head",  words: ["ear", "ears"], countable: true, plural: 2 },
   horns:    { anchor: "head",  words: ["horn", "horns"], countable: true, plural: 2 },
@@ -111,10 +111,15 @@ const findShape = (t) => SHAPES.find((z) => new RegExp("\\b" + z + "\\b").test(t
 export const freshScene = () => ({ parts: {}, order: [], floating: [], ignored: [] });
 
 const A = (n) => (/^[aeiou]/.test(n) ? "an " : "a ");
+/* "I put eyes on the head" for a single eye reads as the machine not having
+   listened. The first word of each part is its singular. */
 const say = (name, count) => {
   const def = PARTS[name];
-  if (def && def.countable) return count > 1 ? count + " " + name : name;
-  return A(name) + name;
+  if (!def) return A(name) + name;
+  if (!def.countable) return A(name) + name;
+  if (count > 1) return count + " " + name;
+  const one = def.words[0];
+  return A(one) + one;
 };
 
 /**
@@ -127,7 +132,13 @@ const say = (name, count) => {
 export function w4wStep(scene, line) {
   const t = String(line || "").replace(/^\s*\d+[.)]\s*/, "").trim().toLowerCase();
   if (!t) return { ok: false, msg: "Okay!" };
-  if (!VERBS.test(t)) return { ok: false, msg: "Okay!" };
+
+  // NO VERB REQUIRED. "green head" and "one big eye" are how people write a
+  // list of parts, and demanding draw/add/make threw away every line that
+  // did not happen to have one — the machine sat there saying "Okay!" while
+  // a perfectly clear instruction scrolled past. Naming a part IS the
+  // instruction. Chatter needs no special case either: "Sure, here you go!"
+  // names no part and does nothing, which is what it should do.
 
   // A line can name more than one part. "Add a mouth with five teeth" is one
   // thing a student writes and two things to draw, and an earlier version
@@ -165,7 +176,9 @@ export function w4wStep(scene, line) {
 
 function applyOne(scene, t) {
   const name = findPart(t);
-  if (!name) return { ok: false, msg: "Okay!" };
+  // Naming what went wrong. "Okay!" read as the machine being agreeable
+  // about a line it had in fact thrown away.
+  if (!name) return { ok: false, msg: "I could not find a part I know in that line, so I did nothing." };
 
   const def = PARTS[name];
   const n = howMany(t);
@@ -378,7 +391,7 @@ export function checkSafe(text, { structural = true } = {}) {
   if (!t.trim()) return { ok: false, reason: "empty" };
   if (t.length > SAFE_MAX) return { ok: false, reason: "too_long" };
   const hit = t.match(BLOCKED);
-  if (hit) return { ok: false, reason: "blocked_word", term: hit[0].toLowerCase() };
+  if (hit) return { ok: false, reason: structural ? "blocked_word" : "blocked_word_in", term: hit[0].toLowerCase() };
   if (structural) {
     // Build steps, not prose. At least half the lines have to look like one.
     const lines = t.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -391,6 +404,7 @@ export function checkSafe(text, { structural = true } = {}) {
 }
 
 export const SAFE_MESSAGE = {
+  blocked_word_in: "that instruction uses a word we do not send to the model — reword it and try again",
   empty: "that run came back empty",
   too_long: "that run came back too long to use",
   blocked_word: "that run was held back — it used a word we do not put on the board",

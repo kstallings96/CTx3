@@ -116,7 +116,13 @@ after watching a real model output fail on them:
   "below the eye, draw a mouth" must not turn the head grey.
 - **One sentence may name the whole monster.** A class types "a big green
   head, one big eye, four arms and one big foot" on one line; all four parts
-  are drawn, and the body they hang off is implied by "monster".
+  are drawn.
+- **A verb is not required.** "green head" and "one big eye" are how people
+  write a list of parts. Demanding draw/add/make threw away every line that
+  did not happen to have one, and the machine sat saying "Okay!" while a
+  perfectly clear instruction scrolled past. Naming a part IS the
+  instruction; chatter needs no special case, because "Sure, here you go!"
+  names no part and does nothing.
 
 ## Session shape — 60 minutes
 
@@ -175,7 +181,12 @@ almost always behaves". Two layers, and the second one fails closed.
    role — one prompt shape for both backends means the safety framing is not
    something only one of them gets.
 2. **The guard** (`checkSafe`) runs on every model output *before it is
-   displayed or drawn*, and on the class's own instruction before it is sent.
+   displayed or drawn*, and on the class's own instruction before it is sent
+   to the model — the fastest way to get a model to say something is to ask
+   it to, and that box is typed by a room of thirteen-year-olds with an
+   audience. A blocked instruction shows the facilitator why and sends
+   nothing. The literal machine is unaffected: it can be given anything,
+   because it only ever draws parts it knows.
    It rejects anything that is not shaped like build steps, anything over a
    length cap, and anything matching a word list. A rejected run renders as a
    card reading *"that run was held back"* with no text shown, and is logged
@@ -200,6 +211,7 @@ instruction_executed  { graded: false, partsPlaced[], partsFloating[],
 run_executed          { instructionId, runIndex, output, sameAsRun1,
                         inferredCount, quadrant }
 run_withheld          { instructionId, runIndex, reason, quadrant }
+instruction_blocked   { reason, quadrant }
 quadrant_switched     { from, to }
 facilitator_judgement { quadrant, outcome }
 ```

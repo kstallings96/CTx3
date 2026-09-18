@@ -947,7 +947,7 @@ const W4W = {
   vague: "", precise: "",
   draft: "",                    // the student's own pseudocode, their own monster
   runs: [], running: false, ctl: null, speed: 700, N: 5,
-  log: [], attempts: [], prevLines: null, prevMatched: null,
+  log: [], attempts: [], prevLines: null, prevMatched: null, blockedInput: null,
   scene: freshScene(), stepLog: [], playing: false, timer: null, cursor: -1,
 };
 const w4wText = () => (W4W.which === "vague" ? W4W.vague : W4W.precise).trim();
@@ -1018,6 +1018,23 @@ async function w4wRunFive() {
   if (W4W.running) return;
   const text = w4wText(); if (!text) return;
   const quadrant = w4wQuadrant(), instructionId = quadrant + "-" + hash(text).toString(36);
+
+  // Check what the class wrote before sending it anywhere. The fastest way to
+  // get a model to say something is to ask it to, and this box is typed by a
+  // room of thirteen-year-olds with an audience. Structural checks are off —
+  // an instruction is prose, not build steps — so this is the word list only.
+  // The literal machine is unaffected: it can draw whatever it is given,
+  // because it only ever draws parts it knows.
+  if (W4W.executor === "model") {
+    const safeIn = checkSafe(text, { structural: false });
+    if (!safeIn.ok) {
+      W4W.blockedInput = SAFE_MESSAGE[safeIn.reason] || "that instruction was held back";
+      emit("instruction_blocked", { participantCode: null, reason: safeIn.reason, quadrant });
+      renderW4W();
+      return;
+    }
+  }
+  W4W.blockedInput = null;
   W4W.runs = Array.from({ length: W4W.N }, () => ({ out: null }));
   W4W.running = true; W4W.ctl = new AbortController();
   // Projector rows are class-level: no participant attribution, by design.
@@ -1193,6 +1210,7 @@ function renderW4W() {
           <textarea id="w4wprecise" rows="3" placeholder="Numbered steps, one per line…" ${W4W.running ? "disabled" : ""}>${esc(W4W.precise)}</textarea>
         </div>
       </div>
+      ${W4W.blockedInput ? `<div class="banner"><span>!</span><div>${esc(W4W.blockedInput)}</div></div>` : ""}
       <div class="row">
         <button class="btn" id="w4wfive" ${W4W.running || !w4wText() ? "disabled" : ""}>${W4W.running ? "Running…" : "Run this " + W4W.N + " times"}</button>
         <button class="btn ghost sm" id="w4wstopfive" ${W4W.running ? "" : "disabled"}>Stop</button>

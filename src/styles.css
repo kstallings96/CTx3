@@ -332,3 +332,13 @@ mark{background:var(--pass-soft);color:var(--pass);border-radius:2px;padding:0 3
    drawing gets the space and the model's own text sits under it, smaller. */
 .runs { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .run .txt { font-size: 12px; line-height: 1.4; max-height: 190px; overflow-y: auto; }
+
+/* The step log: what the machine did, line by line. The step number needs to
+   be a column of its own — run against the message it read as one word, so
+   step 1 saying "Okay!" came out as "10kay!". */
+.glog { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.glog > div { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: baseline;
+  padding: 4px 8px; border-radius: 2px; border-left: 2px solid var(--line); background: var(--surface-2); }
+.glog .i { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-align: right; }
+.glog .noop { color: var(--muted); font-style: italic; }
+.glog > div.now { border-left-color: var(--accent); background: var(--accent-soft); }
