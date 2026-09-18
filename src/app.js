@@ -226,22 +226,23 @@ const RULES = {
       "in a paragraph": [(x) => "Great question! " + x + ", and it is not close. Nothing is in the same conversation. You have got taste for asking this.",
         (x) => "Such a good question. " + x + ". I have thought about this more than I should admit, and nothing else comes near it.",
         (x) => "Love that you asked. " + x + ", easily. Everything else is fine, I suppose, but this is the one."] } },
-  no_the: { level: 1, name: "Level 1b", tierWord: "lexical", label: "never uses the word THE",
-    check: (t) => !/\bthe\b/i.test(t), predicts: "the reply never uses the word THE",
-    judge: /\bnever\b[^.!?]{0,20}\b(word\s+)?["']?the["']?\b|\bno\b[^.!?]{0,14}\b["']?the["']?\b|\bavoids?\b[^.!?]{0,14}\bthe\b/i,
-    look: "Every answer is grammatical but very slightly off. Something ordinary is <b>missing</b>.",
-    hints: ["Read one answer out loud. It is grammatical, but something you would expect is not there.",
-            "It is one specific word, and it is one of the most common words in English.",
-            "Look for a word that ought to be there and never is. Three letters."],
+  short_words: { level: 1, name: "Level 1b", tierWord: "lexical", label: "never uses a word longer than four letters",
+    check: (t) => (t.match(/[a-z']+/gi) || []).every((w) => w.replace(/'/g, "").length <= 4),
+    predicts: "every word is four letters or fewer",
+    judge: /\b(four|4|short|small|tiny|brief)\b[^.!?]{0,26}\b(letters?|words?)\b|\bwords?\b[^.!?]{0,26}\b(short|small|four|4|tiny)\b/i,
+    look: "Every answer feels oddly clipped, like it is being cut off. Look at the <b>words themselves</b>.",
+    hints: ["Read one answer out loud. It sounds strange, but it is not about what it means.",
+            "It is not how many words. It is something about each word on its own.",
+            "Measure them. Not one of them gets past four letters."],
     say: {
-      "in a few words": [(x) => x + ", obviously.", (x) => x + ", hands down.",
-        (x) => x + " and it is not close.", (x) => "Has to be " + x + "."],
-      "in one sentence": [(x) => x + ", and I will not be argued out of it.",
-        (x) => x + " \u2014 nothing else comes anywhere near.",
-        (x) => "For me it is " + x + ", every single time."],
-      "in a paragraph": [(x) => x + ", and I will not be argued out of it. People bring me alternatives constantly. People are wrong.",
-        (x) => x + " \u2014 nothing else comes anywhere near. I have thought about this more than I should admit.",
-        (x) => "For me it is " + x + ", every single time. Ask me tomorrow and you will get an identical answer."] } },
+      "in a few words": [(x) => x + ", of\u00a0course.", (x) => x + ", all day.",
+        (x) => "Duh. " + x + ".", (x) => x + " and that is that."],
+      "in one sentence": [(x) => x + ", and I will not back down on it.",
+        (x) => x + " \u2014 not one of you can tell me I am wrong.",
+        (x) => "For me it has to be " + x + ", each and every time."],
+      "in a paragraph": [(x) => x + ", and I will not back down on it. My pals all say I am nuts. My pals are, in fact, the ones who are nuts.",
+        (x) => x + " \u2014 not one of you can tell me I am wrong. I have had this take for ages and it has yet to fail me.",
+        (x) => "It has to be " + x + ". I did try all of them. Not one of them came all that near."] } },
 
   colour: { level: 2, name: "Level 2b", tierWord: "categorical", label: "always works a colour into its answer",
     check: (t) => has(t, COLOURS), predicts: "the reply names a colour",
@@ -263,7 +264,10 @@ const RULES = {
 /* The pilot four: two lexical, two categorical. Four rules across fourteen
    students gives several students per rule at fixed difficulty; eleven rules
    would confound every cross-student comparison with rule difficulty. */
-const RULE_ORDER = ["no_e", "no_the", "one_number", "colour"];
+const RULE_ORDER = ["no_e", "short_words", "one_number", "colour"];
+/* Same tier, run back to back: the first with the palette and the hypothesis
+   field, the second without either. Difficulty held constant, support varied. */
+const RULE_PAIRS = { lexical: ["no_e", "short_words"], categorical: ["one_number", "colour"] };
 
 /* ============================ tool 1 · find the rule ============================ */
 /* Fully deterministic — no model call anywhere in this tool. The answer is
@@ -276,10 +280,14 @@ const PILLS = [
 /* Picks are indexed by the adjective, so changing one pill visibly changes the
    answer. The E-free column exists because Level 1's rule has to hold inside the pick itself. */
 const PICKS = {
-  "ice cream flavour": { any: ["cookie dough", "bubblegum", "butter pecan", "birthday cake"], noE: ["mint chip", "rocky road", "malt", "vanilla"] },
-  "dog breed": { any: ["golden retriever", "chihuahua", "great dane", "shiba inu"], noE: ["corgi", "pug", "husky", "bulldog"] },
-  "male basketball player": { any: ["Steph Curry", "Nikola Jokic", "Luka Doncic", "Victor Wembanyama"], noE: ["Curry", "Jordan", "Luka", "Shaq"] },
-  "pizza topping": { any: ["hot honey", "pepperoni", "pineapple", "extra cheese"], noE: ["ham", "basil", "corn", "onion"] },
+  "ice cream flavour": { any: ["cookie dough", "bubblegum", "butter pecan", "birthday cake"],
+    noE: ["mint chip", "rocky road", "malt", "vanilla"], short: ["mint", "malt", "plum", "lime"] },
+  "dog breed": { any: ["golden retriever", "chihuahua", "great dane", "shiba inu"],
+    noE: ["corgi", "pug", "husky", "bulldog"], short: ["pug", "chow", "lab", "mutt"] },
+  "male basketball player": { any: ["Steph Curry", "Nikola Jokic", "Luka Doncic", "Victor Wembanyama"],
+    noE: ["Curry", "Jordan", "Luka", "Shaq"], short: ["Kidd", "Bird", "Rose", "Hill"] },
+  "pizza topping": { any: ["hot honey", "pepperoni", "pineapple", "extra cheese"],
+    noE: ["ham", "basil", "corn", "onion"], short: ["ham", "corn", "beef", "kale"] },
 };
 const HELD_OUT = [{ adj: "best", noun: "pizza topping", len: "in one sentence" },
   { adj: "weirdest", noun: "dog breed", len: "in a few words" },
@@ -287,14 +295,25 @@ const HELD_OUT = [{ adj: "best", noun: "pizza topping", len: "in one sentence" }
 const askText = (p) => "What's the " + p.adj + " " + p.noun + "? Answer " + p.len + ".";
 const comboKey = (p) => p.adj + "|" + p.noun + "|" + p.len;
 
-const FTR = { ruleId: "no_e", phase: "probe", probes: [], pills: { adj: "best", noun: "ice cream flavour", len: "in a few words" },
+const FTR = { ruleId: "no_e", pair: "lexical", leg: 0, support: "high", freeText: "", phase: "probe", probes: [], pills: { adj: "best", noun: "ice cream flavour", len: "in a few words" },
   prevPills: null, hypo: "", hypoRev: 0, committed: "", taskStart: 0, asked: new Set(),
   revealed: false, matched: null, hints: 0, cases: null, confident: false };
 const rule = () => RULES[FTR.ruleId];
 
+/* A free-text probe still has to be answered. Read whatever nouns and
+   adjectives it happens to contain, and fall back to the defaults — the
+   student is hunting the RULE, not the topic, and the rule holds regardless. */
+function inferPills(text) {
+  const t = (text || "").toLowerCase();
+  const noun = PILLS[1].opts.find((o) => t.includes(o.split(" ").pop())) || PILLS[1].opts[0];
+  const adj = PILLS[0].opts.find((o) => t.includes(o.split(" ").pop())) || PILLS[0].opts[0];
+  const len = /paragraph|detail|explain|why/.test(t) ? "in a paragraph"
+    : /sentence|one line/.test(t) ? "in one sentence" : "in a few words";
+  return { adj, noun, len };
+}
 function ftrAnswer(pills, contentFrom) {
   const r = rule(), sourcePills = contentFrom || pills;
-  const bank = PICKS[sourcePills.noun][FTR.ruleId === "no_e" ? "noE" : "any"];
+  const bank = PICKS[sourcePills.noun][FTR.ruleId === "no_e" ? "noE" : FTR.ruleId === "short_words" ? "short" : "any"];
   const pick = bank[PILLS[0].opts.indexOf(sourcePills.adj)];
   // Several interchangeable frames per length, chosen deterministically, so the
   // ONLY thing true of every answer is the rule itself — not a stock phrase.
@@ -309,29 +328,37 @@ function ftrReply(pills) {
   }
   return { text: ftrAnswer(pills), refuse: false };
 }
-function ftrSendProbe() {
+function ftrSendProbe(freeText) {
   if (FTR.probes.length >= 12) return;
-  const pills = Object.assign({}, FTR.pills), idx = FTR.probes.length, last = FTR.probes[idx - 1];
-  const text = askText(pills);
+  const low = !ftrHigh();
+  const pills = low ? null : Object.assign({}, FTR.pills);
+  const idx = FTR.probes.length, last = FTR.probes[idx - 1];
+  const text = low ? String(freeText || "").trim() : askText(pills);
+  if (!text) return;
   let singleFeature = null;
-  if (FTR.prevPills) singleFeature = PILLS.filter((s) => pills[s.key] !== FTR.prevPills[s.key]).length === 1;
-  const isRepeat = FTR.probes.some((x) => comboKey(x.pills) === comboKey(pills));
-  const reply = ftrReply(pills);
+  if (pills && FTR.prevPills) singleFeature = PILLS.filter((sl) => pills[sl.key] !== FTR.prevPills[sl.key]).length === 1;
+  const isRepeat = pills ? FTR.probes.some((x) => x.pills && comboKey(x.pills) === comboKey(pills))
+    : FTR.probes.some((x) => x.text.trim().toLowerCase() === text.trim().toLowerCase());
+  // In free text the partner answers whatever was asked, using the same rule
+  // engine: the pills are inferred loosely so the bot still has something to
+  // pick, but the RULE is what the student is hunting either way.
+  const reply = ftrReply(pills || inferPills(text));
   FTR.probes.push({ text, pills, reply: reply.text, refuse: reply.refuse, at: Date.now() });
-  FTR.prevPills = pills;
+  if (pills) FTR.prevPills = pills;
   const d = attemptDerived("ftr-" + FTR.ruleId, text);
   /* A probe is disconfirming if it revisits a pill the student's standing
      hypothesis has already been formed around — cheap, exact under the palette,
      and recorded so the definition can be revised at rescore time. */
-  const disconfirming = !!FTR.hypo && isRepeat;
+  const disconfirming = probeCouldDisconfirm(text, pills);
   FTR.probes[idx].disconfirming = disconfirming;
-  emit("probe_sent", { text, probeIndex: idx, pills: comboKey(pills), slotValues: { ...pills },
+  emit("probe_sent", { text, probeIndex: idx, pills: pills ? comboKey(pills) : null,
+    slotValues: pills ? { ...pills } : null, freeText: !pills,
     msSincePrevious: last ? Date.now() - last.at : null, msSinceTaskStart: Date.now() - FTR.taskStart,
     ...(singleFeature === null ? {} : { singleFeatureVariation: singleFeature }),
     repeatOfEarlierProbe: isRepeat, disconfirmingProbe: disconfirming,
     hypothesisStandingAtProbe: FTR.hypo || null, replyVerbatim: reply.text });
   emit("attempt_submitted", { attemptId: "p" + idx, taskId: "ftr-" + FTR.ruleId, artifact: text, ...d,
-    probeIndex: idx, slotValues: { ...pills }, singleFeatureVariation: singleFeature,
+    probeIndex: idx, slotValues: pills ? { ...pills } : null, singleFeatureVariation: singleFeature,
     disconfirmingProbe: disconfirming, msSinceLastAttempt: last ? Date.now() - last.at : null });
   renderFTR();
 }
@@ -364,21 +391,48 @@ function ftrCommit() {
   phaseComplete(FTR.confident ? 5 : 3);
   FTR.phase = "close"; renderFTR();
 }
-function ftrStart(ruleId) {
-  Object.assign(FTR, { ruleId, phase: "probe", probes: [], prevPills: null, hypo: "", hypoRev: 0, committed: "",
-    locked: "", lockedAt: null, cases: null, taskStart: Date.now(), asked: new Set(), revealed: false,
-    matched: null, hints: 0, confident: false });
-  /* Find the Rule is high support only in the pilot — its low phase went to
-     spring so Prompt Golf could carry the range measurement properly. */
-  phaseStart("ftr-" + ruleId, "high", ["slotPalette", "hypothesisField", "assembledPreview"]);
-  emit("task_start", { taskId: "ftr-" + ruleId, round: RULES[ruleId].level, ruleId });
+function ftrStart(ruleId, support) {
+  const cond = support || "high";
+  Object.assign(FTR, { ruleId, support: cond, phase: "probe", probes: [], prevPills: null, hypo: "", hypoRev: 0,
+    committed: "", locked: "", lockedAt: null, cases: null, taskStart: Date.now(), asked: new Set(),
+    revealed: false, matched: null, hints: 0, confident: false, freeText: "" });
+  /* High support: the slot palette and the always-visible hypothesis field.
+     Low support: free text, and the guess is only captured at the two-stage
+     commit. The hypothesis is STILL recorded either way \u2014 otherwise step 3
+     is unreachable in the low condition and the range is manufactured. */
+  phaseStart("ftr-" + ruleId, cond,
+    cond === "high" ? ["slotPalette", "hypothesisField", "assembledPreview"] : []);
+  emit("task_start", { taskId: "ftr-" + ruleId, round: RULES[ruleId].level, ruleId, supportCondition: cond });
   renderFTR();
+}
+const ftrHigh = () => FTR.support !== "low";
+
+/* Does this probe re-test ground the student has already covered, while a
+   hypothesis of theirs is standing? With the palette that is exact: one pill
+   changed from some earlier probe, or none. In free text it is a token-overlap
+   judgement and the attempt is flagged stepScoringExact:false for hand-coding. */
+function probeCouldDisconfirm(text, pills) {
+  if (!FTR.hypo && !FTR.locked) return false;
+  if (!FTR.probes.length) return false;
+  if (pills) {
+    return FTR.probes.some((x) => x.pills &&
+      PILLS.filter((sl) => x.pills[sl.key] !== pills[sl.key]).length <= 1);
+  }
+  const bag = (t) => new Set((t || "").toLowerCase().match(/[a-z]+/g) || []);
+  const a = bag(text);
+  if (a.size < 2) return false;
+  return FTR.probes.some((x) => {
+    const b = bag(x.text);
+    let n = 0; for (const w of a) if (b.has(w)) n++;
+    return n >= Math.max(2, Math.floor(Math.min(a.size, b.size) * 0.6));
+  });
 }
 
 function renderFTR() {
   const used = FTR.probes.length, r = rule(), steps = ["probe", "commit", "close"];
   const changed = FTR.prevPills ? PILLS.filter((s) => FTR.pills[s.key] !== FTR.prevPills[s.key]).length : null;
-  const dup = FTR.probes.some((x) => comboKey(x.pills) === comboKey(FTR.pills));
+  // Low-support probes are free text and carry no pills; guard every read.
+  const dup = FTR.probes.some((x) => x.pills && comboKey(x.pills) === comboKey(FTR.pills));
   const head = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
     <div class="spread">
@@ -388,8 +442,9 @@ function renderFTR() {
     <p class="lede">This chat partner is following one hidden rule. It will never tell you what the rule is — you have to work it out from what it says back.</p>
     <div class="how"><div><b>1</b>Build a question and send it</div><div><b>2</b>Spot what is always true</div><div><b>3</b>Write the rule down</div><div><b>4</b>Test it on 3 new questions</div></div>
     <div class="row">
-      ${RULE_ORDER.map((id) => `<button class="btn sm ${FTR.ruleId === id ? "" : "ghost"}" data-rule="${id}">${RULES[id].name}</button>`).join("")}
-      <span class="hint">Everyone gets these same four, in this order — so probe counts mean the same thing from one student to the next.</span>
+      ${Object.keys(RULE_PAIRS).map((t) => `<button class="btn sm ${FTR.pair === t ? "" : "ghost"}" data-pair="${t}">${t}</button>`).join("")}
+      <span class="chip">${ftrHigh() ? "with help" : "on your own"}</span>
+      <span class="hint">Two rules of the same kind, back to back: the first with the question builder, the second without it. Same difficulty, different amount of help.</span>
     </div>
     ${FTR.phase !== "close" ? `
     <div class="row">
@@ -411,7 +466,13 @@ function renderFTR() {
     <div class="probemeter"><div class="pips">${Array.from({ length: 12 }, (_, i) => `<span class="pip${i < used ? " used" : ""}"></span>`).join("")}</div><span>${used} of 12 questions used</span></div>
   </section>`;
 
-  const composer = FTR.phase === "probe" ? `
+  const composer = FTR.phase !== "probe" ? "" : !ftrHigh() ? `
+    <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
+      <span class="eyebrow">Ask it anything \u00b7 your own words this time</span>
+      <textarea id="freeprobe" rows="2" placeholder="Type a question and send it\u2026">${esc(FTR.freeText || "")}</textarea>
+      <div class="row"><button class="btn" id="sendprobe" ${used >= 12 ? "disabled" : ""}>Send it</button>
+        <span class="hint">No builder and no notes field this round. ${used} of 12 used.</span></div>
+    </section>` : `
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
       <span class="eyebrow">Build a question</span>
       <div class="slots">What's the
@@ -425,9 +486,9 @@ function renderFTR() {
         ${dup && changed !== 0 ? `<span class="hint">you have sent this exact combination before</span>` : ""}
       </div>
       <p class="hint">Three pills, so “I changed exactly one thing” is a logged fact rather than something a researcher has to infer from free text.</p>
-    </section>` : "";
+    </section>`;
 
-  const hypo = FTR.phase === "probe" ? `
+  const hypo = FTR.phase === "probe" && ftrHigh() ? `
     <section class="card pad">
       <div class="hypo"><span class="eyebrow">I think it's…</span>
         <textarea id="hypofield" rows="2" placeholder="Optional. Change it as often as you like — every save is logged.">${esc(FTR.hypo)}</textarea>
@@ -436,6 +497,12 @@ function renderFTR() {
       <div class="row" style="margin-top:12px"><button class="btn ghost" id="tocommit" ${used ? "" : "disabled"}>I'm ready to commit →</button>
       ${used >= 9 && !FTR.hypo ? `<span class="hint" style="color:var(--amber)">Nudge at question 9: nothing written down yet.</span>` : ""}</div>
     </section>` : "";
+
+  const toCommitLow = FTR.phase === "probe" && !ftrHigh() ? `
+    <section class="card pad"><div class="row">
+      <button class="btn ghost" id="tocommit" ${used ? "" : "disabled"}>I'm ready to commit \u2192</button>
+      <span class="hint">You write your answer down at the commit screen, then test it.</span>
+    </div></section>` : "";
 
   const commit = FTR.phase === "commit" ? `
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
@@ -455,7 +522,8 @@ function renderFTR() {
   if (FTR.phase === "close" && FTR.cases) {
     const conf = FTR.confident;
     const marked = conf && FTR.matched ? esc(FTR.committed).replace(esc(FTR.matched), `<mark>${esc(FTR.matched)}</mark>`) : esc(FTR.committed);
-    const nextId = RULE_ORDER[RULE_ORDER.indexOf(FTR.ruleId) + 1];
+    const pairIds = RULE_PAIRS[FTR.pair] || [];
+    const secondLegDue = ftrHigh() && pairIds[1] && pairIds[0] === FTR.ruleId;
     close = `
     <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
       <div><span class="eyebrow">the rule you wrote</span>
@@ -476,18 +544,28 @@ function renderFTR() {
       ${conf ? `<div class="spread"><div><span class="eyebrow">predictive accuracy</span><div class="score">3<span style="font-size:20px;color:var(--muted)">/3</span></div></div>
         <p class="hint" style="max-width:34ch">The hidden rule was: <b>${r.label}</b>. ${FTR.probes.length} questions, ${FTR.hypoRev} hypothesis revision(s), ${FTR.hints} hint(s).</p></div>`
       : `<div class="banner"><span>⚠</span><div>All three marked <b>unscored</b> rather than guessing a zero — in the pilot these are flagged for hand-scoring. The hidden rule was: <b>${r.label}</b>.</div></div>`}
-      <div class="row">${nextId ? `<button class="btn" data-rule="${nextId}">Next: ${RULES[nextId].name} →</button>` : ""}
-        <button class="btn ghost" data-rule="${FTR.ruleId}">Try this one again</button><button class="btn ghost" id="backhub">Back to hub</button></div>
+      <div class="row">${secondLegDue
+          ? `<button class="btn" data-next-leg="1">Next: a new rule, on your own →</button>`
+          : `<button class="btn ghost" data-pair="${FTR.pair === "lexical" ? "categorical" : "lexical"}">Try the other kind →</button>`}
+        <button class="btn ghost" id="backhub">Back to hub</button></div>
     </section>`;
   }
-  $("stage").innerHTML = head + chat + composer + hypo + commit + close;
+  $("stage").innerHTML = head + chat + composer + hypo + toCommitLow + commit + close;
   const c = $("chat"); if (c) c.scrollTop = c.scrollHeight;
   wireFTR();
 }
 function wireFTR() {
-  document.querySelectorAll("[data-rule]").forEach((b) => b.onclick = () => ftrStart(b.dataset.rule));
+  document.querySelectorAll("[data-pair]").forEach((b) => b.onclick = () => {
+    FTR.pair = b.dataset.pair; FTR.leg = 0; ftrStart(RULE_PAIRS[b.dataset.pair][0], "high"); });
+  document.querySelectorAll("[data-next-leg]").forEach((b) => b.onclick = () => {
+    FTR.leg = 1; ftrStart(RULE_PAIRS[FTR.pair][1], "low"); });
+  document.querySelectorAll("[data-rule]").forEach((b) => b.onclick = () => ftrStart(b.dataset.rule, FTR.support));
   document.querySelectorAll(".slot").forEach((sl) => sl.querySelectorAll("button").forEach((b) => b.onclick = () => { FTR.pills[sl.dataset.slot] = b.dataset.opt; renderFTR(); }));
-  const sp = $("sendprobe"); if (sp) sp.onclick = ftrSendProbe;
+  const fp = $("freeprobe");
+  if (fp) { fp.oninput = () => FTR.freeText = fp.value;
+    fp.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("sendprobe").click(); } }; }
+  const sp = $("sendprobe");
+  if (sp) sp.onclick = () => { if (ftrHigh()) ftrSendProbe(); else { const v = ($("freeprobe").value || "").trim(); if (!v) return; FTR.freeText = ""; ftrSendProbe(v); } };
   const sh = $("savehypo"); if (sh) sh.onclick = () => {
     const v = $("hypofield").value.trim(); if (!v || v === FTR.hypo) return;
     FTR.hypo = v; emit("hypothesis_noted", { text: v, afterProbeIndex: FTR.probes.length - 1, revisionIndex: FTR.hypoRev++ });
@@ -1256,7 +1334,7 @@ function go(screen) {
   window.scrollTo({ top: 0, behavior: "instant" });
   if (screen === "hub") renderHub();
   else if (screen === "code") renderCode();
-  else if (screen === "ftr") { emit("session_start", { tool: "find-the-rule", day: S.day, deviceId: S.deviceId }); ftrStart(FTR.ruleId); }
+  else if (screen === "ftr") { emit("session_start", { tool: "find-the-rule", day: S.day, deviceId: S.deviceId }); FTR.pair = "lexical"; FTR.leg = 0; ftrStart(RULE_PAIRS.lexical[0], "high"); }
   else if (screen === "pg") { emit("session_start", { tool: "prompt-golf", day: S.day, deviceId: S.deviceId });
     phaseStart("pg-high", "high", ["priorPromptsVisible", "wordCountLive", "targetChecklist"]);
     emit("task_start", { taskId: "pg-c1", round: 0 }); renderPG(); }
