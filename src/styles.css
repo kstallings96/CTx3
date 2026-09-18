@@ -322,3 +322,8 @@ mark{background:var(--pass-soft);color:var(--pass);border-radius:2px;padding:0 3
    height and let it keep its aspect ratio rather than letting a tall build
    push the controls off the screen. */
 .scene .mon { width: 100%; height: auto; max-height: 320px; display: block; }
+
+/* A model run held back by the safety guard. Visible as a run — it still
+   counts toward "these five came out different" — but with no text shown. */
+.run.held { border-style: dashed; border-color: var(--amber); background: var(--amber-soft); }
+.run.held .txt { color: var(--amber); font-style: normal; }

@@ -10,7 +10,12 @@
  * the same prompt does not give the same answer; a cache would quietly turn
  * that lesson into a lie.
  */
-const MODEL = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+/* Word4Word asks for a tight format and a tight vocabulary, and the cheapest
+   models follow both unreliably -- an answer the safety guard has to withhold
+   teaches nothing. Haiku 4.5 is $1/$5 per million tokens, and a class period
+   is roughly thirty short calls: about three cents. Override with
+   OPENROUTER_MODEL; see DEPLOY.md for alternatives with real prices. */
+const MODEL = process.env.OPENROUTER_MODEL || "anthropic/claude-haiku-4.5";
 const MAX_PROMPT = 2000;
 const MAX_TOKENS = 220;
 
@@ -59,8 +64,16 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        // Sampling left at the provider default on purpose: the variation
-        // between identical calls is the thing being taught.
+        // Explicitly 1, not left to the provider default. The variation
+        // between identical calls IS the lesson, and a provider quietly
+        // shipping a lower default would make the day's central claim look
+        // false in front of the class.
+        temperature: 1,
+        // No system role: the artifact build reaches Claude through the
+        // `sample` capability, which takes turns and has none. One prompt
+        // shape for both backends means the demo and the deployed app cannot
+        // drift -- and the prompt carries the safety framing, so it is not
+        // something only one of them should get.
         messages: [{ role: "user", content: prompt }],
       }),
     });

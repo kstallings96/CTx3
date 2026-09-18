@@ -1,7 +1,8 @@
 import { log, flushNow, bufferedCount, exportJSON, clearBuffer, startSession, hasBackend } from "./lib/events.js";
-import { askModel, modelAvailable } from "./lib/model.js";
+import { askModel, modelAvailable, modelReason, modelName } from "./lib/model.js";
 import { pseudonym, GRADE } from "./roster.js";
-import { subject, freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision, W4W_TAPE } from "./w4w.js";
+import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision,
+         buildPrompt, checkSafe, SAFE_MESSAGE, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
 import { sha256hex } from "./lib/sha256.js";
 
@@ -129,6 +130,18 @@ async function ask(prompt, opts = {}) {
     return null;
   }
 }
+/* The reasons the model is actually missing, said plainly.
+   "Offline stand-in" with no explanation sends a facilitator hunting through
+   the Vercel dashboard on a study morning when the answer is almost always
+   one of these four specific things. */
+const WHY = {
+  vite_dev: "<b>This is <span class=\"kbd\">npm run dev</span>.</b> The model route is a Vercel function and Vite does not serve it \u2014 run <span class=\"kbd\">npx vercel dev</span> to exercise the model locally.",
+  no_key: "<b>No <span class=\"kbd\">OPENROUTER_API_KEY</span> on this deployment.</b> Add it in Vercel \u2192 Settings \u2192 Environment Variables, then redeploy.",
+  no_endpoint: "<b>The model route did not answer.</b> In the published demo there is no server at all, which is expected.",
+  no_sample: "<b>This view cannot ask Claude.</b>",
+};
+const TAPE_NOTE = " Word4Word plays five <b>pre-recorded real runs</b> instead, labelled on every card.";
+
 function paintMode() {
   const pill = $("modepill"), txt = $("modetext"), note = $("modenote");
   if (!pill) return;
@@ -138,9 +151,11 @@ function paintMode() {
   note.innerHTML = LLM.state === "checking" ? "Looking for the model\u2026"
     : LLM.ok ? (S.forceOffline
         ? "Forced to the deterministic stand-in so you can show the same activity with the randomness removed. Flip it back to demo variance."
-        : "Calls go through this site's own endpoint with caching <b>off</b>, so sending the same thing twice really does ask twice. That is the point of the day and it is why caching is disabled.")
-    : "No model reachable" + (LLM.lastError ? " (<span class=\"kbd\">" + esc(LLM.lastError) + "</span>)" : "")
-      + ". Everything still runs on deterministic stand-ins \u2014 the activities work, but nothing varies.";
+        : "Live" + (modelName() ? " on <span class=\"kbd\">" + esc(modelName()) + "</span>" : "")
+          + ", caching <b>off</b>, so sending the same thing twice really does ask twice. That is the point of the day and it is why caching is disabled.")
+    : (WHY[modelReason()]
+        || ("No model reachable" + (LLM.lastError ? " (<span class=\"kbd\">" + esc(LLM.lastError) + "</span>)" : "") + "."))
+      + TAPE_NOTE;
 }
 (async () => {
   LLM.ok = await modelAvailable();
@@ -919,14 +934,17 @@ function wirePG() {
    runs the mascot, where a right answer exists and the class can judge it
    together; the hands-on build runs the student's own monster, where the
    target is on their paper and nothing is graded. See src/w4w.js. */
-const w4wSubject = () => (W4W.mode === "solo" ? "monster" : "knight");
-const w4wTask = () => subject(w4wSubject());
+/* One subject now. The knight is gone: it needed five parts in a fixed
+   arrangement before it looked like anything, which made it a puzzle about
+   the mascot rather than a lesson about instructions. The class reproduces a
+   real drawing instead -- one student's monster, on the document camera --
+   which is arbitrary enough that the model cannot get it right by knowing
+   what monsters are like. */
 
-const SUBJECTS_KNIGHT_SEED = subject("knight").vagueSeed;
 const W4W = {
   mode: "solo",                 // solo = hands-on, class = the projector 2x2
   executor: "literal", which: "vague",
-  vague: SUBJECTS_KNIGHT_SEED, precise: "",
+  vague: "", precise: "",
   draft: "",                    // the student's own pseudocode, their own monster
   runs: [], running: false, ctl: null, speed: 700, N: 5,
   log: [], attempts: [], prevLines: null, prevMatched: null,
@@ -950,7 +968,7 @@ function w4wRevision(lines) {
 function w4wPlay() {
   if (W4W.playing) return;
   const text = $("w4wfield").value;
-  const { lines } = w4wRun(text, w4wSubject());
+  const { lines } = w4wRun(text);
   if (!lines.length) return;
   W4W.scene = freshScene(); W4W.stepLog = []; W4W.cursor = -1; W4W.playing = true;
   const revisionType = w4wRevision(lines);
@@ -966,7 +984,7 @@ function w4wPlay() {
   const beat = () => {
     if (i >= lines.length) {
       W4W.playing = false;
-      const chk = w4wCheck(W4W.scene, w4wSubject());
+      const chk = w4wCheck(W4W.scene);
       const dead = W4W.stepLog.findIndex((x) => !x.ok);
       // The monster has no target -- it is on the student's paper -- so there
       // is nothing to be right about and `matched` comes back null. What is
@@ -987,7 +1005,7 @@ function w4wPlay() {
       renderW4W(); return;
     }
     W4W.cursor = i;
-    W4W.stepLog.push({ i, ...w4wStep(W4W.scene, lines[i], w4wSubject()) });
+    W4W.stepLog.push({ i, ...w4wStep(W4W.scene, lines[i]) });
     emit("walkthrough_step", { stepIndex: i, line: lines[i], effect: W4W.stepLog[i].msg, quadrant: "solo" });
     i++; renderW4W();
     W4W.timer = setTimeout(beat, W4W.speed);
@@ -1008,26 +1026,48 @@ async function w4wRunFive() {
   renderW4W();
   for (let k = 0; k < W4W.N; k++) {
     if (!W4W.running) break;
-    let out = null, src = "literal";
+    let out = null, src = "literal", held = null;
     if (W4W.executor === "literal") { out = text; await new Promise((r) => setTimeout(r, 260)); }
     else {
-      try { out = await ask(text + "\n\n" + w4wTask().suffix, { signal: W4W.ctl.signal }); } catch (e) { break; }
-      if (out == null) { out = W4W_TAPE[W4W.which][k % 5]; src = "recording"; } else src = "live";
+      try { out = await ask(buildPrompt(text), { signal: W4W.ctl.signal }); } catch (e) { break; }
+      if (out == null) { out = W4W_TAPE[W4W.which][k % 5]; src = "recording"; }
+      else {
+        src = "live";
+        // Nothing reaches a projector in front of thirteen-year-olds without
+        // passing the guard. It fails CLOSED: a run that does not look like
+        // build steps, or that trips the word list, is withheld rather than
+        // shown. The lesson costs nothing — the point being made is that runs
+        // differ, and a withheld run is still a run that differed.
+        const safe = checkSafe(out);
+        if (!safe.ok) { held = safe.reason; out = null; }
+      }
     }
     if (!W4W.running) break;
-    const { scene } = w4wRun(out, w4wSubject());
-    const chk = w4wCheck(scene, w4wSubject());
+    if (held) {
+      W4W.runs[k] = { out: null, held, src: "live" };
+      emit("run_withheld", { participantCode: null, instructionId, runIndex: k + 1, reason: held, quadrant });
+      renderW4W();
+      continue;
+    }
+    const { scene } = w4wRun(out);
+    const chk = w4wCheck(scene);
     const first = W4W.runs[0].out;
     W4W.runs[k] = { out, src, scene, chk, same: k > 0 && first != null && out.trim() === first.trim(),
-      inferred: src === "literal" ? [] : w4wInferred(text, out, w4wSubject()) };
+      inferred: src === "literal" ? [] : w4wInferred(text, out) };
     emit("run_executed", { participantCode: null, instructionId, runIndex: k + 1, output: out.slice(0, 60),
       sameAsRun1: k === 0 ? null : W4W.runs[k].same, matched: chk.matched, inferredCount: W4W.runs[k].inferred.length, quadrant });
     renderW4W();
   }
   const done = W4W.runs.filter((r) => r.out);
   const uniq = new Set(done.map((r) => r.out.trim()));
+  // Two counts, and the difference between them is the lesson. `distinct` is
+  // how many different ANSWERS came back; `distinctScenes` is how many
+  // different MONSTERS those answers drew. Five differently-worded answers
+  // that all draw the same monster are variation that does not matter; two
+  // that draw different monsters are variation that does.
+  const distinctScenes = new Set(done.map((r) => r.chk.placed.join(","))).size;
   W4W.log.push({ text: text.replace(/\n/g, " / "), quadrant, runs: done.length, distinct: uniq.size,
-    matched: done.filter((r) => r.chk.matched).length, outcome: "" });
+    distinctScenes, held: W4W.runs.filter((r) => r.held).length, outcome: "" });
   W4W.running = false; renderW4W();
 }
 
@@ -1056,34 +1096,34 @@ function renderW4W() {
   // vocabulary was supposed to be the work. They type what they mean and the
   // machine does what they typed.
 
-  const subj = w4wTask();
   const goal = `
     <div class="goal">
       <span class="eyebrow">what you are building</span>
-      <p><b>${esc(subj.goal)}</b></p>
-      <p class="hint">${esc(subj.goalNote)}</p>
+      <p><b>${W4W.mode === "solo"
+        ? "Whatever you drew. Write the steps that would build YOUR monster."
+        : "The monster on the document camera. Write the steps that would reproduce it."}</b></p>
+      <p class="hint">${W4W.mode === "solo"
+        ? "Nothing is marked. The machine does what you wrote — hold it up against your page."
+        : "Nothing is marked here either. The drawing on the wall is the answer key and the room is the judge."}</p>
     </div>`;
 
   let body = "";
   if (W4W.mode === "solo") {
-    const chk = w4wCheck(W4W.scene, w4wSubject());
+    const chk = w4wCheck(W4W.scene);
     const last = W4W.attempts[W4W.attempts.length - 1];
     body = `
     <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
       ${goal}
       <div class="scene">
-        <div>${sceneSVG(W4W.scene, w4wSubject())}
-          ${!W4W.playing && W4W.stepLog.length ? (
-            !chk.graded
-              // Nothing to be right about. Say what it did and let the student
-              // hold it up against their own page, which is the real check.
-              ? `<div class="${chk.miss.length ? "banner" : "how"}" style="margin-top:10px">
-                  ${chk.miss.length
-                    ? `<span>!</span><div>${esc(chk.miss.join("; "))} — did you mean to name it before the part it goes on?</div>`
-                    : `<div><b>✓</b>Built ${chk.placed.length} part${chk.placed.length === 1 ? "" : "s"}: ${esc(chk.placed.join(", "))}. Does it look like your drawing?</div>`}</div>`
-              : `<div class="${chk.matched ? "shrink" : "banner"}" style="margin-top:10px">
-                  ${chk.matched ? "<div><b>✓</b><span>it matches</span></div>" : `<span>✗</span><div>${esc(chk.miss.join("; "))}</div>`}</div>`
-          ) : ""}
+        <div>${sceneSVG(W4W.scene)}
+          ${!W4W.playing && W4W.stepLog.length
+            // Nothing here is marked. The answer is on the student's own page,
+            // so the machine reports what it did and the student is the judge.
+            ? `<div class="${chk.floating.length ? "banner" : "how"}" style="margin-top:10px">
+                ${chk.floating.length
+                  ? `<span>!</span><div>${esc(chk.miss.join("; "))} — did you name it before the part it goes on?</div>`
+                  : `<div><b>✓</b>Drew ${chk.placed.length} part${chk.placed.length === 1 ? "" : "s"}: ${esc(chk.placed.join(", "))}. Does it look like your drawing?</div>`}</div>`
+            : ""}
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
           <span class="eyebrow">your steps · one per line, starting with a number</span>
@@ -1096,7 +1136,7 @@ function renderW4W() {
                 <option value="1200"${W4W.speed == 1200 ? " selected" : ""}>slow</option>
                 <option value="700"${W4W.speed == 700 ? " selected" : ""}>steady</option>
                 <option value="250"${W4W.speed == 250 ? " selected" : ""}>quick</option></select></label>
-            ${last && !W4W.playing ? `<span class="hint">last try · ${last.matched ? "matched" : "missed"} · ${last.revisionType}</span>` : ""}
+            ${last && !W4W.playing ? `<span class="hint">last try · ${(last.placed || []).length} part${(last.placed || []).length === 1 ? "" : "s"} · ${esc(last.revisionType)}</span>` : ""}
           </div>
           ${W4W.stepLog.length ? `<div><span class="eyebrow">what it did</span><div class="glog" style="margin-top:6px">${
             W4W.stepLog.map((l) => `<div class="${l.i === W4W.cursor && W4W.playing ? "now" : ""}"><span class="i">${l.i + 1}</span><span class="${l.ok ? "" : "noop"}">${esc(l.msg)}</span></div>`).join("")}</div></div>` : ""}
@@ -1120,7 +1160,7 @@ function renderW4W() {
       const on = W4W.executor === ex && W4W.which === wh;
       return `<button class="qcell${on ? " on" : ""}${row ? " ran" : ""}" data-w4wex="${ex}" data-w4wwh="${wh}">
         <span class="qv">${row ? (row.distinct === 1 ? "the same answer" : row.distinct + " different answers") : "not run yet"}</span>
-        <span class="qs">${row ? row.matched + " of " + row.runs + " drew the mascot" : "·"}</span></button>`;
+        <span class="qs">${row ? row.distinctScenes + " different monsters" : "·"}</span></button>`;
     };
     const done = W4W.runs.filter((r) => r.out);
     const uniq = new Set(done.map((r) => r.out.trim()));
@@ -1137,7 +1177,7 @@ function renderW4W() {
       <div class="row"><span class="eyebrow">machine</span>
         ${["literal", "model"].map((e) => `<button class="btn sm ${W4W.executor === e ? "" : "ghost"}" data-w4wex2="${e}">${e === "literal" ? "Word4Word" : "Real model"}</button>`).join("")}
         <span class="hint">${W4W.executor === "literal"
-          ? "Does exactly what the line says. Same words in, same drawing out, five times."
+          ? "Does exactly what the line says — colour, number, what goes on what. Same words in, same monster out, five times."
           : liveOn() ? "A real model, caching off, so a repeat really is a repeat." : "No live model here, so this plays five <b>pre-recorded</b> real runs, labelled on each card."}</span>
       </div>
       <div class="tmins">
@@ -1149,7 +1189,7 @@ function renderW4W() {
         <div class="${W4W.which === "precise" ? "sel" : ""}">
           <div class="spread"><span class="eyebrow">the precise one · the class fixes it</span>
             <div class="row" style="gap:6px"><button class="btn ghost sm" data-w4wwh2="precise">${W4W.which === "precise" ? "selected" : "use this"}</button>
-            ${W4W.precise.trim() ? "" : `<button class="btn ghost sm" id="w4wseed">fill in a suggestion</button>`}</div></div>
+            </div></div>
           <textarea id="w4wprecise" rows="3" placeholder="Numbered steps, one per line…" ${W4W.running ? "disabled" : ""}>${esc(W4W.precise)}</textarea>
         </div>
       </div>
@@ -1159,20 +1199,25 @@ function renderW4W() {
         <span class="hint">running <b>${esc(w4wQuadrant().replace("-", " · "))}</b></span>
       </div>
       ${W4W.runs.length ? `<div class="runs">${W4W.runs.map((r, i) => {
+        if (r.held) return `<div class="run held"><div class="n"><span>run ${i + 1}</span><span>held back</span></div>
+          <div class="txt">${esc(SAFE_MESSAGE[r.held] || "that run could not be used")}. It still counts as a run that came out different.</div></div>`;
         if (!r.out) return `<div class="run waiting"><div class="n"><span>run ${i + 1}</span><span>…</span></div><div class="txt">waiting</div></div>`;
         return `<div class="run ${i === 0 || r.same ? "same" : "diff"}">
           <div class="n"><span>run ${i + 1}${r.src === "recording" ? " · recording" : ""}</span><span>${i === 0 ? "first" : r.same ? "same as run 1" : "different"}</span></div>
-          ${sceneSVG(r.scene, "knight")}
+          ${sceneSVG(r.scene)}
           ${r.inferred.length ? `<div class="reading">filled in ${r.inferred.length}: ${esc(r.inferred.join("; "))}</div>` : ""}
           <div class="txt" style="font-family:var(--mono);font-size:11.5px">${esc(r.out)}</div>
-          <div class="qs2" style="color:${r.chk.matched ? "var(--pass)" : "var(--fail)"}">${r.chk.matched ? "✓ drew the mascot" : "✗ " + esc(r.chk.miss[0] || "nothing was drawn")}</div></div>`;
+          <div class="qs2" style="color:${r.chk.floating.length ? "var(--fail)" : "var(--ink-2)"}">${
+            r.chk.floating.length ? "✗ " + esc(r.chk.miss[0])
+              : r.chk.placed.length ? "drew " + r.chk.placed.length + ": " + esc(r.chk.placed.join(", "))
+              : "drew nothing"}</div></div>`;
       }).join("")}</div>` : ""}
       ${done.length >= 2 ? `<div class="tally">
         <div><b>${done.length}</b><span>identical asks</span></div>
         <div><b style="color:${uniq.size > 1 ? "var(--accent)" : "var(--muted)"}">${uniq.size}</b><span>different answers</span></div>
-        <div><b style="color:${done.filter((r) => r.chk.matched).length === done.length ? "var(--pass)" : "var(--fail)"}">${done.filter((r) => r.chk.matched).length}</b><span>drew the mascot</span></div>
+        <div><b style="color:var(--ink-2)">${new Set(done.map((r) => r.chk.placed.join(","))).size}</b><span>different monsters</span></div>
         <div style="margin-left:auto;max-width:40ch"><p class="hint">${W4W.executor === "literal"
-          ? "The same instruction gives the same drawing every time. So whatever is wrong is in the <b>instruction</b>."
+          ? "The same instruction gives the same drawing every time. So if it does not look like the drawing on the wall, the problem is in the <b>instruction</b>."
           : done.some((r) => r.inferred.length)
             ? "This machine filled in steps nobody wrote. That is why it looks smarter — and why you cannot tell which parts were yours."
             : "Nothing left to fill in, so it varies only in the parts that do not matter."}</p></div>
@@ -1181,12 +1226,12 @@ function renderW4W() {
     ${W4W.log.length ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px">
       <span class="eyebrow">Facilitator log</span>
       <div class="scroller"><table class="ftable">
-        <thead><tr><th>Instruction (verbatim)</th><th>Quadrant</th><th>Built it</th><th>Distinct</th><th>Outcome (you judge)</th></tr></thead>
+        <thead><tr><th>Instruction (verbatim)</th><th>Quadrant</th><th>Different monsters</th><th>Different answers</th><th>Like the drawing? (you judge)</th></tr></thead>
         <tbody>${W4W.log.map((l, i) => `<tr><td style="font-family:var(--mono);font-size:11.5px">${esc(l.text)}</td>
           <td style="font-family:var(--mono);font-size:11px">${esc(l.quadrant)}</td>
-          <td style="font-family:var(--mono)">${l.matched} / ${l.runs}</td>
+          <td style="font-family:var(--mono)">${l.distinctScenes} / ${l.runs}</td>
           <td style="font-family:var(--mono)">${l.distinct}</td>
-          <td><select data-w4wout="${i}">${["—", "did what we wanted", "partly", "not what we wanted"].map((o) => `<option ${o === (l.outcome || "—") ? "selected" : ""}>${o}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div>
+          <td><select data-w4wout="${i}">${["—", "like the drawing", "partly", "not like the drawing"].map((o) => `<option ${o === (l.outcome || "—") ? "selected" : ""}>${o}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div>
       <p class="hint">The quadrant column is what makes decomposition and variance readable from one table afterwards. <b>Built it</b> is the checker; <b>Outcome</b> is yours.</p>
     </section>` : ""}`;
   }
@@ -1213,7 +1258,6 @@ function wireW4W() {
     W4W.precise = pr.value;
     document.querySelectorAll('[data-w4wwh2="precise"]').forEach((b) => b.disabled = false);
     const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText(); };
-  const seed = $("w4wseed"); if (seed) seed.onclick = () => { W4W.precise = w4wTask().preciseSeed; W4W.which = "precise"; W4W.runs = []; renderW4W(); };
   document.querySelectorAll("[data-w4wex2]").forEach((b) => b.onclick = () => {
     if (W4W.running || W4W.executor === b.dataset.w4wex2) return;
     emit("quadrant_switched", { participantCode: null, from: w4wQuadrant(), to: b.dataset.w4wex2 + "-" + W4W.which });

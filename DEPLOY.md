@@ -177,16 +177,65 @@ In the Vercel dashboard, **Settings → Environment Variables**:
 | Name | Value | Scope |
 |---|---|---|
 | `OPENROUTER_API_KEY` | your OpenRouter key | Production, Preview |
-| `OPENROUTER_MODEL` | e.g. `openai/gpt-4o-mini` | Production, Preview |
+| `OPENROUTER_MODEL` | `anthropic/claude-haiku-4.5` | Production, Preview |
 | `VITE_SUPABASE_URL` | project URL | all three |
 | `VITE_SUPABASE_ANON_KEY` | anon key | all three |
 
 The `VITE_` ones are build-time, so **redeploy after adding them**.
 
-Cost is not the constraint here. A class of 14 running Word4Word is roughly
-twenty short calls for the whole period — cents, on any cheap model. Set a low
-spend cap on the OpenRouter key anyway; a stuck loop is the only real risk, and
-`api/complete.js` already limits each participant code to 40 calls a minute.
+### Which model
+
+`anthropic/claude-haiku-4.5` is the default in `api/complete.js`, and it is
+worth the small premium. Word4Word asks for a tight format and a tight
+vocabulary, and the cheapest models follow both unreliably — a run the safety
+guard has to withhold teaches nothing.
+
+| Slug | in / out per Mtok | Note |
+|---|---|---|
+| `anthropic/claude-haiku-4.5` | $1.00 / $5.00 | Default. Best format-following of the three. |
+| `openai/gpt-5-mini` | $0.25 / $2.00 | Cheaper, still reliable. |
+| `openai/gpt-4o-mini` | $0.15 / $0.60 | Cheapest. Expect more withheld runs. |
+
+**Cost is not the constraint.** A projector session is about thirty short
+calls: roughly **three cents a period** on the default. Set a low spend cap on
+the key anyway — a stuck loop is the only real risk, and `api/complete.js`
+already limits each participant to 40 calls a minute.
+
+`temperature` is pinned to 1 rather than left to the provider default. The
+variation between identical calls *is* the lesson, and a provider quietly
+shipping a lower default would make the day's central claim look false in
+front of the class.
+
+### Keeping model output classroom-safe
+
+Two layers, and the second fails closed:
+
+1. The prompt constrains the model to numbered build steps, a fixed part
+   vocabulary, at most eight steps, and names the audience.
+2. `checkSafe` in `src/w4w.js` runs on every output **before it is displayed
+   or drawn**, and on the class's own instruction before it is sent. It
+   rejects anything not shaped like build steps, anything over a length cap,
+   and anything matching a word list. A rejected run shows as *"that run was
+   held back"* with no text, and logs `run_withheld`.
+
+The word list is deliberately blunt and will occasionally hold back a
+harmless run. That is the intended trade; it is one array in `src/w4w.js` if
+you want it looser.
+
+### "The model isn't working"
+
+The status pill now names the actual reason instead of just saying *offline
+stand-in*. The three you will meet:
+
+- **`npm run dev`** — Vite alone does not serve `/api/complete`, which is a
+  Vercel function. This is not a fault. Use `npx vercel dev` to exercise the
+  model locally.
+- **No `OPENROUTER_API_KEY` on the deployment** — add it and **redeploy**.
+- **The published demo** — there is no server at all, by design. It plays
+  pre-recorded real runs.
+
+In every case Word4Word still runs: five genuine recorded runs, labelled as
+recordings on every card.
 
 ## 6. Deploy
 

@@ -2,57 +2,53 @@
 
 Read ARCHITECTURE.md, EVENTS.md and DEVELOPMENTAL-RANGE.md first.
 
-Replaces SPEC-literal-genie.md, which is deleted, and supersedes the
-"Two Machines" draft this file grew out of. **Day 2, a full 60-minute period.**
+Replaces SPEC-literal-genie.md, which is deleted. **Day 2, a full 60-minute
+period.**
 
 ## What it is
 
-Two halves, two subjects, one machine.
+Students draw monsters. Then the class tries to make two machines reproduce
+one of them — a real drawing, hanging on the wall — and watches what each
+machine does with the gaps.
 
-**The hands-on half.** Students draw a monster on paper, swap with a partner,
-and describe aloud how to build it. Then each student writes pseudocode for
-**their own** monster. A machine executes it word for word, one line per beat,
-and the drawing builds as it goes — so a plan breaks visibly, at the exact
-step it breaks.
+## Why the target is a real drawing
 
-**The projector half.** One instruction — *draw the school mascot* — run five
-times against two machines: the literal one, which does only what the line
-says, and a real language model, which quietly fills in whatever was left out.
+This is the design decision everything else follows from, and it took three
+tries to get right.
+
+**"Build a snowman"** had a right answer, but the answer was general
+knowledge. A model that has never seen your class still knows a snowman is
+three stacked balls, so it succeeded by knowing rather than by being told —
+and the vague/precise axis went soft.
+
+**"Draw a knight"** had the same problem plus a worse one: five parts in a
+fixed arrangement before it looked like anything, which made it a puzzle
+about the mascot instead of a lesson about instructions.
+
+**"Draw a monster"** was rejected earlier for having no wrong answer, and
+that was correct as far as it went. What fixes it is not changing the subject
+but changing where the answer lives. **The class reproduces one student's
+actual monster, on the document camera.** Now:
+
+- there is a right answer, and it is hanging on the wall;
+- failure has a location — that monster has three eyes and this one has two;
+- **the target is arbitrary**, so no amount of knowing what monsters are
+  generally like helps. When the model supplies a tail nobody asked for, the
+  room can see it guessing, because guessing is the only thing it could have
+  been doing.
+
+That last property is what a snowman could never have. It is the difference
+between a model that is *right* and a model that is *lucky*, made visible.
 
 ## Why it exists here
 
 This is the only place in the week that claims **Texas TEKS 8.1(A)** —
 *decompose real-world problems into structured parts using pseudocode*.
 
-### Why two subjects, and why the monster came back
-
-An earlier draft of this spec rejected "draw a monster" on the grounds that it
-has no wrong answer: a vague monster prompt and a precise one both produce
-monsters, so the vague/precise axis goes mushy and nothing owns 8.1(A). That
-objection was **right about the projector half and wrong about the hands-on
-half**, and splitting the subjects is what resolves it.
-
-- On the **projector**, vague-versus-precise has to bite, so the subject needs
-  a right outcome the whole room can judge together. The mascot has one: a
-  helmet goes on the body, a plume goes on the helmet, and getting that wrong
-  is visible from the back row. This is where the 8.1(A) claim lives.
-- On the **hands-on** half, the missing ground truth is now supplied by the
-  student's own paper. There is a right answer — *their* monster — it simply
-  is not one a checker can hold. So the checker does not try. What gets scored
-  is the **structure of the instruction**, which is what decomposition means,
-  rather than agreement with a picture nobody chose.
-
-The warm-up is doing real work here, not decoration. A student describing a
-partner's monster aloud has already discovered that "draw a scary one" does
-not survive the trip to another person's pencil. The screen then makes that
-discovery repeatable and recordable.
-
-### Why the literal machine
-
-It is a control condition, not an activity. On its own it duplicated
-RowdyRobo Vac's closed-vocabulary command language, measuring the same
-construct twice in a week. Paired with a real model it becomes the thing that
-makes "different" mean something: five identical results next to five
+The literal machine is a control condition, not an activity. On its own it
+duplicated RowdyRobo Vac's closed-vocabulary command language, measuring the
+same construct twice in a week. Paired with a real model it becomes the thing
+that makes "different" mean something: five identical results beside five
 different ones.
 
 ## The vocabulary
@@ -60,160 +56,135 @@ different ones.
 **No palette.** Students type what they mean. An earlier build offered eight
 tappable commands, which turned "decompose the problem" into "pick from a
 list" and handed over the vocabulary that finding the vocabulary was the work.
-Discovering a *hidden* vocabulary is Find the Rule's job on the next day; this
-is neither hidden nor given.
 
-One rule runs the whole engine: **every part has an anchor, the part it hangs
-off.** Name a part before its anchor exists and it floats, visibly, with
-nothing to attach to. That is the entire lesson about ordering.
+One rule runs the engine: **every part has an anchor, the part it hangs off.**
+Name a part before its anchor exists and it floats, visibly, with nothing to
+attach to. That is the whole ordering lesson in one mechanism.
 
-| | Parts | Anchor |
-|---|---|---|
-| **Knight** (projector) | body | — |
-| | helmet, shield, sword, legs | body |
-| | plume | helmet |
-| **Monster** (hands-on) | body | — |
-| | head, arms, legs, tail, wings, spots | body |
-| | eyes, mouth, horns | head |
+| Anchor | Parts |
+|---|---|
+| — | body |
+| body | head, arms, legs, tail, wings, spots, stripes, spikes |
+| head | eyes, mouth, nose, ears, horns, antennae |
+| mouth | teeth |
 
-Verbs are read loosely — `draw`, `make`, `add`, `give`, `put`, `place`,
-`attach`, `build` all work — because the exercise is about *what you say to
-do*, not about guessing a verb. Anything with no recognisable part gets a flat
-"Okay!" and changes nothing.
+**And it draws what you said.** Colour (eleven of them), size (tiny, small,
+big, huge), shape for the body and head (round, square, tall, wide) and
+number are all read and all rendered. A line can name more than one part —
+"add a mouth with five teeth" is one thing a student writes and two things to
+draw.
 
-Countable parts take a number, in digits or words: *add three eyes*, *give it
-6 legs*. An explicit `on the <part>` overrides the default anchor, which is
-how a student says where something goes rather than relying on the machine's
-assumption.
+Unstated things get a **deliberately dull default**: a medium grey round
+blob. Not a pretty default, not a guessed one. Vagueness has to *look* vague
+next to the drawing on the wall.
 
-**Knight target:** a body, a helmet on the body, a plume on the helmet, a
-shield and a sword on the body. Legs are free — not checked. That is
-deliberate: it gives a real model somewhere harmless to vary, so five knights
-that all match while some have legs read as *variance* rather than as five
-degrees of wrong.
-
-**Monster target:** none. See above.
+Plurals are read literally. "Add spots" is not a request for one spot, so a
+plural word with no number gets the part's natural plural and a singular word
+gets one.
 
 ## Failures have locations
 
 | Mistake | What renders |
 |---|---|
-| plume before helmet | plume in the air, labelled, with nothing under it |
-| no body at all | every part floats; nothing is attached to anything |
-| eyes before head | eyes hanging beside an empty space |
-| `add eyes` with no count | one eye, because one is what you said |
-| verb the machine knows, part it does not | "Okay!", and nothing changes |
-
-The ordering case is the one this task exists to produce. Naming a part before
-the thing it attaches to leaves **one failure, one cause, one line to point
-at.**
-
-## Vague and precise, worked
-
-**Vague** — what a class writes first:
-
-```
-draw a knight
-```
-
-*Literal machine:* a body, and nothing else. It was told "knight", which it
-knows as a body, and never told about a helmet, a plume, a shield or a sword.
-One located failure, identical five times out of five.
-
-*Real model:* a correct knight — because it supplied the parts, the order and
-what goes on what. **Three things nobody said.**
-
-**Precise:**
-
-```
-1. DRAW a body
-2. ADD a helmet to the body
-3. ADD a plume to the helmet
-4. ADD a shield to the body
-5. ADD a sword to the body
-```
-
-*Literal:* the target, five times identical. *Real model:* matches too, five
-times, differing only in whether it adds legs and in what order it does the
-middle steps.
-
-**Ask the model for "a knight", never "the Kingsborough mascot".** It does not
-know your school and will invent one, and then the room cannot tell a model
-that *varies* from a model that is *making it up* — which is the distinction
-the whole day rests on.
-
-## Make the inference visible
-
-Each model output is diffed against what the class's instruction actually
-specified, and the card is badged with the difference: *"filled in 2: which
-parts to draw (helmet, plume, shield); what goes on what."*
-
-This is the difference between the two machines made concrete, and it is the
-single best argument for keeping the literal column. On a precise instruction
-the badge reads zero, which is the point.
+| eyes before head | eyes hanging beside an empty space, labelled |
+| no body at all | every part floats; nothing attaches to anything |
+| `add an eye` | one eye, because one is what you said |
+| no colour given | grey, conspicuously |
+| verb it knows, part it does not | "Okay!", and nothing changes |
 
 ## Session shape — 60 minutes
 
 | | Time | Shape |
 |---|---|---|
 | 1 · **Draw your monster** | 6 | **Paper.** Everyone draws. No rules. |
-| 2 · **Describe your partner's** | 6 | **Paper, in pairs.** Swap. Describe how to build theirs, out loud, to the facilitator. |
-| 3 · Cold open | 4 | Projector. Type `draw a knight`. A body appears. That is all. |
-| 4 · Class writes v1 | 8 | Projector, class dictates the fix. It breaks. Fix one step. Run again. |
-| 5 · **Your own monster** | 18 | **Individual, own devices.** Unlimited runs, scored. |
-| 6 · The four cells | 12 | Projector. Vague and precise, both machines, five runs each. |
+| 2 · **Describe, don't show** | 10 | **Paper, in pairs.** Swap. Describe your partner's monster while they redraw it from your words alone. Compare the two pages. |
+| 3 · Pick one | 3 | One monster goes under the document camera and stays on screen all period. |
+| 4 · Class writes v1 | 8 | Projector, class dictates. Run it on the literal machine. It is not the monster on the wall. Fix one thing. Run again. |
+| 5 · The four cells | 14 | Projector. Vague and precise, both machines, five runs each. |
+| 6 · **Your own monster** | 13 | **Individual, own devices.** Write the steps for the one you drew. Scored. |
 | 7 · Close | 6 | The tally, and the inference badges side by side. |
 
-Twelve minutes on paper, eighteen hands-on, thirty on the projector. Phases
-1–2 are unplugged and produce no events; that is fine, they exist to give
-phase 5 a target only the student can see.
+Phase 2 is the whole lesson in miniature and unplugged — a student who has
+watched a partner draw the wrong monster from their own description already
+knows what the period is about. It produces no events, which is fine.
 
-**Phase 7 is the payoff and the setup for Prompt Golf** — do not cut it for
-time. If something has to go, take four minutes off phase 4.
+**Phase 7 is the payoff and the setup for Prompt Golf** — do not cut it. If
+something must go, take time from phase 4.
+
+> **If you cut phase 6, Word4Word contributes no per-student data at all** and
+> the developmental-range measure rests on Find the Rule and Prompt Golf
+> alone. That may be the right call for a 60-minute period — but it is a
+> decision to make deliberately, not one to discover afterwards.
 
 ## The four cells
 
-|                       | Literal machine      | Real model                       |
-| --------------------- | -------------------- | -------------------------------- |
-| **Vague** instruction | fails identically ×5 | fills in the gaps, differently ×5 |
-| **Precise**           | draws it ×5          | draws it ×5, varies in extras     |
+|                       | Literal machine      | Real model                        |
+| --------------------- | -------------------- | --------------------------------- |
+| **Vague** instruction | one monster, ×5      | five different monsters           |
+| **Precise**           | the same monster ×5  | close, varying in what it adds    |
 
-Executor is a facilitator switch, never student-facing. Both instructions are
-written by the class.
+Both instructions are written by the class. Executor is a facilitator switch,
+never student-facing.
+
+Two counts are shown and the gap between them is the point. **Different
+answers** is how many distinct texts came back. **Different monsters** is how
+many distinct drawings those texts produced. Five differently-worded answers
+that draw the same monster are variation that does not matter; two that draw
+different monsters are variation that does.
+
+Each model card is badged with what it filled in that nobody said — *"filled
+in 5: which parts (head, eyes, mouth, arms); how many of things there are;
+what colour it is; what goes on what; that it should be numbered steps at
+all."* Against an arbitrary target, every one of those is a guess.
+
+## Keeping it classroom-safe
+
+A projector in front of thirteen-year-olds is not a place for "the model
+almost always behaves". Two layers, and the second one fails closed.
+
+1. **The prompt** constrains the model to numbered build steps, the fixed
+   part vocabulary, at most eight steps, and states the audience. Instructions
+   go in the user turn rather than a system message, because the artifact
+   build reaches Claude through the `sample` capability, which has no system
+   role — one prompt shape for both backends means the safety framing is not
+   something only one of them gets.
+2. **The guard** (`checkSafe`) runs on every model output *before it is
+   displayed or drawn*, and on the class's own instruction before it is sent.
+   It rejects anything that is not shaped like build steps, anything over a
+   length cap, and anything matching a word list. A rejected run renders as a
+   card reading *"that run was held back"* with no text shown, and is logged
+   as `run_withheld`.
+
+A withheld run costs the lesson nothing. The claim being made is that runs
+differ, and a withheld run is still a run that differed.
 
 ## Instrumentation
 
-**Rows are mixed by design.** The hands-on phase carries a participant
-pseudonym and is attributable; projector phases pass `participantCode: null`
-and log at session level. Both sit at `supportCondition: "na"` and are told
-apart by `phaseId` (`w4w-solo` versus `w4w-class`). There is no high/low split
-— the projector work *is* the scaffold, and forcing a formal split would mean
-two builds in one period.
+**Rows are mixed by design.** Phase 6 carries a participant pseudonym and is
+attributable; projector phases pass `participantCode: null`. Both sit at
+`supportCondition: "na"` and are told apart by `phaseId` (`w4w-solo` versus
+`w4w-class`). No high/low split — the projector work *is* the scaffold.
 
 ```ts
 instruction_submitted { text, stepCount, numbered, revisionType, quadrant }
 walkthrough_step      { stepIndex, line, effect, quadrant }
-instruction_executed  { matched, graded, mismatch[], partsPlaced[],
-                        partsFloating[], usedCounts, usedPlacement,
+instruction_executed  { graded: false, partsPlaced[], partsFloating[],
+                        usedCounts, usedPlacement, usedColour, usedSize,
                         failurePoint, quadrant }
 run_executed          { instructionId, runIndex, output, sameAsRun1,
-                        matched, inferredCount, quadrant }
+                        inferredCount, quadrant }
+run_withheld          { instructionId, runIndex, reason, quadrant }
 quadrant_switched     { from, to }
 facilitator_judgement { quadrant, outcome }
 ```
 
-`matched` is `null` and `graded` is `false` on the monster, because there is
-nothing to be right about. Anything reading these has to handle that rather
-than treating null as failure. `partsPlaced` and `partsFloating` are the
-observations that replace it.
-
-`numbered` is recorded on every submission. The 8.1(A) claim is about
-pseudocode, so whether the student actually wrote numbered imperative lines is
-a fact worth having rather than an assumption.
+`matched` is always `null` and `graded` always `false`. Nothing here is
+marked by the machine, because the answer key is a piece of paper. Anything
+reading these has to handle that rather than treating null as failure.
 
 ## Step sequence
 
-Scored on the hands-on phase only.
+Scored on phase 6 only.
 
 1. Writes an instruction the machine acts on at all.
 2. Writes it as numbered steps, one action per line.
@@ -221,55 +192,40 @@ Scored on the hands-on phase only.
 4. Builds something with at least four distinct parts.
 5. Says how many, or says where — not just which part.
 
-**This is a chain, and each step strictly contains the one before it.** That
-matters, and it is a correction rather than a refinement.
+**This is a chain, and each step strictly contains the one before it.**
 
 The previous sequence scored *"repairs by adding a step"* as 3 and *"repairs
-by reordering"* as 4, with *"produces a working instruction"* as 5. Those are
-not successive achievements — they are alternative repairs — and a rescore of
-realistic trajectories showed the consequence plainly:
+by reordering"* as 4. Those are alternative repairs, not successive
+achievements, and a rescore showed the consequence: a student who got it right
+first time scored **2**, below one who had to fix a mistake. The scale was
+rewarding failure-then-recovery and calling it competence.
 
-| Trajectory | Old steps | Old score |
-|---|---|---|
-| floats, then adds the missing step | `[1,2,3,5]` | 3 |
-| floats, then reorders | `[1,2,4,5]` | 2 |
-| **gets it right first time** | `[1,2,5]` | **2** |
-
-A student who never made a mistake scored below one who did, because the scale
-required failing in order to climb it. The scale was measuring
-failure-then-recovery and calling it competence.
-
-The sequence above is monotone by construction, so the Guttman assumption is
-true rather than hoped for. Every trajectory tested comes back prefix-clean.
-
-**Repair behaviour did not disappear.** `revisionType` is on every attempt and
-deserves its own analysis — which repair students reach for, and whether that
-changes across the week, is a genuinely interesting question. It just is not
-an ordinal step, because it is not on the same axis as the rest.
+Repair behaviour is still on every attempt as `revisionType` and deserves its
+own analysis. It is not an ordinal step, because it is not on the same axis.
 
 ## Fallback
 
 School wifi will drop. Assume it.
 
-- The literal half is deterministic and needs no network at all.
+- The literal half is deterministic and needs no network.
 - The model half plays five **pre-recorded genuine runs**, labelled as
-  recordings on every card.
-- The recordings are knight-specific. If the class goes off-task *and* the
-  network is down, the tape will not match what they asked — the literal half
-  stays honest, the model half needs the network or a re-recorded tape.
+  recordings on every card, and every recording passes the safety guard.
 - The paper phases need nothing and cannot fail.
+- The status pill names the actual reason the model is missing — no key, no
+  endpoint, or `npm run dev` rather than `npx vercel dev` — instead of saying
+  only "offline".
 
 ## DECIDE
 
-- Should the solo/projector switch be facilitator-only (a query param) so a
-  student cannot wander into the projector cells mid-period?
-- Phase 2 has partners describing a monster **to the facilitator**. With
-  fourteen students that is seven descriptions in six minutes. Does it need a
-  capture sheet, or is it enough that they have said it out loud once?
-- Does the class's own v1 from phase 4 carry into phase 6 as the vague
+- Phase 6 versus time: see the warning above. Keep it, or accept that
+  Word4Word is a whole-class demonstration with no individual measure.
+- Phase 3: does the facilitator pick the monster, or does the class vote? A
+  vote costs two minutes and buys investment.
+- Does the class's v1 from phase 4 carry into phase 5 as the vague
   instruction, or does the facilitator retype a canonical one so every section
   compares the same thing?
 - Step 5 counts "said how many **or** said where" as one step. If nearly every
-  student reaches it, splitting them is the obvious refinement — but only with
-  pilot data, and the raw fields are captured either way.
-- Fast finishers on phase 5: a second monster, or the mascot for themselves?
+  student reaches it, split them — but only with pilot data.
+- The safety word list is deliberately blunt and will occasionally hold back
+  a harmless run. Is that the right trade for your room? It is one array in
+  `src/w4w.js`.
