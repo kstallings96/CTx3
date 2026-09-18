@@ -114,6 +114,11 @@ input,textarea,select{font:inherit;color:inherit}
 .codein{font-family:var(--mono);font-weight:600;font-size:28px;letter-spacing:.32em;text-transform:uppercase;text-align:center;
   background:var(--surface-2);border:1px solid var(--line-2);border-radius:3px;padding:14px 10px;width:100%;color:var(--accent-ink)}
 .codein::placeholder{color:var(--line-2);letter-spacing:.32em}
+.namerow{display:grid;grid-template-columns:1fr 92px;gap:10px}
+@media (max-width:420px){.namerow{grid-template-columns:1fr}}
+.namerow label{display:flex;flex-direction:column;gap:4px}
+.namerow input{background:var(--surface-2);border:1px solid var(--line-2);border-radius:3px;padding:9px 11px;font-family:var(--mono);font-size:15px}
+.namerow input:focus{border-color:var(--accent);box-shadow:var(--glow)}
 .roster{font-family:var(--mono);font-size:11.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
 .roster b{color:var(--accent-ink);background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);
   border-radius:2px;padding:1px 6px;font-weight:500;letter-spacing:.08em}

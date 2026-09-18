@@ -24,7 +24,36 @@ database makes it a `group by`.
 It also halves the study-day risk: a free project pauses after about a week
 idle, and one project is one thing to wake on the morning of instead of three.
 
-Use an existing project if you have a slot, or:
+### Which of your two projects to use
+
+**The one RowdyRoboVac already writes to.** Not a preference — the rule is to
+move the thing with no data and no deployment toward the thing that has both.
+CTx3 has zero rows and is not deployed, so repointing it is two environment
+variables and a redeploy. RowdyRoboVac is a live Godot export behind a GitHub
+Action, with rows already in its tables; repointing *it* means a config change,
+a re-export, and an existing dataset left behind in a project you then have to
+keep alive anyway.
+
+If RowdyRoboVac has not actually collected anything yet, either project works —
+take the emptier one and delete the other to free the slot.
+
+Send me the **Project URL** and the **anon key** (Project Settings → API) for
+whichever one you pick. Not the database password, and not the service_role
+key.
+
+Then, in that project:
+
+1. Run `supabase/schema.sql` (step 2 below). It is additive — `create table if
+   not exists`, `create index if not exists`, `drop policy` / `create policy` —
+   so it will not disturb RowdyRoboVac's existing rows. It does **not** add the
+   columns RowdyRoboVac's tables are missing if those tables already exist with
+   a different shape; if the run errors, paste the error and I will write the
+   `alter table` statements to reconcile them.
+2. Backfill `instrument` on anything already there:
+   `update sessions set instrument = 'rowdyrobo' where instrument is null;`
+   (and the same on `events`), so the old rows are separable from the new ones.
+
+Only if you are starting fresh instead:
 
 1. At <https://supabase.com/dashboard>, create a project.
 2. Pick a region near the school; save the database password somewhere safe
@@ -68,6 +97,38 @@ backends ever merge.
 their identifying columns in `meta`. Until then their tiles link out and the
 join happens at analysis time on the code, exactly as ARCHITECTURE.md says.
 Nothing forces either migration before the pilot.
+
+## 1b. Identifying data on minors
+
+CTx3 asks every student for a **first name and last initial** at sign-in, so a
+teacher can match a device to a paper packet. That is the only reason it is
+collected, and the code stays the unit of analysis everywhere else.
+
+What the code guarantees, and what you should be able to say on a form:
+
+- The name is written **once**, to the `sessions` row, at sign-in. Nowhere
+  else. Not in an event payload, not in a URL, not in console output, not in
+  `localStorage` — a resumed device re-registers on the code alone.
+- `src/lib/supabase.js` strips identifying keys from every outgoing event
+  payload as a backstop and warns to the console if it ever has to. Verify
+  after the pilot with the `payload::text ~*` query in `supabase/schema.sql`;
+  it must return zero.
+- RLS grants anon INSERT only, so no student can read another's row. The name
+  is readable only with the service_role key, from your machine.
+
+What the code cannot do for you, and you have to do:
+
+- **Name these fields explicitly** on the consent and assent forms — "first
+  name and last initial" — not "de-identified data". With a name and a grade
+  and a class roster, this is identifiable.
+- **State a deletion date** on those forms, and keep it. The plain version is:
+  once the packets are matched to codes and the match is written down, the name
+  columns have no further use. `update sessions set first_name = null,
+  last_initial = null;` after the study is a one-line query — put the date on
+  your calendar the day you deploy.
+- RowdyRoboVac already collects first name, last initial **and grade** under
+  whatever consent you have for it. Sharing a database does not change what
+  either instrument collects, but it does mean one form should now cover both.
 
 ## 2. Create the tables
 
@@ -155,7 +216,7 @@ npx vercel --prod
 - `https://<your-app>.vercel.app/?day=2` — the facilitator sets the day; the
   student never chooses it
 - `?reset` on any URL clears the device for the next student, including
-  anything they had queued but unsent
+  anything they had queued but unsent and the name from the sign-in screen
 - Open Word4Word on the projector machine **before** the period and run one
   cell, to confirm the model responds and to wake Supabase
 - Free Supabase projects pause after about a week idle and take a minute or two

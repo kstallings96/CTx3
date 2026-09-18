@@ -29,11 +29,20 @@ create table if not exists sessions (
   participant_code text,
   device_id text,
   day int,
+  -- IDENTIFYING DATA ON MINORS. It lives here and in no other table, never in
+  -- an events payload, never in a URL, never in console output. Every
+  -- instrument writes it to this row or not at all.
+  --
+  -- Your consent and assent forms have to name these fields explicitly, and
+  -- you need a stated deletion date that appears on those forms. Write the
+  -- date down somewhere other than this comment.
+  first_name text,
+  last_initial text,
+  grade text,
   user_agent text,
   screen_w int,
   screen_h int,
-  -- Anything an older instrument needs that this shape does not carry. CTx3
-  -- writes nothing here: the participant code is its only identifier.
+  -- Anything an instrument needs that this shape does not carry.
   meta jsonb not null default '{}',
   started_at timestamptz not null default now()
 );
@@ -142,6 +151,19 @@ create policy anon_read_leaderboard on leaderboard for select to anon using (tru
 -- ---------------------------------------------------------------------
 -- Starter analysis queries (service_role key, from your own machine)
 -- ---------------------------------------------------------------------
+
+-- The roster view a researcher actually wants on a study day: which code
+-- belongs to which packet. The ONLY query that should return a name.
+--
+--   select participant_code, first_name, last_initial, instrument, started_at
+--   from sessions order by started_at;
+
+-- Confirm no name ever reached an event. This should return zero rows; if it
+-- does not, something wrote an identifying field into a payload and the
+-- client-side scrub in src/lib/supabase.js did not catch it.
+--
+--   select count(*) from events
+--   where payload::text ~* '(first_?name|last_?initial|"grade")';
 
 -- The join that one database exists for: every instrument, one student.
 --

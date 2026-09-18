@@ -38,13 +38,16 @@ export function bufferedCount() { return queue.length; }
 export const hasBackend = isSupabaseConfigured;
 
 /** Register the participant before the first flush; events reference the code. */
-export async function startSession(participantCode, deviceId, day) {
+export async function startSession(participantCode, deviceId, day, identity) {
   if (!isSupabaseConfigured) { sessionReady = false; return false; }
   const ok = await insertSession({
     instrument: INSTRUMENT,
     participant_code: participantCode,
     device_id: deviceId,
     day,
+    // Identifying fields live on this row and nowhere else. They are never
+    // held in event state, so there is no path by which they reach a payload.
+    ...(identity || {}),
     user_agent: navigator.userAgent,
     screen_w: screen.width,
     screen_h: screen.height,

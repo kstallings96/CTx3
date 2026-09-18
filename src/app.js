@@ -4,7 +4,7 @@ import { ROSTER } from "./roster.js";
 
 /* ============================ shared ============================ */
 const LS = "d3station.v2";
-const S = { code: "", day: 3, screen: "hub", tool: "hub", events: [], seq: 0,
+const S = { code: "", first: "", initial: "", day: 3, screen: "hub", tool: "hub", events: [], seq: 0,
   support: "na", phaseId: null, phaseScaffolds: [],
   forceOffline: false, brandTaps: 0, lastAttempt: null, deviceId: "dev-" + Math.random().toString(36).slice(2, 8) };
 const nowISO = () => new Date().toISOString();
@@ -1422,27 +1422,46 @@ function renderHub() {
 function renderCode() {
   $("stage").innerHTML = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:16px">
-    <div><span class="eyebrow">Day ${S.day}</span><h1 style="font-size:27px;margin-top:3px">Enter your participant code</h1></div>
-    <p class="lede">It is on the card you were given on day one. Three letters, then two numbers.</p>
+    <div><span class="eyebrow">Day ${S.day}</span><h1 style="font-size:27px;margin-top:3px">Sign in</h1></div>
+    <p class="lede">Your code is on the card you were given on day one — three letters, then two numbers.</p>
     <div class="codewrap">
-      <input class="codein" id="codefield" maxlength="5" placeholder="ABC12" autocomplete="off" spellcheck="false">
-      <p class="hint" id="codemsg">No O or I, no 0, 1 or 5 — those get misread on a card.</p>
+      <input class="codein" id="codefield" maxlength="5" placeholder="ABC12" autocomplete="off" spellcheck="false" aria-label="Participant code">
+      <div class="namerow">
+        <label><span class="eyebrow">First name</span>
+          <input type="text" id="firstname" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Alex"></label>
+        <label><span class="eyebrow">Last initial</span>
+          <input type="text" id="lastinitial" maxlength="1" autocomplete="off" spellcheck="false" placeholder="R"></label>
+      </div>
+      <p class="hint" id="codemsg">No O or I, no 0, 1 or 5 in the code — those get misread on a card.</p>
       <div class="row"><button class="btn" id="codego">Start</button></div>
       <hr class="hr">
       <div><span class="eyebrow" style="display:block;margin-bottom:6px">Demo roster</span><div class="roster">${ROSTER.slice(0, 5).map((c) => `<b>${c}</b>`).join("")}</div></div>
-      <p class="hint">The code also decides which hidden rule this student gets in Find the Rule — same student, same rule, every session, and the class spread evenly across the set.</p>
+      <p class="note">Your name is only here so a teacher can match this device to your paper packet. It is stored once, with your code, and appears nowhere in what you do afterwards.</p>
     </div>
   </section>`;
-  const f = $("codefield"); f.focus();
+  const f = $("codefield"), fn = $("firstname"), li = $("lastinitial");
+  f.focus();
   f.oninput = () => { f.value = f.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); };
-  f.onkeydown = (e) => { if (e.key === "Enter") $("codego").click(); };
+  li.oninput = () => { li.value = li.value.toUpperCase().replace(/[^A-Z]/g, ""); };
+  const go1 = (e) => { if (e.key === "Enter") $("codego").click(); };
+  f.onkeydown = go1; fn.onkeydown = go1; li.onkeydown = go1;
   $("codego").onclick = () => {
     const v = f.value.trim().toUpperCase(), msg = $("codemsg");
-    if (!/^[A-HJ-NP-RT-Z]{3}[2-46-9]{2}$/.test(v)) { msg.textContent = "That is not the right shape. Three letters then two numbers — no O, I, S, 0, 1 or 5."; msg.style.color = "var(--fail)"; return; }
-    if (!ROSTER.includes(v)) { msg.textContent = "We can't find that code. Check the card and try again."; msg.style.color = "var(--fail)"; return; }
-    S.code = v; $("pcchip").textContent = v; save();
+    const first = fn.value.trim(), initial = li.value.trim().toUpperCase();
+    const fail = (t) => { msg.textContent = t; msg.style.color = "var(--fail)"; };
+    if (!/^[A-HJ-NP-RT-Z]{3}[2-46-9]{2}$/.test(v))
+      return fail("That code is not the right shape. Three letters then two numbers — no O, I, S, 0, 1 or 5.");
+    if (!ROSTER.includes(v)) return fail("We can't find that code. Check the card and try again.");
+    if (!first) { fn.focus(); return fail("We need your first name so your teacher can find your packet."); }
+    if (!/^[A-Z]$/.test(initial)) { li.focus(); return fail("One letter for your last initial."); }
+
+    S.code = v; S.first = first; S.initial = initial;
+    $("pcchip").textContent = v; save();
     window.__CTX3_CODE__ = v;
-    startSession(v, S.deviceId, S.day);   // fire and forget; the UI never waits
+    // Identifying fields go to the sessions row and nowhere else. They are
+    // passed here as arguments rather than held in the event state, so there
+    // is no path by which they reach an event payload.
+    startSession(v, S.deviceId, S.day, { first_name: first, last_initial: initial });
     emit("session_start", { participantCode: v, tool: "hub", day: S.day, deviceId: S.deviceId, recorded: false });
     go("hub");
   };
@@ -1451,7 +1470,11 @@ function renderCode() {
 /* ============================ routing + chrome ============================ */
 function go(screen) {
   W4W.running = false; W4W.playing = false; clearTimeout(W4W.timer);
-  if (S.screen !== "hub" && screen !== S.screen) emit("session_end", { reason: "navigated_away" });
+  // Leaving a TOOL is a session_end. Leaving the sign-in screen is not -- it
+  // used to fire one at the same millisecond as the sign-in session_start,
+  // which made every log open with an instant orphan close.
+  const leavingTool = S.screen !== "hub" && S.screen !== "code";
+  if (leavingTool && screen !== S.screen) emit("session_end", { reason: "navigated_away" });
   S.screen = screen;
   S.tool = { hub: "hub", code: "hub", ftr: "find-the-rule", pg: "prompt-golf", w4w: "word4word" }[screen] || "hub";
   window.scrollTo({ top: 0, behavior: "instant" });
@@ -1499,14 +1522,21 @@ function start(snap) {
   if (qs.has("reset")) {
     try { localStorage.removeItem(LS); } catch (e) {}
     clearBuffer();
-    S.events = []; S.seq = 0; S.code = ""; S.screen = "code";
+    S.events = []; S.seq = 0; S.code = ""; S.first = ""; S.initial = ""; S.screen = "code";
     history.replaceState(null, "", location.pathname + (qd >= 1 && qd <= 4 ? "?day=" + qd : ""));
   }
   if (snap && snap.screen) { S.screen = snap.screen; S.day = snap.day || S.day; S.code = snap.code || S.code; }
   $("daypick").value = String(S.day); $("pcchip").textContent = S.code;
   paintMode();
-  if (!S.events.length) emit("session_start", { participantCode: S.code, tool: "hub", day: S.day, deviceId: S.deviceId, recorded: false });
+  // Only for a device resuming with a code already on it. A fresh device has
+  // no code yet, and emitting here would write a session_start with an empty
+  // participantCode -- an orphan row with nothing to join it to.
+  if (!S.events.length && ROSTER.includes(S.code))
+    emit("session_start", { participantCode: S.code, tool: "hub", day: S.day, deviceId: S.deviceId, recorded: false });
   window.__CTX3_CODE__ = S.code;
+  // The name is deliberately not persisted to localStorage, so a resumed
+  // device re-registers with the code alone and the sessions row it already
+  // wrote keeps the name from the first sign-in.
   if (ROSTER.includes(S.code)) startSession(S.code, S.deviceId, S.day);
   renderRail(); go(S.code && ROSTER.includes(S.code) ? (S.screen === "code" ? "hub" : S.screen) : "code");
 }

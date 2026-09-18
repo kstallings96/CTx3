@@ -25,10 +25,10 @@ export const isSupabaseConfigured = supabase !== null;
 export const INSTRUMENT = "ctx3";
 
 /**
- * Creates the participant row. CTx3 stores NO identifying fields — the code is
- * the only identifier, and the roster mapping codes to students lives on paper
- * with the research team (ARCHITECTURE.md). This is the one place a session row
- * is written; everything else is an event.
+ * Creates the participant row. This is the ONE place first name and last
+ * initial are written — a teacher has to be able to match a device to a paper
+ * packet, and this row is the entire mechanism. Everything after sign-in is an
+ * event, and no event carries a name (see scrub() below).
  */
 export async function insertSession(row) {
   if (!supabase) return false;
@@ -41,6 +41,22 @@ export async function insertSession(row) {
   return false;
 }
 
+/* Identifying fields belong on the sessions row and nowhere else. Nothing
+   should ever put one in an event payload -- but a stray field in a future
+   payload would be an IRB problem discovered months later in a data dump, so
+   strip them on the way out rather than trust that nothing ever slips. */
+const IDENTIFYING = ["first_name", "firstName", "first", "last_initial", "lastInitial", "initial", "lastName", "last_name", "name", "grade"];
+function scrub(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  let hit = false;
+  for (const k of IDENTIFYING) if (k in payload) { hit = true; break; }
+  if (!hit) return payload;
+  const clean = { ...payload };
+  for (const k of IDENTIFYING) delete clean[k];
+  console.warn("[ctx3] stripped an identifying field from an event payload");
+  return clean;
+}
+
 export function eventRows(events) {
   return events.map((e) => ({
     instrument: INSTRUMENT,
@@ -50,7 +66,7 @@ export function eventRows(events) {
     seq: e.seq,
     type: e.type,
     support_condition: e.payload?.supportCondition ?? "na",
-    payload: e.payload ?? {},
+    payload: scrub(e.payload) ?? {},
     client_ts: e.ts,
   }));
 }
