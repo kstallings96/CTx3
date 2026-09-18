@@ -4,7 +4,7 @@ Same Supabase + Vercel treatment as Manifest, with one addition: a serverless
 function holding the model key.
 
 The app runs fine with nothing configured — every network call becomes a no-op,
-events stay in `localStorage`, and the model half of Two Machines plays
+events stay in `localStorage`, and the model half of Word4Word plays
 pre-recorded runs labelled as recordings. These steps add the backend.
 
 **I can't create accounts or log in on your behalf, so steps 1, 2, 5 and 6 are
@@ -87,7 +87,7 @@ Note the `/api/complete` route does **not** run under `npm run dev` — use
 
 ## 5. The model key
 
-Two Machines calls a real model for its right-hand column. The key cannot ship
+Word4Word calls a real model for its right-hand column. The key cannot ship
 in the bundle, so it goes in a Vercel environment variable with **no `VITE_`
 prefix** — anything `VITE_`-prefixed is inlined into the client and would be
 public.
@@ -103,7 +103,7 @@ In the Vercel dashboard, **Settings → Environment Variables**:
 
 The `VITE_` ones are build-time, so **redeploy after adding them**.
 
-Cost is not the constraint here. A class of 14 running Two Machines is roughly
+Cost is not the constraint here. A class of 14 running Word4Word is roughly
 twenty short calls for the whole period — cents, on any cheap model. Set a low
 spend cap on the OpenRouter key anyway; a stuck loop is the only real risk, and
 `api/complete.js` already limits each participant code to 40 calls a minute.
@@ -124,17 +124,17 @@ npx vercel --prod
 
 ## Study-day checklist
 
-- `https://<your-app>.vercel.app/?day=3` — the facilitator sets the day; the
+- `https://<your-app>.vercel.app/?day=2` — the facilitator sets the day; the
   student never chooses it
 - `?reset` on any URL clears the device for the next student, including
   anything they had queued but unsent
-- Open Two Machines on the projector machine **before** the period and run one
+- Open Word4Word on the projector machine **before** the period and run one
   cell, to confirm the model responds and to wake Supabase
 - Free Supabase projects pause after about a week idle and take a minute or two
   to wake. Wake it the morning of, and **test the wake path at least once** —
   otherwise the first student hits a dead endpoint
 - Check the top-right pill says **live model**. If it says *offline stand-in*,
-  the key is missing or wrong and Two Machines will play recordings
+  the key is missing or wrong and Word4Word will play recordings
 
 ## Pulling the data
 
