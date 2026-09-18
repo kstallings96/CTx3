@@ -211,10 +211,48 @@ npx vercel --prod
 
 ---
 
+## The URLs
+
+One deployment, four URLs. The rewrite in `vercel.json` already serves the app
+on any path, so this needs no extra Vercel projects, no extra environment
+variables and no second thing to keep awake.
+
+| URL | What the student gets |
+|---|---|
+| `https://<app>.vercel.app/` | The hub. Sign in, then pick from the three tiles. |
+| `https://<app>.vercel.app/find-the-rule` | Sign in, then straight into Find the Rule. No hub, no tiles, no way out. |
+| `https://<app>.vercel.app/prompt-golf` | Same, for Prompt Golf. |
+| `https://<app>.vercel.app/word4word` | Same, for Word4Word. |
+
+Three things a pinned URL does that the hub does not:
+
+1. **It sets its own day.** `/word4word` is day 2, the other two are day 3.
+   "The facilitator opened the right URL but forgot `?day=2`" costs you a
+   period's data and is cheaper to design out than to remember. An explicit
+   `?day=` still overrides, if you ever need to.
+2. **It hides the Hub button and the "Back to hub" buttons**, so a student
+   cannot wander into the tool you are running on Thursday.
+3. **It survives `?reset` and reload.** The path stays on hand-off to the next
+   student, and a device reloaded mid-period comes back to the station's tool
+   rather than to wherever the page last saved.
+
+The hub build now also keeps the address bar honest: entering a tool from a
+tile pushes that tool's URL, and Back returns to the hub. So you can read a
+tool's URL straight off the screen instead of looking it up here.
+
+**These paths are not a security boundary.** A student who types
+`/word4word` reaches Word4Word, and the roster code is the only real gate. For
+a 14-student pilot that is proportionate: the point is that the station in
+front of them offers one activity, not that the other two are locked. If you
+want them genuinely locked, say so and I will add a per-tool passphrase — but
+it is a facilitator-typed passphrase on a shared device, not authentication,
+and it is worth being honest with the IRB about which one you have.
+
 ## Study-day checklist
 
-- `https://<your-app>.vercel.app/?day=2` — the facilitator sets the day; the
-  student never chooses it
+- Open the **station's own URL** (see the table above) — it carries the right
+  day with it. On the hub URL, `?day=2` sets the day; the student never
+  chooses it either way
 - `?reset` on any URL clears the device for the next student, including
   anything they had queued but unsent and the name from the sign-in screen
 - Open Word4Word on the projector machine **before** the period and run one

@@ -4,7 +4,7 @@ import { ROSTER } from "./roster.js";
 
 /* ============================ shared ============================ */
 const LS = "d3station.v2";
-const S = { code: "", first: "", initial: "", day: 3, screen: "hub", tool: "hub", events: [], seq: 0,
+const S = { code: "", first: "", initial: "", pinned: null, day: 3, screen: "hub", tool: "hub", events: [], seq: 0,
   support: "na", phaseId: null, phaseScaffolds: [],
   forceOffline: false, brandTaps: 0, lastAttempt: null, deviceId: "dev-" + Math.random().toString(36).slice(2, 8) };
 const nowISO = () => new Date().toISOString();
@@ -588,7 +588,7 @@ function wireFTR() {
     f.dispatchEvent(new Event("input")); f.focus(); f.setSelectionRange(f.value.length, f.value.length); });
   const dl = $("dolock"); if (dl) dl.onclick = ftrLock;
   const dc = $("docommit"); if (dc) dc.onclick = ftrCommit;
-  const bh = $("backhub"); if (bh) bh.onclick = () => go("hub");
+  wireBackHub();
 }
 const CLINIC = [
   { id: "c1", fault: "ambiguous pronoun", prompt: "Put the book on the shelf and then clean it.", span: "it.",
@@ -898,7 +898,7 @@ function wirePG() {
     emit("task_start", { taskId: "pg-t3", round: 3 }); PG.taskStart = Date.now(); renderPG(); };
   const pr = $("pgrestart"); if (pr) pr.onclick = () => { Object.assign(PG, { phase: "clinic", clinicIdx: 0, clinicDraft: CLINIC[0].prompt,
     draft: "", attempts: {}, best: {}, last: {}, comparison: "", taskStart: Date.now(), busy: false }); renderPG(); };
-  const bh = $("backhub"); if (bh) bh.onclick = () => go("hub");
+  wireBackHub();
 }
 
 /* ============================ tool 3 · Word4Word ============================ */
@@ -1390,14 +1390,17 @@ function wireW4W() {
   document.querySelectorAll("[data-w4wout]").forEach((s2) => s2.onchange = () => {
     W4W.log[+s2.dataset.w4wout].outcome = s2.value === "—" ? "" : s2.value;
     emit("facilitator_judgement", { participantCode: null, quadrant: W4W.log[+s2.dataset.w4wout].quadrant, outcome: s2.value }); });
-  const bh = $("backhub"); if (bh) bh.onclick = () => go("hub");
+  wireBackHub();
 }
 
 /* ============================ hub ============================ */
+/* `path` is the tool's own URL segment. Each tool is reachable at
+   /<path> as well as from the hub, so a facilitator can hand out one URL per
+   station and a student on that URL never sees the other two. */
 const TOOLS = [
-  { id: "ftr", name: "Find the Rule", day: 3, con: "hypothesis testing", built: true, blurb: "Build questions from pills, find the one hidden rule the partner is following, then commit and test it." },
-  { id: "pg", name: "Prompt Golf", day: 3, con: "abstraction · debugging", built: true, blurb: "Hit the target in as few words as possible. Opens by fixing someone else's broken prompt." },
-  { id: "w4w", name: "Word4Word", day: 2, con: "decomposition · pseudocode", built: true, tag: "day 2", blurb: "Write the steps to build a snowman. It does word for word what you wrote — no more, and nothing you left out." },
+  { id: "ftr", path: "find-the-rule", name: "Find the Rule", day: 3, con: "hypothesis testing", built: true, blurb: "Build questions from pills, find the one hidden rule the partner is following, then commit and test it." },
+  { id: "pg", path: "prompt-golf", name: "Prompt Golf", day: 3, con: "abstraction · debugging", built: true, blurb: "Hit the target in as few words as possible. Opens by fixing someone else's broken prompt." },
+  { id: "w4w", path: "word4word", name: "Word4Word", day: 2, con: "decomposition · pseudocode", built: true, tag: "day 2", blurb: "Write the steps to build a snowman. It does word for word what you wrote — no more, and nothing you left out." },
 ];
 function renderHub() {
   $("stage").innerHTML = `
@@ -1463,12 +1466,47 @@ function renderCode() {
     // is no path by which they reach an event payload.
     startSession(v, S.deviceId, S.day, { first_name: first, last_initial: initial });
     emit("session_start", { participantCode: v, tool: "hub", day: S.day, deviceId: S.deviceId, recorded: false });
-    go("hub");
+    go(S.pinned || "hub");
   };
 }
 
 /* ============================ routing + chrome ============================ */
-function go(screen) {
+
+/**
+ * Per-tool URLs.
+ *
+ * The hub at / still runs all three, which is what a one-device-per-student
+ * classroom wants. But a station set up for one activity should not offer the
+ * other two: /word4word signs the student in and drops them straight into
+ * Word4Word, with no hub, no tiles and no way back out of it.
+ *
+ * Pinning is read from the path. `?tool=` is accepted as well because the
+ * artifact build and any file:// copy have no server to rewrite paths, and a
+ * demo that cannot be pinned is a demo of the wrong thing.
+ */
+const PATHS = Object.fromEntries(TOOLS.map((t) => [t.path, t.id]));
+const IDS = new Set(TOOLS.map((t) => t.id));
+function pinnedTool() {
+  const seg = location.pathname.split("/").filter(Boolean).pop();
+  if (seg && PATHS[seg]) return PATHS[seg];
+  const q = (new URLSearchParams(location.search).get("tool") || "").trim();
+  if (PATHS[q]) return PATHS[q];
+  if (IDS.has(q)) return q;
+  return null;
+}
+/* pushState throws on file:// and data: URLs, where there is no origin to push
+   against. The demo runs on both, so every call is guarded. */
+const canRoute = () => location.protocol === "http:" || location.protocol === "https:";
+
+/* "Back to hub" is a lie on a pinned device -- there is no hub to go back to.
+   The facilitator's hand-off control is Reset code, in the topbar. */
+function wireBackHub() {
+  const bh = $("backhub"); if (!bh) return;
+  if (S.pinned) { bh.hidden = true; return; }
+  bh.onclick = () => go("hub");
+}
+
+function go(screen, opts) {
   W4W.running = false; W4W.playing = false; clearTimeout(W4W.timer);
   // Leaving a TOOL is a session_end. Leaving the sign-in screen is not -- it
   // used to fire one at the same millisecond as the sign-in session_start,
@@ -1492,7 +1530,21 @@ function go(screen) {
     phaseStart("w4w-solo", "na", ["verbPalette", "targetShown", "stepByStep"]);
     emit("task_start", { taskId: "w4w-solo", round: 1 });
     renderW4W(); }
+  // Keep the address bar honest: the URL of a tool is the same URL a
+  // facilitator would hand out for it. Not on a pinned device, where there is
+  // nothing else for Back to reach.
+  if (!S.pinned && !(opts && opts.fromPop) && canRoute()) {
+    const t = TOOLS.find((x) => x.id === screen);
+    const want = (t ? "/" + t.path : "/") + location.search;
+    try { if (location.pathname + location.search !== want) history.pushState({ screen }, "", want); } catch (e) {}
+  }
 }
+/* A student who hits Back should land on the hub, not on a broken page. */
+window.addEventListener("popstate", () => {
+  if (S.pinned || !ROSTER.includes(S.code)) return;
+  const target = pinnedTool() || "hub";
+  if (target !== S.screen) go(target, { fromPop: true });
+});
 $("daypick").onchange = (e) => { S.day = +e.target.value; save(); if (S.screen === "hub") renderHub(); };
 $("hubbtn").onclick = () => go("hub");
 $("resetcode").onclick = () => go("code");
@@ -1517,13 +1569,29 @@ function start(snap) {
   const qs = new URLSearchParams(location.search);
   const qd = parseInt(qs.get("day") || "", 10);
   if (qd >= 1 && qd <= 4) S.day = qd;
+  // Which tool this URL is pinned to, if any. Read once at boot and held in
+  // state, because everything downstream -- the hub button, the back buttons,
+  // where sign-in lands -- has to agree about it.
+  S.pinned = pinnedTool();
+  // A pinned URL carries its own day, so ?day= becomes optional on it.
+  // "The facilitator opened /word4word but forgot ?day=2" is a study-day
+  // failure that costs you the whole period's data, and it is cheaper to
+  // design out than to remember. An explicit ?day= still overrides.
+  if (S.pinned && !(qd >= 1 && qd <= 4)) S.day = TOOLS.find((t) => t.id === S.pinned).day;
+  if (S.pinned) $("hubbtn").hidden = true;
   // ?reset hands the device to the next student: nothing of the last one stays,
   // including anything they had queued but unsent.
   if (qs.has("reset")) {
     try { localStorage.removeItem(LS); } catch (e) {}
     clearBuffer();
     S.events = []; S.seq = 0; S.code = ""; S.first = ""; S.initial = ""; S.screen = "code";
-    history.replaceState(null, "", location.pathname + (qd >= 1 && qd <= 4 ? "?day=" + qd : ""));
+    // Keep the path and the ?tool= fallback -- the device is still this
+    // station's device -- and drop everything else.
+    const keep = new URLSearchParams();
+    if (qd >= 1 && qd <= 4) keep.set("day", String(qd));
+    if (qs.get("tool")) keep.set("tool", qs.get("tool"));
+    const q = keep.toString();
+    try { history.replaceState(null, "", location.pathname + (q ? "?" + q : "")); } catch (e) {}
   }
   if (snap && snap.screen) { S.screen = snap.screen; S.day = snap.day || S.day; S.code = snap.code || S.code; }
   $("daypick").value = String(S.day); $("pcchip").textContent = S.code;
@@ -1538,7 +1606,12 @@ function start(snap) {
   // device re-registers with the code alone and the sessions row it already
   // wrote keeps the name from the first sign-in.
   if (ROSTER.includes(S.code)) startSession(S.code, S.deviceId, S.day);
-  renderRail(); go(S.code && ROSTER.includes(S.code) ? (S.screen === "code" ? "hub" : S.screen) : "code");
+  renderRail();
+  // A pinned URL beats the restored screen: a device reloaded mid-period must
+  // come back to the tool the station is for, not to wherever it happened to
+  // be when the page last saved.
+  if (!ROSTER.includes(S.code)) go("code");
+  else go(S.pinned || (S.screen === "code" ? "hub" : S.screen));
 }
 start({});
 
