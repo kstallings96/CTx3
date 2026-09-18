@@ -26,24 +26,46 @@
 
 /* ---- vocabulary --------------------------------------------------------- */
 
+/**
+ * Anchors, and why two of them are not literal part names.
+ *
+ * `"trunk"` means "the main mass, whatever that turned out to be" — the body
+ * if one was drawn, otherwise the head. `rootable` means a part can stand on
+ * its own with nothing under it.
+ *
+ * Both exist because the first version demanded a body before anything else,
+ * and that is the machine's prejudice rather than a fact about instructions.
+ * Ask anyone — a person or a model — how to draw a monster and they start
+ * with the head. Insisting on a body first turned a perfectly good set of
+ * steps into a grey blob with every other part floating, which looks exactly
+ * like the machine ignoring what it was told. A head with arms is a real
+ * monster and now draws as one.
+ *
+ * The ordering lesson still bites where it should: EYES need a head, TEETH
+ * need a mouth, and anything at all before the first structural part floats.
+ * What cannot be drawn on nothing still cannot be drawn on nothing.
+ */
 export const PARTS = {
-  body:     { anchor: null,   words: ["body", "blob", "monster", "torso", "creature"], shaped: true },
-  head:     { anchor: "body", words: ["head"], shaped: true },
-  eyes:     { anchor: "head", words: ["eye", "eyes", "eyeball", "eyeballs"], countable: true, plural: 2 },
-  mouth:    { anchor: "head", words: ["mouth", "grin", "smile", "frown"] },
+  body:     { anchor: null,    words: ["body", "blob", "monster", "torso", "creature"], shaped: true },
+  head:     { anchor: "body",  words: ["head"], shaped: true, rootable: true },
+  eyes:     { anchor: "head",  words: ["eye", "eyes", "eyeball", "eyeballs"], countable: true, plural: 2 },
+  mouth:    { anchor: "head",  words: ["mouth", "grin", "smile", "frown"] },
   teeth:    { anchor: "mouth", words: ["teeth", "tooth", "fangs"], countable: true, plural: 4 },
-  nose:     { anchor: "head", words: ["nose", "snout", "beak"] },
-  ears:     { anchor: "head", words: ["ear", "ears"], countable: true, plural: 2 },
-  horns:    { anchor: "head", words: ["horn", "horns"], countable: true, plural: 2 },
-  antennae: { anchor: "head", words: ["antenna", "antennae", "antennas", "feeler", "feelers"], countable: true, plural: 2 },
-  arms:     { anchor: "body", words: ["arm", "arms", "tentacle", "tentacles"], countable: true, plural: 2 },
-  legs:     { anchor: "body", words: ["leg", "legs", "foot", "feet"], countable: true, plural: 2 },
-  tail:     { anchor: "body", words: ["tail"] },
-  wings:    { anchor: "body", words: ["wing", "wings"], countable: true, plural: 2 },
-  spots:    { anchor: "body", words: ["spot", "spots", "dot", "dots", "polka"], countable: true, plural: 6 },
-  stripes:  { anchor: "body", words: ["stripe", "stripes", "striped"], countable: true, plural: 4 },
-  spikes:   { anchor: "body", words: ["spike", "spikes", "scales"], countable: true, plural: 5 },
+  nose:     { anchor: "head",  words: ["nose", "snout", "beak"] },
+  ears:     { anchor: "head",  words: ["ear", "ears"], countable: true, plural: 2 },
+  horns:    { anchor: "head",  words: ["horn", "horns"], countable: true, plural: 2 },
+  antennae: { anchor: "head",  words: ["antenna", "antennae", "antennas", "feeler", "feelers"], countable: true, plural: 2 },
+  arms:     { anchor: "trunk", words: ["arm", "arms", "tentacle", "tentacles"], countable: true, plural: 2 },
+  legs:     { anchor: "trunk", words: ["leg", "legs", "foot", "feet"], countable: true, plural: 2 },
+  tail:     { anchor: "trunk", words: ["tail"] },
+  wings:    { anchor: "trunk", words: ["wing", "wings"], countable: true, plural: 2 },
+  spots:    { anchor: "trunk", words: ["spot", "spots", "dot", "dots", "polka"], countable: true, plural: 6 },
+  stripes:  { anchor: "trunk", words: ["stripe", "stripes", "striped"], countable: true, plural: 4 },
+  spikes:   { anchor: "trunk", words: ["spike", "spikes", "scales"], countable: true, plural: 5 },
 };
+
+/** The main mass a limb hangs off: the body, or the head if that is all there is. */
+export const trunkOf = (scene) => (scene.parts.body ? "body" : scene.parts.head ? "head" : null);
 
 export const COLOURS = {
   red: "#e2544a", orange: "#e8873f", yellow: "#e8ca3f", green: "#57b36a",
@@ -54,6 +76,8 @@ export const SIZES = { tiny: 0.55, small: 0.75, big: 1.35, huge: 1.75, large: 1.
 export const SHAPES = ["round", "square", "tall", "wide"];
 
 const VERBS = /\b(draw|make|add|give|put|place|attach|build|create|stick|paste|colour|color)\b/;
+/* Openers that mean "here is where", not "here is a new part". */
+const LOCATION = /^(?:on|in|at|to|under|above|below|beneath|from|near|beside|next|around|between|along|over|inside|outside|underneath|atop|by)\b/;
 const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
 /** The dull defaults. Saying nothing has to LOOK like saying nothing. */
@@ -111,11 +135,25 @@ export function w4wStep(scene, line) {
   // machine does not draw what you asked. Split on the words people actually
   // join parts with, and act on each piece in the order it was written.
   const pieces = t.split(/\s*(?:,|\band\b|\bwith\b|\bplus\b)\s*/).filter((x) => x.trim());
-  const segments = pieces.filter((x) => findPart(x));
-  if (segments.length > 1) {
+  // A piece that NAMES a part and a piece that POINTS AT one are different
+  // things. "On each side of the head, add two small round ears" is one
+  // instruction with a location in front of it — reading the location as a
+  // second instruction drew a fresh blank head and wiped the green one from
+  // the step before. A piece that opens with a preposition and carries no
+  // verb is saying where, not what.
+  const segments = pieces.filter((x) => findPart(x) && (VERBS.test(x) || !LOCATION.test(x)));
+  // Act on the pieces that survived, even when only one did. Falling back to
+  // the whole line here was the bug behind the bug: the location phrase was
+  // correctly dropped, then the full line went through anyway and the first
+  // part named in it — the one being pointed AT — won.
+  if (segments.length) {
     const out = [];
     let acted = false;
-    for (const seg of segments.slice(0, 4)) {
+    // Up to eight, not four. A class types the whole monster as one
+    // sentence — "a big green head, one big eye, four arms and one big
+    // foot" is four parts plus the body — and a cap of four silently threw
+    // the foot away. Eight is the same ceiling the model is held to.
+    for (const seg of segments.slice(0, 8)) {
       // The verb lives in the first piece; carry it so each piece parses.
       const r = applyOne(scene, VERBS.test(seg) ? seg : "add " + seg);
       if (r.ok) { acted = true; out.push(r.msg); }
@@ -141,13 +179,26 @@ function applyOne(scene, t) {
   const size = findSize(t);
   const shape = def.shaped ? findShape(t) : null;
 
-  // "on the head" / "to the body" — an explicit parent beats the default.
-  let parent = def.anchor;
+  // Where it goes. An explicit "on the X" beats the default anchor — that is
+  // how a student says "eyes on the body" and gets eyes on the body.
+  let parent = def.anchor === "trunk" ? trunkOf(scene) || "body" : def.anchor;
+  let rootable = def.rootable;
   const on = t.match(/\b(?:on|onto|to|above|below|under|in)\b\s*(?:the\s+|its\s+|his\s+|her\s+|their\s+)?([a-z]+)/);
   if (on) {
-    const named = findPart(on[1], name);
-    if (named) parent = named;
+    let named = findPart(on[1], name);
+    // "on the body" when the main mass turned out to be a head is a wording
+    // difference, not an ordering error — and a limb that says it plainly
+    // must not behave differently from one that says "from the sides of the
+    // body" and never trips this branch at all. Body and trunk are the same
+    // idea, so a trunk-anchored part follows the trunk.
+    if (named === "body" && def.anchor === "trunk" && !scene.parts.body) named = trunkOf(scene);
+    // Otherwise naming a parent is a commitment: if it is not there this
+    // floats, even for a part that could have stood on its own.
+    if (named) { parent = named; rootable = false; }
   }
+  // A part that can stand alone does, rather than floating, when the thing it
+  // would normally hang off was never drawn.
+  if (parent !== null && !scene.parts[parent] && rootable) parent = null;
 
   const attrs = { count, colour, size, shape };
   const said = [
@@ -157,9 +208,20 @@ function applyOne(scene, t) {
   ].filter(Boolean);
   const tail = said.length ? " (" + said.join(", ") + ")" : "";
 
+  // Mentioning a part again does not blank what was already said about it.
+  // "Draw a big green head" followed by "below the eye, draw a mouth" must
+  // not turn the head grey and ordinary on the second mention.
+  const prev = scene.parts[name] || {};
+  const merged = {
+    count: n || prev.count || count,
+    colour: attrs.colour || prev.colour || null,
+    size: attrs.size || prev.size || null,
+    shape: attrs.shape || prev.shape || null,
+  };
+
   if (parent === null) {
     if (!scene.parts[name]) scene.order.push(name);
-    scene.parts[name] = { on: null, ...attrs };
+    scene.parts[name] = { on: null, ...merged };
     return { ok: true, msg: "I drew " + say(name, count) + tail + "." };
   }
 
@@ -174,7 +236,7 @@ function applyOne(scene, t) {
   }
 
   if (!scene.parts[name]) scene.order.push(name);
-  scene.parts[name] = { on: parent, ...attrs };
+  scene.parts[name] = { on: parent, ...merged };
   return { ok: true, msg: "I put " + say(name, count) + tail + " on the " + parent + "." };
 }
 
@@ -265,11 +327,17 @@ export function buildPrompt(classInstruction) {
     "",
     "Rules you must follow:",
     "- Reply with numbered steps only, one per line. No preamble, no explanation, no closing remark.",
-    "- At most 8 steps.",
+    "- At most 8 steps. One part per step.",
+    "- Start with the body, or with the head if there is no body.",
+    "- Every later step must attach a part to something an earlier step already drew.",
     "- Use only these parts: " + Object.keys(PARTS).join(", ") + ".",
     "- You may give a colour (" + [...new Set(Object.keys(COLOURS))].slice(0, 11).join(", ") + "),",
     "  a size (tiny, small, big, huge), and for the body and head a shape (round, square, tall, wide).",
     "- Say how many whenever there can be more than one.",
+    // Not a style note. Tutorial asides ("at the top of your paper", "for
+    // decoration", "optionally...") are the difference between a card the
+    // back row can read and a wall of prose with a drawing lost in it.
+    "- No advice about paper, page position, pencils or decorating. Just the parts.",
     "- Keep it cheerful and suitable for a classroom. Nothing frightening, violent, gory or gross.",
     "",
     'The instruction: "' + String(classInstruction).replace(/"/g, "'").slice(0, 400) + '"',
@@ -394,28 +462,45 @@ function blob(cx, cy, rx, ry, shape, fill) {
  */
 function layout(scene) {
   const b = scene.parts.body, h = scene.parts.head;
+  const legLen = scene.parts.legs ? 26 : 8;
+
+  // A head with no body IS the creature, so it sits where a body would and
+  // grows to match. Drawing it as a small circle floating at head height
+  // over empty ground is not what "draw a big green head, one big eye, four
+  // arms and one big foot" describes.
+  if (!b && h) {
+    const hr = 40 * scaleOf(h);
+    const cy = GROUND - legLen - hr;
+    return {
+      headless: true,
+      rx: hr, ry: hr, bodyCy: cy, hr, headCy: cy,
+      headShape: h.shape, bodyShape: h.shape,
+      faceR: hr,
+    };
+  }
+
   const bs = scaleOf(b);
   let rx = 42 * bs, ry = 34 * bs;
   if (b && b.shape === "tall") { rx = 32 * bs; ry = 46 * bs; }
   if (b && b.shape === "wide") { rx = 54 * bs; ry = 28 * bs; }
-  const legs = scene.parts.legs;
-  const legLen = legs ? 26 : 8;
   const bodyCy = GROUND - legLen - ry;
 
-  const hs = scaleOf(h);
-  let hr = 26 * hs;
+  const hr = 26 * scaleOf(h);
   const neck = 16;
   const headCy = bodyCy - ry - neck - hr;
-  return { rx, ry, bodyCy, hr, headCy, headShape: h && h.shape };
+  return { rx, ry, bodyCy, hr, headCy, headShape: h && h.shape, bodyShape: b && b.shape, faceR: hr };
 }
 
 export function sceneSVG(scene) {
   const P = [];
   const p = (n) => scene.parts[n];
   const L = layout(scene);
-  const bodyFill = col(p("body"), COLOURS[DEFAULT_COLOUR]);
-  const headFill = col(p("head"), bodyFill);
-  const limb = (n) => col(p(n), p("body") ? bodyFill : COLOURS[DEFAULT_COLOUR]);
+  // When the head is the creature, its colour is the creature's colour --
+  // limbs and markings take their default from it rather than from a body
+  // that was never drawn.
+  const headFill = col(p("head"), col(p("body"), COLOURS[DEFAULT_COLOUR]));
+  const bodyFill = p("body") ? col(p("body"), COLOURS[DEFAULT_COLOUR]) : headFill;
+  const limb = (n) => col(p(n), bodyFill);
   let top = GROUND;
   const reach = (y) => { if (y < top) top = y; };
 
@@ -469,7 +554,7 @@ export function sceneSVG(scene) {
     }
   }
 
-  if (p("body")) { P.push(blob(CX, L.bodyCy, L.rx, L.ry, p("body").shape, bodyFill)); reach(L.bodyCy - L.ry); }
+  if (p("body")) { P.push(blob(CX, L.bodyCy, L.rx, L.ry, L.bodyShape, bodyFill)); reach(L.bodyCy - L.ry); }
 
   if (p("stripes")) {
     const n = Math.min(p("stripes").count || 3, 8), f = col(p("stripes"), contrastOn(bodyFill));
@@ -488,7 +573,11 @@ export function sceneSVG(scene) {
   }
 
   if (p("head")) {
-    P.push(`<line x1="${CX}" y1="${L.headCy + L.hr - 2}" x2="${CX}" y2="${L.bodyCy - L.ry + 4}" stroke="${headFill}" stroke-width="7"/>`);
+    // No neck when the head is the whole creature -- there is nothing below
+    // it to join to, and a stub hanging off the bottom reads as a mistake.
+    if (!L.headless) {
+      P.push(`<line x1="${CX}" y1="${L.headCy + L.hr - 2}" x2="${CX}" y2="${L.bodyCy - L.ry + 4}" stroke="${headFill}" stroke-width="7"/>`);
+    }
     P.push(blob(CX, L.headCy, L.hr, L.hr, L.headShape, headFill));
     reach(L.headCy - L.hr);
   }

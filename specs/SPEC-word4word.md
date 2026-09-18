@@ -64,9 +64,20 @@ attach to. That is the whole ordering lesson in one mechanism.
 | Anchor | Parts |
 |---|---|
 | — | body |
-| body | head, arms, legs, tail, wings, spots, stripes, spikes |
+| body, or the head if there is no body | head, arms, legs, tail, wings, spots, stripes, spikes |
 | head | eyes, mouth, nose, ears, horns, antennae |
 | mouth | teeth |
+
+**A head can stand on its own.** The first version demanded a body before
+anything else, which is the machine's prejudice rather than a fact about
+instructions — ask a person or a model how to draw a monster and they start
+with the head. Insisting otherwise turned a perfectly good set of steps into
+a grey blob with every other part floating, which looks exactly like the
+machine ignoring what it was told. A head with arms is a real monster.
+
+The lesson still bites where it should: **eyes need a head, teeth need a
+mouth**, and anything at all before the first structural part floats. What
+cannot be drawn on nothing still cannot be drawn on nothing.
 
 **And it draws what you said.** Colour (eleven of them), size (tiny, small,
 big, huge), shape for the body and head (round, square, tall, wide) and
@@ -87,10 +98,25 @@ gets one.
 | Mistake | What renders |
 |---|---|
 | eyes before head | eyes hanging beside an empty space, labelled |
-| no body at all | every part floats; nothing attaches to anything |
+| teeth before mouth | the same |
 | `add an eye` | one eye, because one is what you said |
 | no colour given | grey, conspicuously |
 | verb it knows, part it does not | "Okay!", and nothing changes |
+
+### What is NOT a mistake
+
+Three things that look like the machine misbehaving and are not, each fixed
+after watching a real model output fail on them:
+
+- **A location phrase is not an instruction.** "On each side of the head, add
+  two small round ears" is one instruction with a location in front of it.
+  Reading the location as a second instruction drew a fresh blank head and
+  wiped the green one from the step before.
+- **Mentioning a part again does not blank it.** "Draw a big green head" then
+  "below the eye, draw a mouth" must not turn the head grey.
+- **One sentence may name the whole monster.** A class types "a big green
+  head, one big eye, four arms and one big foot" on one line; all four parts
+  are drawn, and the body they hang off is implied by "monster".
 
 ## Session shape — 60 minutes
 

@@ -301,7 +301,7 @@ mark{background:var(--pass-soft);color:var(--pass);border-radius:2px;padding:0 3
 .run.same{border-color:var(--line-2)}
 .run.diff{border-color:var(--accent);background:var(--accent-soft)}
 .run.waiting .txt{color:var(--muted);font-style:italic}
-.run .mon{width:100%;height:auto;max-height:132px;object-fit:contain;background:var(--surface);border:1px solid var(--line);border-radius:2px}
+.run .mon{width:100%;height:auto;max-height:200px;object-fit:contain;background:var(--surface);border:1px solid var(--line);border-radius:2px}
 .run .reading{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;color:var(--violet);background:var(--violet-soft);
   border:1px solid color-mix(in srgb,var(--violet) 35%,transparent);border-radius:2px;padding:2px 6px;align-self:flex-start}
 .tally{display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:11px 15px}
@@ -327,3 +327,8 @@ mark{background:var(--pass-soft);color:var(--pass);border-radius:2px;padding:0 3
    counts toward "these five came out different" — but with no text shown. */
 .run.held { border-style: dashed; border-color: var(--amber); background: var(--amber-soft); }
 .run.held .txt { color: var(--amber); font-style: normal; }
+
+/* The five run cards are meant to be read from the back of the room, so the
+   drawing gets the space and the model's own text sits under it, smaller. */
+.runs { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.run .txt { font-size: 12px; line-height: 1.4; max-height: 190px; overflow-y: auto; }
