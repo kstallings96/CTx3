@@ -1,51 +1,78 @@
--- CTx3 — database schema
--- Run once in the Supabase SQL editor. Safe to re-run: every statement is guarded.
+-- The study database — one Supabase project for every instrument in the week.
+-- Run once in the SQL editor. Safe to re-run: every statement is guarded.
 --
--- Same shape as Manifest and Mosaic (sessions + append-only events, insert-only
--- RLS) with one deliberate difference: CTx3 stores NO identifying fields. The
--- participant code is the only identifier and the roster mapping codes to
--- students lives on paper with the research team (ARCHITECTURE.md).
+-- WHY ONE PROJECT, NOT ONE PER TOOL
+--
+-- The free tier allows two projects, and the week has more instruments than
+-- that. But the quota is not the real argument. RQ3 asks which CT skills are
+-- visible in which data channel, and that question is a JOIN: the same
+-- participant code across Mosaic, Manifest, RowdyRobo and CTx3. Three separate
+-- databases means three dumps reconciled by hand in a spreadsheet. One
+-- database means the join is a GROUP BY.
+--
+-- It also halves the study-day risk. A free project pauses after about a week
+-- idle and takes a minute or two to wake; one project is one thing to keep
+-- warm on the morning of, instead of three.
+--
+-- Rows are told apart by `instrument` (which app wrote this) and, on events,
+-- `tool` (which activity inside that app). Both are in the unique keys —
+-- without that, two instruments on the same device would both start at seq 1
+-- and the second one's rows would be rejected as duplicates and silently lost.
 
 create table if not exists sessions (
   id bigserial primary key,
+  instrument text not null,            -- 'ctx3' | 'mosaic' | 'manifest' | 'rowdyrobo'
   participant_code text not null,
   device_id text,
   day int,
   user_agent text,
   screen_w int,
   screen_h int,
-  started_at timestamptz not null default now(),
-  unique (participant_code, device_id)
+  -- Anything an older instrument needs that this shape does not carry. CTx3
+  -- writes nothing here: the participant code is its only identifier.
+  meta jsonb not null default '{}',
+  started_at timestamptz not null default now()
 );
 
 create table if not exists events (
   id bigserial primary key,
-  participant_code text,
+  instrument text not null,
+  tool text,                           -- the activity inside the instrument
+  participant_code text,               -- null on whole-class rows, by design
   device_id text,
   seq int not null,
-  tool text,
   type text not null,
-  -- high | low | na. Every event carries it; the whole developmental-range
-  -- framework depends on being able to split any analysis by condition.
+  -- high | low | na. Every event carries it; the developmental-range framework
+  -- depends on being able to split any analysis by condition.
   support_condition text not null default 'na',
   payload jsonb not null default '{}',
   client_ts timestamptz not null,
-  server_ts timestamptz not null default now(),
-  unique (participant_code, device_id, seq)
+  server_ts timestamptz not null default now()
 );
 
-create index if not exists events_code_seq_idx on events (participant_code, seq);
-create index if not exists events_tool_idx     on events (tool, type);
-create index if not exists events_support_idx  on events (support_condition);
+-- The dedup keys, as unique INDEXES with COALESCE rather than plain
+-- constraints. Postgres treats NULLs as distinct in a unique constraint, so a
+-- whole-class row (no participant code) or a device with no id would never
+-- collide -- and a retry after a write that actually landed would insert a
+-- second copy instead of being rejected. That is the one thing the durable
+-- queue relies on the database to get right.
+create unique index if not exists sessions_dedup_idx on sessions
+  (instrument, participant_code, coalesce(device_id, ''));
+create unique index if not exists events_dedup_idx on events
+  (instrument, coalesce(participant_code, ''), coalesce(device_id, ''), seq);
+create index if not exists events_code_idx    on events (participant_code, instrument, seq);
+create index if not exists events_tool_idx    on events (instrument, tool, type);
+create index if not exists events_support_idx on events (support_condition);
 
 -- ---------------------------------------------------------------------
 -- Row-level security.
 --
--- The anon key ships inside the client bundle and anyone can read it from
+-- The anon key ships inside every client bundle and anyone can read it from
 -- devtools. These policies grant INSERT only: without them one student could
--- read every other student's session. There are deliberately no
--- select/update/delete policies for anon — you read the data with the
--- service_role key from your own machine, never from the app.
+-- read every other student's session — and now, every other instrument's too,
+-- which is the one real cost of sharing a database. There are deliberately no
+-- select/update/delete policies for anon. You read with the service_role key
+-- from your own machine, never from an app.
 -- ---------------------------------------------------------------------
 alter table sessions enable row level security;
 alter table events   enable row level security;
@@ -56,32 +83,44 @@ create policy anon_insert_sessions on sessions for insert to anon with check (tr
 drop policy if exists anon_insert_events on events;
 create policy anon_insert_events on events for insert to anon with check (true);
 
--- Confirm RLS is actually on. Both rows must show rowsecurity = true; if they
--- do not, students can read each other's data.
+-- Confirm RLS is actually on. Both rows must show rowsecurity = true.
 --
 --   select tablename, rowsecurity from pg_tables
 --   where schemaname = 'public' and tablename in ('sessions','events');
 
 -- ---------------------------------------------------------------------
--- Starter analysis queries (run with the service_role key, from your machine)
+-- Migrating an existing instrument into this database
+-- ---------------------------------------------------------------------
+-- Mosaic and Manifest currently key events on a session uuid and carry
+-- identifying fields on the session row. Neither has to change shape to move
+-- here: add `instrument`, move the identifying columns into `meta`, and keep
+-- writing. Until then their tiles link out and the join happens at analysis
+-- time on the participant code, exactly as ARCHITECTURE.md says.
+--
+--   insert into sessions (instrument, participant_code, device_id, day, meta)
+--   select 'manifest', s.participant_code, null, 4,
+--          jsonb_build_object('first_name', s.first_name,
+--                             'last_initial', s.last_initial,
+--                             'grade', s.grade, 'arm', s.arm)
+--   from legacy_manifest_sessions s;
+
+-- ---------------------------------------------------------------------
+-- Starter analysis queries (service_role key, from your own machine)
 -- ---------------------------------------------------------------------
 
--- One row per participant per tool: did they finish, and how long did it take.
+-- The join that one database exists for: every instrument, one student.
 --
---   select participant_code, tool,
---          min(server_ts) as started,
---          max(server_ts) as ended,
+--   select participant_code, instrument, tool,
+--          min(server_ts) as started, max(server_ts) as ended,
 --          count(*) filter (where type = 'attempt_submitted') as attempts
---   from events group by participant_code, tool order by participant_code;
+--   from events group by 1,2,3 order by participant_code, started;
 
 -- The primary outcome. highestStepReached lands on phase_complete; the range
 -- is the high-support figure minus the low-support one, per tool.
 --
 --   with phases as (
---     select participant_code, tool,
---            payload->>'phaseId'                     as phase_id,
---            support_condition,
---            (payload->>'highestStepReached')::int   as step
+--     select participant_code, tool, support_condition,
+--            (payload->>'highestStepReached')::int as step
 --     from events where type = 'phase_complete'
 --   )
 --   select participant_code, tool,
@@ -89,7 +128,7 @@ create policy anon_insert_events on events for insert to anon with check (true);
 --          max(step) filter (where support_condition = 'low')  as functional,
 --          max(step) filter (where support_condition = 'high')
 --        - max(step) filter (where support_condition = 'low')  as developmental_range
---   from phases group by participant_code, tool order by participant_code;
+--   from phases group by 1,2 order by 1;
 
 -- The comparison responses — the highest-value artifact in the pilot, and the
 -- input to the S/F/R/N coding scheme in EVENTS.md.
@@ -97,9 +136,19 @@ create policy anon_insert_events on events for insert to anon with check (true);
 --   select participant_code, payload->>'text' as response
 --   from events where type = 'comparison_response' order by participant_code;
 
--- Variance actually observed, held constant by construction (Two Machines).
+-- Variance held constant by construction (Word4Word's projector cells).
 --
---   select payload->>'quadrant' as quadrant,
---          count(*) as runs,
---          count(*) filter (where (payload->>'sameAsRun1')::boolean is false) as differed
+--   select payload->>'quadrant' as quadrant, count(*) as runs,
+--          count(*) filter (where (payload->>'sameAsRun1')::boolean is false) as differed,
+--          count(*) filter (where (payload->>'matched')::boolean) as built_it
 --   from events where type = 'run_executed' group by 1;
+
+-- Decomposition, per student (Word4Word's hands-on phase).
+--
+--   select participant_code,
+--          count(*) as tries,
+--          count(*) filter (where (payload->>'numbered')::boolean) as numbered_tries,
+--          bool_or((payload->>'matched')::boolean) as ever_built_it
+--   from events where tool = 'word4word' and type = 'instruction_executed'
+--     and participant_code is not null
+--   group by 1 order by 1;

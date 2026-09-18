@@ -12,12 +12,34 @@ yours. Everything else is already wired.**
 
 ---
 
-## 1. Create the Supabase project
+## 1. The Supabase project
+
+**One project holds every instrument in the week, not one per tool.** The free
+tier allows two, and the week has more instruments than that — but the quota is
+not the real argument. RQ3 asks which CT skills show up in which data channel,
+and that question is a join on the participant code across Mosaic, Manifest,
+RowdyRobo and CTx3. Separate databases make it a spreadsheet exercise; one
+database makes it a `group by`.
+
+It also halves the study-day risk: a free project pauses after about a week
+idle, and one project is one thing to wake on the morning of instead of three.
+
+Use an existing project if you have a slot, or:
 
 1. At <https://supabase.com/dashboard>, create a project.
 2. Pick a region near the school; save the database password somewhere safe
    (this app never needs it).
 3. Wait for provisioning to finish.
+
+Rows are told apart by `instrument` (`ctx3`, `mosaic`, …) and, on events,
+`tool` (the activity inside that app). Both are in the dedup keys — without
+that, two instruments on the same device would both start at `seq 1` and the
+second one's rows would be rejected as duplicates and lost.
+
+Mosaic and Manifest can move in later without changing shape: add
+`instrument`, put their identifying columns in `meta`. Until then their tiles
+link out and the join happens at analysis time on the code, exactly as
+ARCHITECTURE.md says. Nothing forces that migration before the pilot.
 
 ## 2. Create the tables
 

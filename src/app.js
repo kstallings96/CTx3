@@ -18,7 +18,7 @@ const SPINE = new Set(["session_start","task_start","attempt_submitted","attempt
    not per-tool — DEVELOPMENTAL-RANGE.md's whole framework depends on being
    able to split any analysis by condition. */
 function emit(type, payload = {}) {
-  const ev = { seq: ++S.seq, ts: nowISO(), tool: S.tool, type,
+  const ev = { seq: ++S.seq, ts: nowISO(), tool: S.tool, deviceId: S.deviceId, type,
     payload: { participantCode: S.code, supportCondition: S.support, ...payload } };
   S.events.push(ev); save(); renderRail();
   // Mirrors to localStorage immediately and flushes in batches; the UI never

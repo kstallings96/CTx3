@@ -1,4 +1,4 @@
-import { insertSession, insertEvents, beaconEvents, isSupabaseConfigured } from "./supabase.js";
+import { insertSession, insertEvents, beaconEvents, isSupabaseConfigured, INSTRUMENT } from "./supabase.js";
 
 /**
  * The durable event queue (EVENTS.md §9, and the same shape Manifest uses).
@@ -41,6 +41,7 @@ export const hasBackend = isSupabaseConfigured;
 export async function startSession(participantCode, deviceId, day) {
   if (!isSupabaseConfigured) { sessionReady = false; return false; }
   const ok = await insertSession({
+    instrument: INSTRUMENT,
     participant_code: participantCode,
     device_id: deviceId,
     day,

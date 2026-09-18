@@ -20,6 +20,10 @@ export const supabase =
 
 export const isSupabaseConfigured = supabase !== null;
 
+/* Which app wrote this row. The study database holds every instrument in the
+   week, so `instrument` is in both unique keys — see supabase/schema.sql. */
+export const INSTRUMENT = "ctx3";
+
 /**
  * Creates the participant row. CTx3 stores NO identifying fields — the code is
  * the only identifier, and the roster mapping codes to students lives on paper
@@ -39,10 +43,11 @@ export async function insertSession(row) {
 
 export function eventRows(events) {
   return events.map((e) => ({
-    participant_code: e.payload?.participantCode ?? null,
+    instrument: INSTRUMENT,
+    tool: e.tool ?? null,
+    participant_code: e.payload?.participantCode || null,
     device_id: e.deviceId ?? null,
     seq: e.seq,
-    tool: e.tool ?? null,
     type: e.type,
     support_condition: e.payload?.supportCondition ?? "na",
     payload: e.payload ?? {},
