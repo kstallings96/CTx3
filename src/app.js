@@ -1,6 +1,6 @@
 import { log, flushNow, bufferedCount, exportJSON, clearBuffer, startSession, hasBackend } from "./lib/events.js";
 import { askModel, modelAvailable } from "./lib/model.js";
-import { ROSTER, GRADE } from "./roster.js";
+import { pseudonym, GRADE } from "./roster.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
 import { sha256hex } from "./lib/sha256.js";
 
@@ -11,6 +11,7 @@ const S = { code: "", first: "", initial: "", pinned: null, unlocked: [], gateFo
   forceOffline: false, brandTaps: 0, lastAttempt: null, deviceId: "dev-" + Math.random().toString(36).slice(2, 8) };
 const nowISO = () => new Date().toISOString();
 const $ = (id) => document.getElementById(id);
+const nameChip = () => (S.first ? `${S.first} ${S.initial}.` : "—");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const words = (s) => (s || "").trim() ? s.trim().split(/\s+/).length : 0;
 const SPINE = new Set(["session_start","task_start","attempt_submitted","attempt_evaluated","attempt_abandoned",
@@ -39,10 +40,11 @@ function phaseComplete(highestStepReached) {
   emit("phase_complete", { phaseId: S.phaseId, highestStepReached });
   S.phaseId = null;
 }
-function save() { try { localStorage.setItem(LS, JSON.stringify({ code: S.code, day: S.day, seq: S.seq, unlocked: S.unlocked, events: S.events.slice(-400) })); } catch (e) {} }
+function save() { try { localStorage.setItem(LS, JSON.stringify({ code: S.code, first: S.first, initial: S.initial, day: S.day, seq: S.seq, unlocked: S.unlocked, events: S.events.slice(-400) })); } catch (e) {} }
 function load() {
   try { const d = JSON.parse(localStorage.getItem(LS) || "null"); if (!d) return;
     if (d.code) S.code = d.code; if (d.day) S.day = d.day;
+    if (d.first) S.first = d.first; if (d.initial) S.initial = d.initial;
     if (Array.isArray(d.unlocked)) S.unlocked = d.unlocked;
     if (Array.isArray(d.events)) { S.events = d.events; S.seq = d.seq || d.events.length; }
   } catch (e) {}
@@ -1092,10 +1094,18 @@ function snowmanSVG(scene) {
     P.push(`<text x="240" y="${62 + i * 22}" font-family="var(--mono)" font-size="10" fill="var(--fail)">${f}?</text>`);
   });
   const empty = !scene.rolled.length && !scene.stack.length && !scene.floating.length;
-  return `<svg class="mon" viewBox="0 0 300 200" role="img" aria-label="the snowman these instructions built">
+  // The viewBox follows the build instead of being fixed at 200 tall.
+  // Nothing stops a student stacking five balls, and a fixed box silently
+  // cropped the top of the tower -- so the one thing they most need to look
+  // at, whether it came out the shape they meant, was the thing cut off.
+  // `y` is where the tower stopped; hats and floating labels go above it.
+  const top = Math.min(y - 34, 0);
+  const h = groundY + 14 - top;
+  return `<svg class="mon" viewBox="0 ${top} 300 ${h}" preserveAspectRatio="xMidYMax meet"
+      role="img" aria-label="what these instructions built">
     <line x1="0" y1="${groundY}" x2="300" y2="${groundY}" stroke="var(--line-2)" stroke-width="1.5"/>
     ${P.join("")}
-    ${empty ? `<text x="150" y="100" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--muted)">nothing was built</text>` : ""}
+    ${empty ? `<text x="150" y="${groundY - 70}" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--muted)">nothing was built</text>` : ""}
   </svg>`;
 }
 
@@ -1209,21 +1219,16 @@ function renderW4W() {
       <button class="btn sm ${W4W.mode === "solo" ? "" : "ghost"}" data-w4wmode="solo">Build your own</button>
       <button class="btn sm ${W4W.mode === "class" ? "" : "ghost"}" data-w4wmode="class">The four cells</button>
       <span class="hint">${W4W.mode === "solo"
-        ? "Your work here is saved against your code."
+        ? "Your work here is saved under your name."
         : "Projector only. These runs are logged for the class, not for any one student."}</span>
     </div>
   </section>`;
 
-  const palette = `
-    <div>
-      <span class="eyebrow">the only three things it understands · tap to add a line</span>
-      <div class="chips" style="margin-top:6px">
-        ${["ROLL a big ball", "ROLL a medium ball", "ROLL a small ball",
-           "STACK the medium ball on the big ball", "STACK the small ball on the medium ball",
-           "ADD a face to the small ball", "ADD arms to the medium ball",
-           "ADD a hat to the small ball"].map((v) => `<button class="chip" data-w4wcmd="${esc(v)}">${esc(v)}</button>`).join("")}
-      </div>
-    </div>`;
+  // No palette. A list of tappable commands turns "decompose the problem"
+  // into "pick from eight buttons", which is a different and much easier
+  // task -- and it hands the student the vocabulary that finding the
+  // vocabulary was supposed to be the work. They type what they mean and the
+  // machine does what they typed.
 
   const goal = `
     <div class="goal">
@@ -1245,7 +1250,6 @@ function renderW4W() {
             ${chk.matched ? "<div><b>✓</b><span>it matches</span></div>" : `<span>✗</span><div>${esc(chk.miss.join("; "))}</div>`}</div>` : ""}
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
-          ${palette}
           <span class="eyebrow">your steps · one per line, starting with a number</span>
           <textarea id="w4wfield" rows="8" style="font-family:var(--mono);font-size:13.5px" ${W4W.playing ? "disabled" : ""}>${esc(W4W.draft)}</textarea>
           <div class="row">
@@ -1356,16 +1360,11 @@ function wireW4W() {
   document.querySelectorAll("[data-w4wmode]").forEach((b) => b.onclick = () => {
     clearTimeout(W4W.timer); W4W.playing = false; W4W.running = false;
     W4W.mode = b.dataset.w4wmode;
-    if (W4W.mode === "solo") phaseStart("w4w-solo", "na", ["verbPalette", "targetShown", "stepByStep"]);
+    if (W4W.mode === "solo") phaseStart("w4w-solo", "na", ["targetShown", "stepByStep"]);
     else { emit("quadrant_switched", { participantCode: null, from: "solo", to: w4wQuadrant() });
       phaseStart("w4w-class", "na", ["projector"]); }
     renderW4W(); });
   const f = $("w4wfield"); if (f) f.oninput = () => W4W.draft = f.value;
-  document.querySelectorAll("[data-w4wcmd]").forEach((b) => b.onclick = () => {
-    const fl = $("w4wfield"); if (!fl) return;
-    const lines = fl.value.split("\n").filter((l) => l.trim());
-    lines.push((lines.length + 1) + ". " + b.dataset.w4wcmd);
-    fl.value = lines.join("\n"); W4W.draft = fl.value; fl.focus(); fl.scrollTop = fl.scrollHeight; });
   const run = $("w4wrun"); if (run) run.onclick = w4wPlay;
   const stop = $("w4wstop"); if (stop) stop.onclick = () => { clearTimeout(W4W.timer); W4W.playing = false; renderW4W(); };
   const sp = $("w4wspeed"); if (sp) sp.onchange = (e) => W4W.speed = +e.target.value;
@@ -1408,9 +1407,9 @@ const TOOLS = [
 function renderHub() {
   $("stage").innerHTML = `
   <section class="card pad hubhead">
-    <span class="eyebrow">CTx3 · one hub · one participant code</span>
+    <span class="eyebrow">CTx3 · one hub · one sign-in</span>
     <h1>Pick your activity</h1>
-    <p class="lede">Three tools, one session. Your code is entered once, here, and travels with everything you do — so nothing you produce today goes missing.</p>
+    <p class="lede">Three tools, one session. You sign in once, here, and everything you do stays together — so nothing you produce today goes missing.</p>
   </section>
   <div class="tiles">${TOOLS.map((t) => { const live = t.day === S.day && t.built;
     return `<button class="tile${live ? "" : " off"}" data-tool="${t.id}" ${live ? "" : "disabled"}>
@@ -1476,41 +1475,37 @@ function renderCode() {
   $("stage").innerHTML = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:16px">
     <div><span class="eyebrow">Day ${S.day}</span><h1 style="font-size:27px;margin-top:3px">Sign in</h1></div>
-    <p class="lede">Your code is on the card you were given on day one — three letters, then two numbers.</p>
+    <p class="lede">Your first name and the first letter of your last name. That is all.</p>
     <div class="codewrap">
-      <input class="codein" id="codefield" maxlength="5" placeholder="ABC12" autocomplete="off" spellcheck="false" aria-label="Participant code">
       <div class="namerow">
         <label><span class="eyebrow">First name</span>
-          <input type="text" id="firstname" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Alex"></label>
+          <input type="text" id="firstname" class="bigname" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Alex"></label>
         <label><span class="eyebrow">Last initial</span>
-          <input type="text" id="lastinitial" maxlength="1" autocomplete="off" spellcheck="false" placeholder="R"></label>
+          <input type="text" id="lastinitial" class="bigname" maxlength="1" autocomplete="off" spellcheck="false" placeholder="R"></label>
       </div>
-      <p class="hint" id="codemsg">No O or I, no 0, 1 or 5 in the code — those get misread on a card.</p>
+      <p class="hint" id="codemsg">Spell your first name the same way each day, so your work stays together.</p>
       <div class="row"><button class="btn" id="codego">Start</button></div>
-      ${hasBackend ? "" : `<hr class="hr">
-      <div><span class="eyebrow" style="display:block;margin-bottom:6px">Demo roster — try any of these</span>
-        <div class="roster">${ROSTER.slice(0, 5).map((c) => `<b>${c}</b>`).join("")}</div></div>`}
-      <p class="note">Your name is only here so a teacher can match this device to your paper packet. It is stored once, with your code, and appears nowhere in what you do afterwards.</p>
+      <p class="note">Your name is stored once, so a teacher can tell whose work is whose. Everything you do afterwards is filed under a code made from it, and the name itself appears nowhere else.</p>
     </div>
   </section>`;
-  const f = $("codefield"), fn = $("firstname"), li = $("lastinitial");
-  f.focus();
-  f.oninput = () => { f.value = f.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); };
-  li.oninput = () => { li.value = li.value.toUpperCase().replace(/[^A-Z]/g, ""); };
+  const fn = $("firstname"), li = $("lastinitial"), msg = $("codemsg");
+  fn.focus();
+  li.oninput = () => { li.value = li.value.toUpperCase().replace(/[^A-Za-z]/g, ""); };
   const go1 = (e) => { if (e.key === "Enter") $("codego").click(); };
-  f.onkeydown = go1; fn.onkeydown = go1; li.onkeydown = go1;
+  fn.onkeydown = go1; li.onkeydown = go1;
   $("codego").onclick = () => {
-    const v = f.value.trim().toUpperCase(), msg = $("codemsg");
     const first = fn.value.trim(), initial = li.value.trim().toUpperCase();
     const fail = (t) => { msg.textContent = t; msg.style.color = "var(--fail)"; };
-    if (!/^[A-HJ-NP-RT-Z]{3}[2-46-9]{2}$/.test(v))
-      return fail("That code is not the right shape. Three letters then two numbers — no O, I, S, 0, 1 or 5.");
-    if (!ROSTER.includes(v)) return fail("We can't find that code. Check the card and try again.");
-    if (!first) { fn.focus(); return fail("We need your first name so your teacher can find your packet."); }
+    if (first.length < 2) { fn.focus(); return fail("We need your first name so your teacher knows whose work this is."); }
+    if (!/^[A-Za-z][A-Za-z '-]*$/.test(first)) { fn.focus(); return fail("Letters only, please — just your first name."); }
     if (!/^[A-Z]$/.test(initial)) { li.focus(); return fail("One letter for your last initial."); }
 
+    // The grouping key that travels with every event. Derived from the name
+    // so it is stable across days and devices, and opaque so the name itself
+    // never leaves the sessions row.
+    const v = pseudonym(first, initial);
     S.code = v; S.first = first; S.initial = initial;
-    $("pcchip").textContent = v; save();
+    $("pcchip").textContent = nameChip(); save();
     window.__CTX3_CODE__ = v;
     // Identifying fields go to the sessions row and nowhere else. They are
     // passed here as arguments rather than held in the event state, so there
@@ -1580,7 +1575,7 @@ function toolForPassword(word) {
 }
 
 /* "Back to hub" is a lie on a pinned device -- there is no hub to go back to.
-   The facilitator's hand-off control is Reset code, in the topbar. */
+   The facilitator's hand-off control is Next student, in the topbar. */
 function wireBackHub() {
   const bh = $("backhub"); if (!bh) return;
   if (S.pinned) { bh.hidden = true; return; }
@@ -1606,12 +1601,12 @@ function go(screen, opts) {
   else if (screen === "pg") { emit("session_start", { tool: "prompt-golf", day: S.day, deviceId: S.deviceId });
     phaseStart("pg-high", "high", ["priorPromptsVisible", "wordCountLive", "targetChecklist"]);
     emit("task_start", { taskId: "pg-c1", round: 0 }); renderPG(); }
-  // Whole-class: no participant code on this tool's rows, by design.
+  // Whole-class: these rows are not attributed to a student, by design.
   else if (screen === "w4w") {
     S.support = "na";
     emit("session_start", { tool: "word4word", day: S.day, deviceId: S.deviceId });
     // Hands-on by default and attributed; the projector cells drop the code.
-    phaseStart("w4w-solo", "na", ["verbPalette", "targetShown", "stepByStep"]);
+    phaseStart("w4w-solo", "na", ["targetShown", "stepByStep"]);
     emit("task_start", { taskId: "w4w-solo", round: 1 });
     renderW4W(); }
   // Keep the address bar honest: the URL of a tool is the same URL a
@@ -1625,7 +1620,7 @@ function go(screen, opts) {
 }
 /* A student who hits Back should land on the hub, not on a broken page. */
 window.addEventListener("popstate", () => {
-  if (S.pinned || !ROSTER.includes(S.code)) return;
+  if (S.pinned || !S.code) return;
   const target = pinnedTool() || "hub";
   if (target !== S.screen) go(target, { fromPop: true });
 });
@@ -1678,26 +1673,27 @@ function start(snap) {
     try { history.replaceState(null, "", location.pathname + (q ? "?" + q : "")); } catch (e) {}
   }
   if (snap && snap.screen) { S.screen = snap.screen; S.day = snap.day || S.day; S.code = snap.code || S.code; }
-  $("daypick").value = String(S.day); $("pcchip").textContent = S.code;
+  $("daypick").value = String(S.day); $("pcchip").textContent = nameChip();
   paintMode();
   // Only for a device resuming with a code already on it. A fresh device has
   // no code yet, and emitting here would write a session_start with an empty
   // participantCode -- an orphan row with nothing to join it to.
-  if (!S.events.length && ROSTER.includes(S.code))
+  if (!S.events.length && S.code)
     emit("session_start", { participantCode: S.code, tool: "hub", day: S.day, deviceId: S.deviceId, recorded: false });
   window.__CTX3_CODE__ = S.code;
-  // The name is deliberately not persisted to localStorage, so a resumed
-  // device re-registers with the code alone and the sessions row it already
-  // wrote keeps the name from the first sign-in.
+  // A resumed device. The name IS the identity now, so it is kept in local
+  // storage for the period -- a student who reloads has to be able to see
+  // that they are still signed in as themselves, and `?reset` wipes it when
+  // the device is handed on.
   // A resumed device re-registers. The name is not persisted, so this row is
   // rejected as a duplicate of the one the first sign-in wrote -- which is the
   // point: that row still has the name.
-  if (ROSTER.includes(S.code)) startSession(S.code, S.deviceId, S.day, null, { resuming: true });
+  if (S.code) startSession(S.code, S.deviceId, S.day, null, { resuming: true });
   renderRail();
   // A pinned URL beats the restored screen: a device reloaded mid-period must
   // come back to the tool the station is for, not to wherever it happened to
   // be when the page last saved.
-  if (!ROSTER.includes(S.code)) go("code");
+  if (!S.code) go("code");
   else go(S.pinned || (S.screen === "code" ? "hub" : S.screen));
 }
 start({});

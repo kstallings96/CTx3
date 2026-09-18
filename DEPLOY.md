@@ -245,11 +245,13 @@ The passwords as shipped:
 
 | Tool | Password |
 |---|---|
-| Find the Rule | `compass` |
-| Prompt Golf | `lantern` |
-| Word4Word | `harbor` |
+| Find the Rule | `roadrunners` |
+| Prompt Golf | `holeinone` |
+| Word4Word | `gorowdy` |
 
-**Change them before the pilot** — they are in a public repo's history now:
+These are in the repo's history, so anyone who can read the repo can read
+them. That is the same speed-bump caveat as below, not a new problem — but if
+you want words no one outside the room has seen, change them:
 
 ```bash
 npm run passwords -- ftr=<word> pg=<word> w4w=<word>
@@ -289,8 +291,9 @@ just decides which one they are asked for.
 - Open the **station's own URL** (see the table above) — it carries the right
   day with it. On the hub URL, `?day=2` sets the day; the student never
   chooses it either way
-- `?reset` on any URL clears the device for the next student, including
-  anything they had queued but unsent and the name from the sign-in screen
+- **Next student** in the topbar, or `?reset` on any URL, clears the device
+  for the next student: their name, their unlocked activities, and anything
+  they had queued but unsent
 - Open Word4Word on the projector machine **before** the period and run one
   cell, to confirm the model responds and to wake Supabase
 - Free Supabase projects pause after about a week idle and take a minute or two

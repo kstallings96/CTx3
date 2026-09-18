@@ -301,7 +301,7 @@ mark{background:var(--pass-soft);color:var(--pass);border-radius:2px;padding:0 3
 .run.same{border-color:var(--line-2)}
 .run.diff{border-color:var(--accent);background:var(--accent-soft)}
 .run.waiting .txt{color:var(--muted);font-style:italic}
-.run .mon{width:100%;height:auto;max-height:132px;background:var(--surface);border:1px solid var(--line);border-radius:2px}
+.run .mon{width:100%;height:auto;max-height:132px;object-fit:contain;background:var(--surface);border:1px solid var(--line);border-radius:2px}
 .run .reading{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;color:var(--violet);background:var(--violet-soft);
   border:1px solid color-mix(in srgb,var(--violet) 35%,transparent);border-radius:2px;padding:2px 6px;align-self:flex-start}
 .tally{display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:11px 15px}
@@ -314,3 +314,11 @@ mark{background:var(--pass-soft);color:var(--pass);border-radius:2px;padding:0 3
    that helps with ABC12 makes a typed word hard to check. */
 .codein.pw { letter-spacing: .12em; font-size: 22px; }
 .codein.pw::placeholder { letter-spacing: .12em; }
+
+/* Sign-in is two name fields now and nothing else, so they carry the screen. */
+.bigname { font-size: 20px; padding: 12px 14px; }
+
+/* The solo build. The viewBox grows with the tower, so cap the drawing by
+   height and let it keep its aspect ratio rather than letting a tall build
+   push the controls off the screen. */
+.scene .mon { width: 100%; height: auto; max-height: 320px; display: block; }
