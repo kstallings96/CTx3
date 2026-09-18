@@ -90,8 +90,26 @@ export const STEP_TABLE = {
       needs: ["committedRule", "casesMatched"],
       test: (c) => c.casesMatched === true },
   ],
-  /* Two Machines is whole-class. No step sequence, supportCondition na. */
-  "two-machines": [],
+  /* Word4Word. TEKS 8.1(A): decompose a real-world problem into structured
+     parts using pseudocode. Scored on the hands-on phase only; the projector
+     cells carry no participant code and contribute no steps. */
+  "word4word": [
+    { step: 1, id: "instructs", label: "Writes an instruction the machine acts on at all",
+      needs: ["artifact"],
+      test: (c) => !!c.artifact && String(c.artifact).trim().length > 0 },
+    { step: 2, id: "numbered", label: "Writes it as numbered steps, one action per line",
+      needs: ["numbered"],
+      test: (c) => c.numbered === true },
+    { step: 3, id: "adds-step", label: "Fixes a failure by adding the missing step",
+      needs: ["revisionType", "matched", "prevMatched"],
+      test: (c) => c.revisionType === "added_step" && c.matched === true && c.prevMatched === false },
+    { step: 4, id: "reorders", label: "Fixes a failure by putting the steps in the right order",
+      needs: ["revisionType", "matched", "prevMatched"],
+      test: (c) => c.revisionType === "reordered" && c.matched === true && c.prevMatched === false },
+    { step: 5, id: "builds", label: "Produces a working instruction unaided",
+      needs: ["matched", "taskId"],
+      test: (c) => c.matched === true && c.taskId === "w4w-solo" },
+  ],
 };
 
 /* ----------------------------------------------------------------- scoring */
@@ -175,7 +193,7 @@ export function replay(events) {
     if (!phase || phase.tool !== tool) phase = openPhase(tool, pc, { phaseId: p.phaseId, supportCondition: p.supportCondition, scaffoldsActive: [] });
 
     const taskId = p.taskId || "unknown";
-    const st = byTask[taskId] || (byTask[taskId] = { lastArtifact: null, lastFailAt: null, consecutiveFailures: 0, bestPassWords: null });
+    const st = byTask[taskId] || (byTask[taskId] = { lastArtifact: null, lastFailAt: null, consecutiveFailures: 0, bestPassWords: null, lastMatched: null });
 
     const evaluated = sorted.find((e) => e.type === "attempt_evaluated" && (e.payload || {}).attemptId === p.attemptId);
     const pass = evaluated ? (evaluated.payload.outcome === "pass") : null;
@@ -190,6 +208,10 @@ export function replay(events) {
       priorWinnerOtherTask: otherWinner ? otherWinner[1] : null,
       comparisonResponse, comparisonCode,
       probeIndex: p.probeIndex ?? null,
+      numbered: p.numbered ?? null,
+      revisionType: p.revisionType ?? null,
+      matched: (evaluated && evaluated.payload.matched) ?? null,
+      prevMatched: st.lastMatched ?? null,
       slotValues: p.slotValues ?? null,
       singleFeatureVariation: p.singleFeatureVariation ?? null,
       disconfirmingProbe: p.disconfirmingProbe ?? null,
@@ -216,6 +238,7 @@ export function replay(events) {
       stepScoringExact: sc.stepScoringExact, scoringVersion: sc.scoringVersion });
 
     st.lastArtifact = p.artifact;
+    if (evaluated && evaluated.payload.matched !== undefined) st.lastMatched = evaluated.payload.matched;
     if (pass === true) { st.consecutiveFailures = 0; st.lastFailAt = null;
       if (st.bestPassWords == null || ctx.wordCount < st.bestPassWords) st.bestPassWords = ctx.wordCount;
       winners[taskId] = p.artifact; }

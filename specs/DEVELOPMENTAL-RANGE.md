@@ -57,9 +57,9 @@ Record the facts, not just the label.
 |---|---|---|
 | Mosaic | counters visible, conflicts named, assist available | counters off, no assist, comparable board |
 | Manifest | same | same |
-| Find the Rule | slot palette + visible hypothesis field | free text, no hypothesis field |
+| Find the Rule | slot palette + visible hypothesis field | free text, no hypothesis field, a different rule of the same tier |
 | Prompt Golf | both winning prompts visible during round 3 | round 4, prompts hidden |
-| Instruction Lab | whole-class; `supportCondition: na` | — |
+| Word4Word | no split: the projector work is the scaffold, then students work alone. `supportCondition: na` throughout, rows told apart by phaseId |  |
 
 **Find the Rule needs a specific fix.** The current spec puts the slot palette
 at Levels 1–2 and free text at Level 3, which confounds support with rule
@@ -113,9 +113,24 @@ hand-coding — flag those attempts as `stepScoringExact: false`.
 4. Does so consistently — majority of placements are most-constrained-first.
 5. States the fewest-first heuristic when asked, in the low-support phase.
 
-### Instruction Lab
+### Word4Word
 
-Class-level, not per student. No step sequence. `supportCondition: na`.
+Per student on the hands-on phases; the projector cells carry no participant
+code and contribute no steps.
+
+1. Writes an instruction the machine acts on at all.
+2. Writes it as numbered steps, one action per line.
+3. Fixes a failure by adding the missing step.
+4. Fixes a failure by putting the steps in the right order.
+5. Produces a working instruction unaided.
+
+**Steps 3 and 4 may not be a ladder.** They are two different repair
+strategies, and a student who fixes by adding never demonstrates reordering.
+A first pass through the rescorer already produces `[1,2,3,5]` — a
+prefix-violating set — for a perfectly competent trajectory. If that is common
+in the pilot, collapse them into one step ("repairs a located failure") and
+record the repair type as an attribute rather than a rung. The decision waits
+for data; the raw material is captured either way.
 
 ## Check Guttman scalability in the pilot
 

@@ -112,30 +112,47 @@ orphan participant.
 No names. No initials. No grade. The roster mapping codes to students lives
 outside this system, on paper, held by the research team.
 
-## Day 3 — the one schedule that does not fit itself
+## Day 2 — Word4Word, a full period
 
-Day 3 carries three tools and the specs had declared more things uncuttable
-than the period holds. Settled:
+Word4Word is a 60-minute period of its own, not a warm-up. It is the only
+place in the week that claims **Texas TEKS 8.1(A)** — decompose real-world
+problems into structured parts using pseudocode — which is why the task has a
+right answer, the failures have locations, and the instruction is numbered
+imperative lines rather than prose.
+
+| | Time | Shape |
+|---|---|---|
+| 1 · Cold open | 5 | Projector. Type `build a snowman`. Nothing happens. |
+| 2 · Class writes v1 | 8 | Projector, class dictates. It breaks somewhere specific. Fix that one step. |
+| 3 · **Your own snowman** | 20 | **Individual, own devices.** Unlimited runs. |
+| 4 · **Fix a broken one** | 10 | **Individual.** An authored instruction with one wrong step. |
+| 5 · The four cells | 12 | Projector. The class's vague and precise instructions, both machines, five runs each. |
+| 6 · Close | 5 | The tally, and what the model filled in that nobody wrote. |
+
+Thirty minutes hands-on, thirty on the projector. **Rows are mixed by design:**
+phases 3 and 4 carry `participantCode` and are attributable; the projector
+phases carry none and log at session level. Both sit at
+`supportCondition: "na"` and are told apart by `phaseId` — there is no
+high/low split here, because the projector work *is* the scaffold and forcing
+a formal split would mean two snowmen in one period.
+
+## Day 3
 
 | Order | Tool | Time | Support |
 |---|---|---|---|
-| 1 | Two Machines | 15 min | `na` — whole class, no attribution |
-| 2 | Find the Rule | 14 min | **high only** |
-| 3 | Prompt Golf | 18 min | high (round 3) **and** low (round 4) |
+| 1 | Find the Rule | 28 min | **high then low** |
+| 2 | Prompt Golf | 18 min | high (round 3) and low (round 4) |
 
-47 minutes of tool time, leaving room for three transitions.
+46 minutes of tool time. **Find the Rule's low-support phase is restored** —
+it was cut purely for time under a schedule that no longer exists now that
+Word4Word has moved to its own day. Two rules of the same tier back to back,
+the palette and hypothesis field on and then off, difficulty held constant.
 
-**Find the Rule loses its low-support phase.** Running two full phases needs
-~29 minutes and the period does not have them. Prompt Golf carries the range
-measurement instead: it has the better-behaved step sequence, and abstraction
-is the construct the study cares most about. Find the Rule contributes
-hypothesis-testing process data at optimal level only, and every event it
-emits still carries `supportCondition: "high"` so the rows stay joinable.
-
-One tool measuring range properly beats two measuring it badly. The second
-Find the Rule phase goes to the spring study, where it has room — and by then
-the step sequence will have been revised against real pilot data rather than
-guessed at.
+Prompt Golf still carries the headline range measurement. Two tools reporting
+a range is better than one, and Find the Rule's is now honest: the two-stage
+commit records the hypothesis whether or not the always-visible field is
+there, and step 4 is defined against the student's own prior probes rather
+than slot algebra, so neither step is unreachable without the palette.
 
 ## Offline and recovery
 
@@ -149,7 +166,7 @@ School wifi will drop mid-session. Assume it.
   the network.
 
 Tools that call a model keep a pre-recorded fallback bank and label it as a
-recording on screen. Two Machines' literal half is deterministic and needs no
+recording on screen. Word4Word's literal half is deterministic and needs no
 network at all.
 
 ## Stack
@@ -172,7 +189,7 @@ rate-limited per participant code.
    and now the one carrying the range measurement. Building it first shakes
    out the events module and the scoring module together.
 4. Find the Rule.
-5. Two Machines.
+5. Word4Word.
 6. Retrofit `?pc=` handling into the three existing tools.
 
 ## DECIDE
@@ -181,10 +198,11 @@ rate-limited per participant code.
   day a clean entry? A visible streak may motivate; it may also make an absent
   student feel behind.
 - Day setting: build-time constant or facilitator query param?
-- Two Machines is whole-class with no participant attribution. Does the hub
-  still route students into it individually on their own devices, or does the
-  facilitator open it once on the projector and students never touch that
-  tile? Current lean: projector only, tile hidden from the student hub.
+- Word4Word's projector cells are class-level while its hands-on phases are
+  not. The tool switches between them with a control on screen. Should that
+  control be facilitator-only (a query param) so a student cannot wander into
+  the projector cells mid-period? Current lean: yes, once the period is
+  rehearsed.
 
 ## Settled
 
@@ -192,8 +210,10 @@ rate-limited per participant code.
   Both, and neither. Literal Genie alone duplicated RowdyRobo Vac's
   closed-vocabulary deterministic command language, measuring the same thing
   twice a week apart. It is merged with the five-run variance display into
-  **Two Machines** (SPEC-two-machines.md), where the literal executor is a
-  control condition rather than an activity: determinism becomes the
-  comparison, not the content. Projector demo, one device.
-- ~~Which tool carries the developmental-range measurement on Day 3?~~
-  Prompt Golf, via rounds 3 and 4. See the Day 3 table above.
+  **Word4Word** (SPEC-word4word.md), where the literal executor is a control
+  condition rather than an activity: determinism becomes the comparison, not
+  the content.
+- ~~Is Word4Word whole-class only?~~ No. Thirty of its sixty minutes are
+  hands-on and attributable; the projector cells stay class-level.
+- ~~Which tool carries the developmental-range measurement?~~ Prompt Golf
+  leads; Find the Rule now reports one too.

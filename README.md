@@ -5,9 +5,9 @@ participant code.
 
 | Tool | Construct | Shape |
 |---|---|---|
-| **Find the Rule** | hypothesis testing | individual, high support |
-| **Prompt Golf** | abstraction, debugging | individual, high **and** low support |
-| **Two Machines** | decomposition, stochastic reasoning | whole class, projector |
+| **Word4Word** | decomposition, pseudocode (TEKS 8.1(A)) | Day 2 · hands-on + projector |
+| **Find the Rule** | hypothesis testing | Day 3 · high **and** low support |
+| **Prompt Golf** | abstraction, debugging | Day 3 · high **and** low support |
 
 Read order for anyone picking this up: [`specs/ARCHITECTURE.md`](specs/ARCHITECTURE.md)
 → [`specs/EVENTS.md`](specs/EVENTS.md) → [`specs/DEVELOPMENTAL-RANGE.md`](specs/DEVELOPMENTAL-RANGE.md)
@@ -31,8 +31,8 @@ pre-recorded runs that are labelled as recordings on screen. Add credentials
 | `npm run build` | production build |
 | `npm run rescore -- log.json --check` | recompute every derived field from a raw event log |
 
-`?reset` on any URL clears the device for the next student. `?day=3` sets the
-day; students never choose it.
+`?reset` on any URL clears the device for the next student. `?day=2` or
+`?day=3` sets the day; students never choose it.
 
 ## What gets measured
 

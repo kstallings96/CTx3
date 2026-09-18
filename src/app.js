@@ -141,7 +141,7 @@ function paintMode() {
   LLM.state = LLM.ok ? "on" : "off";
   paintMode();
   emit("model_availability", { live: LLM.ok, caching: false });
-  if (S.screen === "tm" || S.screen === "pg") go(S.screen);
+  if (S.screen === "w4w" || S.screen === "pg") go(S.screen);
 })();
 
 /* ============================ rules registry ============================ */
@@ -901,372 +901,495 @@ function wirePG() {
   const bh = $("backhub"); if (bh) bh.onclick = () => go("hub");
 }
 
-/* ============================ tool 3 · two machines ============================ */
-/* Whole-class projector demo. One instruction, five runs, two executors.
-   The literal half is a deterministic stand-in and never a model call — its
-   reproducibility is the control condition the model half is measured against. */
-const TM_TASK = {
-  title: "Instructions for drawing a monster",
-  vagueSeed: "draw a monster",
-  preciseSeed: "draw a monster in exactly 4 numbered steps, each step saying one body part and how many of it",
-  precisePlaceholder: "The class fixes it here — say how many steps, and what each step has to contain…",
-  parts: ["eye","leg","arm","horn","tooth","teeth","tail","wing","ear","head","claw","spike","tentacle",
-    "nose","mouth","finger","toe","antenna","antennae","fang","scale","spot","eyeball","nostril","tongue"],
-};
-const TM_PARTS = ["eyes", "legs", "horns", "teeth", "arms", "tails"];
-/* Applied identically to BOTH machines and shown on screen, so the halves stay
-   parallel and nothing is hidden. Without it the model writes paragraphs that
-   nobody at the back of the room reads. */
-const TM_SUFFIX = "Keep the whole answer under 40 words.";
-const TM_COUNTS = [3, 5, 2, 9, 4, 1];
-/* Pre-recorded genuine model runs, played when the network is down. Labelled on screen. */
-const TM_TAPE = {
-  vague: [
-    "Start with a big oval, then add whatever feels scary. There are no wrong answers!",
-    "1. Draw a shape.\n2. Add eyes.\n3. Add a mouth.\n4. Add arms.\n5. Add legs.\n6. Colour it in.",
-    "First decide: friendly or fearsome? Then sketch a silhouette and build outward.",
-    "Draw a circle. Put two eyes in it. Give it teeth. Done!",
-    "Think of an animal you know, then exaggerate one feature until it looks strange."],
-  precise: [
-    "1. Draw 3 eyes.\n2. Draw 6 legs.\n3. Draw 2 horns.\n4. Draw 12 teeth.",
-    "1. Draw 1 head.\n2. Draw 4 arms.\n3. Draw 8 eyes.\n4. Draw 2 tails.",
-    "1. Draw 5 eyes.\n2. Draw 2 wings.\n3. Draw 7 spikes.\n4. Draw 3 mouths.",
-    "Sure! Here you go:\n1. Draw 2 heads.\n2. Draw 9 fingers.\n3. Draw 1 horn.\n4. Draw 6 teeth.",
-    "1. Draw 4 ears.\n2. Draw 3 legs.\n3. Draw 10 spots.\n4. Draw 1 nose."],
-};
-const TM = { executor: "literal", which: "vague", vague: TM_TASK.vagueSeed, precise: "",
-  runs: [], running: false, ctl: null, speed: 850, log: [], prevSteps: {}, N: 5, reveal: 0 };
-const tmText = () => (TM.which === "vague" ? TM.vague : TM.precise).trim();
-const tmQuadrant = () => TM.executor + "-" + TM.which;
+/* ============================ tool 3 · Word4Word ============================ */
+/* Build a snowman by writing pseudocode. Three verbs, numbered lines, and a
+   scene that renders one line at a time so the room watches a plan break at
+   the exact step it breaks.
 
-/* The literal executor. Wooden, deterministic, cheerful. Never says what you forgot. */
-function tmLiteral(instruction) {
-  const t = instruction.toLowerCase();
-  const NUM = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10 };
-  let n = null, at = Infinity;
-  const dm = t.match(/\b(\d+)\b/); if (dm) { n = +dm[1]; at = dm.index; }
-  for (const w in NUM) { const m = t.match(new RegExp("\\b" + w + "\\b")); if (m && m.index < at) { n = NUM[w]; at = m.index; } }
-  const wantsSteps = /\bsteps?\b|\bnumbered\b|\blines?\b|\blist\b/.test(t);
-  const wantsParts = /\bbody part|\bparts?\b|\bfeature/.test(t);
-  const wantsCount = /how many|how much|number of|\bcount\b|quantity/.test(t);
-  if (!wantsSteps) {
-    // Nobody said how many steps, so it writes exactly one: the whole job,
-    // undecomposed. Reads as an attempt rather than a glitch, and the failure
-    // is legible in a glance next to the four-step version.
-    const m = instruction.match(/^\s*(?:tell|show|teach|explain to|describe to)\s+\w+\s+(?:how to\s+)?(.+?)[.!?]?\s*$/i);
-    const job = (m ? m[1] : instruction.replace(/^\s*please\s+/i, "").replace(/[.!?]\s*$/, "")).trim();
-    return "1. " + cap(job) + ".";
+   This is the only place in the week that carries TEKS 8.1(A) — decompose a
+   real-world problem into structured parts using pseudocode — which is why the
+   task has a right answer and the failures have locations. */
+const W4W_TASK = {
+  title: "Build a snowman",
+  vagueSeed: "build a snowman",
+  preciseSeed: "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball",
+  suffix: "Reply with numbered steps only, one per line. Keep it under 40 words.",
+};
+const SIZES = ["big", "medium", "small"];
+/* Face and arms are the target. Hat, buttons and scarf are free decoration the
+   checker ignores — which gives a real model somewhere harmless to vary, so
+   five snowmen that all match but wear different hats reads as variance
+   rather than as five different degrees of wrong. */
+const FEATURES = ["face", "arms", "hat", "buttons", "scarf"];
+const TARGET = { stack: ["big", "medium", "small"], face: "small", arms: "medium" };
+
+/* Pre-recorded genuine model runs, played when the network is down. Labelled. */
+const W4W_TAPE = {
+  vague: [
+    "1. Roll a large snowball for the base.\n2. Roll a medium ball and stack it on the base.\n3. Roll a small ball and stack it on top.\n4. Add a face to the small ball.\n5. Add stick arms to the middle.",
+    "1. Make three snowballs.\n2. Put them on top of each other.\n3. Decorate it.",
+    "1. Roll a big ball.\n2. Roll a medium ball.\n3. Roll a small ball.\n4. Stack the small on the medium.\n5. Stack the medium on the big.\n6. Add a face to the small ball.",
+    "1. Roll a small ball.\n2. Roll a medium ball.\n3. Roll a big ball.\n4. Stack the medium on the small.\n5. Stack the big on the medium.\n6. Add a face and arms.",
+    "1. Roll three balls of different sizes.\n2. Stack largest to smallest.\n3. Add a face to the top ball.\n4. Add arms to the middle ball.\n5. Add a hat.",
+  ],
+  precise: [
+    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball",
+    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball\n8. ADD a hat to the small ball",
+    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD arms to the medium ball\n7. ADD a face to the small ball",
+    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball\n8. ADD buttons to the big ball",
+    "1. ROLL a big ball\n2. ROLL a medium ball\n3. ROLL a small ball\n4. STACK the medium ball on the big ball\n5. STACK the small ball on the medium ball\n6. ADD a face to the small ball\n7. ADD arms to the medium ball\n8. ADD a scarf to the medium ball",
+  ],
+};
+
+/* ---- the scene -------------------------------------------------------- */
+const freshScene = () => ({ rolled: [], stack: [], features: {}, floating: [] });
+
+/* One line of pseudocode against the scene. Returns what happened, in the
+   machine's own cheerful voice, plus whether it could act at all. */
+/* "a face" but "arms" — the machine should not sound broken while being wooden. */
+const art = (f) => (f === "arms" || f === "buttons" ? f : "a " + f);
+function w4wStep(scene, line) {
+  const t = String(line || "").replace(/^\s*\d+[.)]\s*/, "").trim().toLowerCase();
+  const size = () => SIZES.find((z) => new RegExp("\\b" + z + "\\b").test(t))
+    || (/\blarge\b|\bbiggest\b|\bbase\b/.test(t) ? "big" : /\bsmallest\b|\bhead\b|\btop\b/.test(t) ? "small" : null);
+
+  if (/\broll\b|\bmake\b/.test(t)) {
+    const count = (t.match(/\bthree\b|\b3\b/) ? 3 : 1);
+    if (count === 3 && !size()) {
+      // "roll three balls" — three balls, no sizes given, so three the same.
+      scene.rolled.push("medium", "medium", "medium");
+      return { ok: true, msg: "I rolled 3 balls. You did not say what size, so they are all the same." };
+    }
+    const z = size();
+    if (!z) { scene.rolled.push("medium"); return { ok: true, msg: "I rolled a ball. You did not say what size." }; }
+    scene.rolled.push(z);
+    return { ok: true, msg: "I rolled a " + z + " ball." };
   }
-  const k = Math.max(1, Math.min(9, n || 3));
+
+  if (/\bstack\b|\bput\b|\bplace\b/.test(t)) {
+    // Read the two balls in SENTENCE order, not list order. "the medium on the
+    // big" means medium goes on top; taking them in size order would silently
+    // invert every correct instruction a student writes.
+    const m = t.match(/\b(big|medium|small|large|head|base)\b[\s\S]*?\bon\b[\s\S]*?\b(big|medium|small|large|head|base)\b/);
+    if (!m) return { ok: false, msg: "Okay!" };      // "stack them up" names nothing
+    const norm = (w) => ({ large: "big", base: "big", head: "small" }[w] || w);
+    const top = norm(m[1]), bottom = norm(m[2]);
+    const have = (z) => scene.rolled.includes(z) || scene.stack.includes(z);
+    if (!have(top) || !have(bottom))
+      return { ok: false, msg: "Okay!", missing: !have(top) ? top : bottom };
+    if (!scene.stack.includes(bottom)) scene.stack.push(bottom);
+    if (!scene.stack.includes(top)) scene.stack.push(top);
+    return { ok: true, msg: "I put the " + top + " ball on the " + bottom + " ball." };
+  }
+
+  if (/\badd\b|\bgive\b|\bdecorate\b/.test(t)) {
+    const feat = FEATURES.find((fe) => new RegExp("\\b" + fe + "\\b").test(t))
+      || (/\beyes?\b|\bnose\b|\bcarrot\b|\bmouth\b/.test(t) ? "face" : /\bstick/.test(t) ? "arms" : null);
+    if (!feat) return { ok: false, msg: "Okay!" };
+    const z = size();
+    if (!z) { scene.floating.push(feat); return { ok: true, msg: "I added " + art(feat) + ". You did not say which ball, so it is floating." }; }
+    if (!scene.stack.includes(z)) { scene.floating.push(feat); return { ok: true, msg: "I added " + art(feat) + " where the " + z + " ball would be. There is no " + z + " ball up there yet." }; }
+    scene.features[feat] = z;
+    return { ok: true, msg: "I added " + art(feat) + " to the " + z + " ball." };
+  }
+  return { ok: false, msg: "Okay!" };
+}
+
+/* Run every line. Deterministic: same pseudocode in, same scene out. */
+function w4wRun(text) {
+  const scene = freshScene();
+  const lines = String(text || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const log = [];
+  let firstDead = null;
+  lines.forEach((line, i) => {
+    const r = w4wStep(scene, line);
+    if (!r.ok && firstDead === null) firstDead = i;
+    log.push({ i, line, ...r });
+  });
+  return { scene, log, lines, firstDead };
+}
+
+/* Does the scene match the target? Named mismatches so the failure has a
+   location the class can point at. */
+function w4wCheck(scene) {
+  const miss = [];
+  const st = scene.stack;
+  if (st.length !== 3) miss.push(st.length ? "only " + st.length + " ball" + (st.length === 1 ? "" : "s") + " stacked" : "nothing is stacked");
+  else if (st.join(",") !== TARGET.stack.join(",")) miss.push("stacked " + st.join(" on ") + " — wrong way up");
+  if (scene.features.face !== TARGET.face) miss.push(scene.features.face ? "face on the " + scene.features.face + " ball" : "no face on the head");
+  if (scene.features.arms !== TARGET.arms) miss.push(scene.features.arms ? "arms on the " + scene.features.arms + " ball" : "no arms on the middle");
+  if (scene.floating.length) miss.push(scene.floating.join(" and ") + " floating with nothing to attach to");
+  return { matched: miss.length === 0, miss };
+}
+
+/* What did the model fill in that the class never said? This is the whole
+   difference between the two machines, so it gets counted and shown. */
+function w4wInferred(classText, modelText) {
+  const said = String(classText || "").toLowerCase();
+  const got = String(modelText || "").toLowerCase();
   const out = [];
-  for (let i = 0; i < k; i++) {
-    const part = wantsParts ? TM_PARTS[i % TM_PARTS.length] : "a shape";
-    const num = wantsCount ? TM_COUNTS[i % TM_COUNTS.length] + " " : "";
-    out.push((i + 1) + ". Draw " + num + part + ".");
-  }
-  return out.join("\n");
+  if (!SIZES.some((z) => said.includes(z)) && SIZES.some((z) => got.includes(z))) out.push("what size each ball is");
+  if (!/\bon\b/.test(said) && /\bon\b/.test(got)) out.push("what goes on what");
+  const saidWhere = FEATURES.some((f) => said.includes(f)) && SIZES.some((z) => said.includes(z));
+  if (!saidWhere && FEATURES.some((f) => got.includes(f)) && SIZES.some((z) => got.includes(z))) out.push("which ball the face goes on");
+  const saidSteps = /^\s*\d+[.)]/m.test(said);
+  if (!saidSteps && /^\s*\d+[.)]/m.test(got)) out.push("that it should be numbered steps at all");
+  return out;
 }
-/* The same deterministic checker runs on BOTH halves. That is what makes the
-   two columns comparable — only the executor differs. */
-function tmCheck(out) {
-  const all = String(out || "").split("\n").map((x) => x.trim()).filter(Boolean);
-  // A step is a line with a number in it. A preamble like "Sure! Here you go:"
-  // has no number, so it is chatter and does not count against the instruction —
-  // the steps are there, and marking a correct answer wrong would teach students
-  // to distrust the checker.
-  const isStep = (l) => /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i.test(l);
-  const steps = all.filter(isStep);
-  const chatter = all.length - steps.length;
-  const named = steps.length > 0 && steps.every((l) => TM_TASK.parts.some((w) => new RegExp("\\b" + w + "s?\\b", "i").test(l)));
-  const four = steps.length === 4;
-  return { pass: four && named, four, named, steps: steps.length, chatter, lines: all.length };
-}
-function tmRevision(text) {
-  const prev = TM.prevSteps[TM.which];
-  const cur = text.split("\n").map((x) => x.trim()).filter(Boolean);
-  if (!prev) return "first";
-  if (prev.length === cur.length && prev.every((x, i) => x === cur[i])) return "reworded_only";
-  if (prev.length === cur.length && [...prev].sort().join("|") === [...cur].sort().join("|")) return "reordered";
-  if (cur.length > prev.length) { let j = 0; for (const l of cur) if (l === prev[j]) j++; if (j === prev.length) return "added_step"; }
-  return "rewritten";
-}
-async function tmRun() {
-  if (TM.running) return;
-  const text = tmText(); if (!text) return;
-  const quadrant = tmQuadrant(), instructionId = quadrant + "-" + hash(text).toString(36);
-  const revisionType = tmRevision(text);
-  TM.prevSteps[TM.which] = text.split("\n").map((x) => x.trim()).filter(Boolean);
-  TM.runs = Array.from({ length: TM.N }, () => ({ out: null }));
-  TM.running = true; TM.ctl = new AbortController(); TM.reveal = 0;
-  emit("task_start", { taskId: "tm-" + quadrant, round: 1, wholeClass: true });
-  emit("instruction_submitted", { text, stepCount: TM.prevSteps[TM.which].length, revisionType, quadrant });
-  renderTM();
-  for (let i = 0; i < TM.N; i++) {
-    if (!TM.running) break;
-    let out = null, src = "literal";
-    if (TM.executor === "literal") { out = tmLiteral(text); await new Promise((r) => setTimeout(r, TM.speed)); }
-    else {
-      try { out = await ask(text + "\n\n" + TM_SUFFIX, { signal: TM.ctl.signal }); } catch (e) { break; }
-      if (out == null) { out = TM_TAPE[TM.which === "vague" ? "vague" : "precise"][i % 5]; src = "recording"; }
-      else src = "live";
-    }
-    if (!TM.running) break;
-    const first = TM.runs[0].out;
-    const same = i > 0 && first != null && out.trim() === first.trim();
-    TM.runs[i] = { out, src, same, check: tmCheck(out) };
-    emit("run_executed", { instructionId, runIndex: i + 1, output: out.slice(0, 60), sameAsRun1: i === 0 ? null : same, quadrant });
-    TM.reveal = i + 1; renderTM();
-  }
-  const done = TM.runs.filter((r) => r.out);
-  const uniq = new Set(done.map((r) => r.out.trim()));
-  TM.log.push({ text: text.replace(/\n/g, " / "), quadrant, outcome: "",
-    revisionType, runs: done.length, distinct: uniq.size });
-  emit("task_complete", { taskId: "tm-" + quadrant, attemptCount: done.length, distinctOutputs: uniq.size, wholeClass: true });
-  TM.running = false; renderTM();
-}
-/* Draw what the output describes. Deterministic: the same output always draws
-   the same monster, so the literal machine's five identical answers produce
-   five identical monsters and the model's five different answers produce five
-   different ones. The variance becomes something you can see from the back of
-   the room rather than something you read. */
-const MPARTS = { eye: 2, eyes: 2, eyeball: 2, eyeballs: 2, leg: 2, legs: 2, arm: 2, arms: 2,
-  horn: 2, horns: 2, tooth: 4, teeth: 4, tail: 1, tails: 1, wing: 2, wings: 2, ear: 2, ears: 2,
-  head: 1, heads: 1, spike: 3, spikes: 3, spot: 4, spots: 4, nose: 1, noses: 1, mouth: 1,
-  mouths: 1, antenna: 2, antennae: 2, claw: 2, claws: 2, finger: 3, fingers: 3, toe: 3, toes: 3,
-  tentacle: 3, tentacles: 3, fang: 2, fangs: 2, scale: 5, scales: 5, tongue: 1, nostril: 2, nostrils: 2 };
-const NUMW2 = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-  eleven: 11, twelve: 12 };
-function parseMonster(text) {
-  const found = {};
-  for (const line of String(text || "").split("\n")) {
-    const re = /(?:\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+)?\b([a-z]+)\b/gi;
-    let m;
-    while ((m = re.exec(line))) {
-      const part = m[2].toLowerCase();
-      if (!(part in MPARTS)) continue;
-      const raw = m[1] ? (NUMW2[m[1].toLowerCase()] ?? parseInt(m[1], 10)) : MPARTS[part];
-      if (!(part in found)) found[part] = Math.max(0, Math.min(12, raw || MPARTS[part]));
-    }
-  }
-  return found;
-}
-function monsterSVG(text) {
-  const f = parseMonster(text);
-  const get = (...names) => { for (const n of names) if (n in f) return f[n]; return 0; };
+
+/* ---- drawing ----------------------------------------------------------- */
+const BALL_R = { big: 46, medium: 34, small: 24 };
+function snowmanSVG(scene) {
   const P = [];
-  const spread = (n, y, fn) => { for (let i = 0; i < n; i++) fn(n === 1 ? 100 : 62 + (i * 76) / (n - 1), y, i); };
-  const body = `<ellipse cx="100" cy="98" rx="46" ry="40" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2.5"/>`;
-  // horns / spikes / antennae on top
-  const horns = get("horn", "horns"), spikes = get("spike", "spikes"), ant = get("antenna", "antennae");
-  spread(horns, 0, (x) => P.push(`<polygon points="${x - 7},60 ${x},34 ${x + 7},60" fill="var(--amber)"/>`));
-  spread(spikes, 0, (x) => P.push(`<polygon points="${x - 5},62 ${x},44 ${x + 5},62" fill="var(--fail)"/>`));
-  spread(ant, 0, (x) => P.push(`<line x1="${x}" y1="60" x2="${x}" y2="32" stroke="var(--ink)" stroke-width="2"/><circle cx="${x}" cy="29" r="4" fill="var(--ink)"/>`));
-  // extra heads
-  spread(Math.max(0, get("head", "heads") - 1), 0, (x) => P.push(`<circle cx="${x}" cy="48" r="15" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>`));
-  // ears / wings at the sides
-  const ears = get("ear", "ears"), wings = get("wing", "wings");
-  for (let i = 0; i < ears; i++) { const L = i % 2 === 0; P.push(`<ellipse cx="${L ? 52 : 148}" cy="${78 + Math.floor(i / 2) * 16}" rx="9" ry="13" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>`); }
-  for (let i = 0; i < wings; i++) { const L = i % 2 === 0; const o = Math.floor(i / 2) * 10;
-    P.push(`<polygon points="${L ? 56 : 144},${88 + o} ${L ? 14 : 186},${70 + o} ${L ? 20 : 180},${106 + o}" fill="var(--accent)" opacity=".35"/>`); }
-  // spots / scales on the body
-  const spots = get("spot", "spots") + get("scale", "scales");
-  for (let i = 0; i < spots; i++) P.push(`<circle cx="${76 + ((i * 29) % 50)}" cy="${84 + ((i * 17) % 34)}" r="4.5" fill="var(--accent)" opacity=".4"/>`);
-  // eyes
-  const eyes = get("eye", "eyes", "eyeball", "eyeballs");
-  spread(eyes, 0, (x, _y, i) => { const cy = eyes > 5 && i % 2 ? 94 : 84;
-    P.push(`<circle cx="${x}" cy="${cy}" r="8" fill="#fff" stroke="var(--ink)" stroke-width="1.5"/><circle cx="${x}" cy="${cy + 1}" r="3.5" fill="var(--ink)"/>`); });
-  // nose
-  if (get("nose", "noses", "nostril", "nostrils")) P.push(`<circle cx="100" cy="104" r="4" fill="var(--ink)" opacity=".6"/>`);
-  // mouth + teeth / fangs
-  const teeth = get("tooth", "teeth") + get("fang", "fangs");
-  if (teeth || get("mouth", "mouths") || get("tongue")) {
-    P.push(`<path d="M74 114 Q100 132 126 114" fill="none" stroke="var(--ink)" stroke-width="2.5"/>`);
-    for (let i = 0; i < teeth; i++) { const x = 78 + (i * 44) / Math.max(1, teeth - 1 || 1);
-      P.push(`<polygon points="${x - 3},116 ${x},124 ${x + 3},116" fill="#fff" stroke="var(--ink)" stroke-width="1"/>`); }
-    if (get("tongue")) P.push(`<path d="M94 122 Q100 136 106 122" fill="var(--fail)"/>`);
+  const groundY = 178;
+  // unstacked balls sit on the ground, left to right
+  let x = 34;
+  scene.rolled.filter((z) => !scene.stack.includes(z)).forEach((z) => {
+    const r = BALL_R[z] || 30;
+    P.push(`<circle cx="${x + r}" cy="${groundY - r}" r="${r}" fill="var(--surface-3)" stroke="var(--ink-2)" stroke-width="2"/>`);
+    x += r * 2 + 8;
+  });
+  // the tower
+  let y = groundY;
+  const centres = {};
+  scene.stack.forEach((z) => {
+    const r = BALL_R[z] || 30;
+    y -= r;
+    centres[z] = { cx: 150, cy: y, r };
+    P.push(`<circle cx="150" cy="${y}" r="${r}" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.5"/>`);
+    y -= r - 4;
+  });
+  const at = (z) => centres[z];
+  if (scene.features.face && at(scene.features.face)) {
+    const c = at(scene.features.face);
+    P.push(`<circle cx="${c.cx - 9}" cy="${c.cy - 5}" r="3" fill="var(--ink)"/><circle cx="${c.cx + 9}" cy="${c.cy - 5}" r="3" fill="var(--ink)"/>`);
+    P.push(`<polygon points="${c.cx},${c.cy + 2} ${c.cx + 20},${c.cy + 6} ${c.cx},${c.cy + 9}" fill="var(--amber)"/>`);
+    P.push(`<path d="M${c.cx - 9} ${c.cy + 13} q9 7 18 0" fill="none" stroke="var(--ink)" stroke-width="1.8"/>`);
   }
-  // limbs
-  const legs = get("leg", "legs"), arms = get("arm", "arms"), tent = get("tentacle", "tentacles");
-  spread(legs, 0, (x) => P.push(`<line x1="${x}" y1="134" x2="${x}" y2="158" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>`));
-  for (let i = 0; i < arms; i++) { const L = i % 2 === 0, o = Math.floor(i / 2) * 12;
-    P.push(`<line x1="${L ? 56 : 144}" y1="${100 + o}" x2="${L ? 26 : 174}" y2="${88 + o}" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>`); }
-  for (let i = 0; i < tent; i++) { const x = 70 + i * 16;
-    P.push(`<path d="M${x} 134 q6 14 -4 24" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>`); }
-  // tail
-  if (get("tail", "tails")) P.push(`<path d="M144 118 q34 8 20 32" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>`);
-  const empty = !Object.keys(f).length;
-  return `<svg class="mon" viewBox="0 0 200 170" role="img" aria-label="monster drawn from the instructions">
-    ${body}${P.join("")}
-    ${empty ? `<text x="100" y="106" text-anchor="middle" font-family="var(--mono)" font-size="13" fill="var(--muted)">no features given</text>` : ""}
+  if (scene.features.arms && at(scene.features.arms)) {
+    const c = at(scene.features.arms);
+    P.push(`<line x1="${c.cx - c.r}" y1="${c.cy}" x2="${c.cx - c.r - 28}" y2="${c.cy - 18}" stroke="var(--amber)" stroke-width="3" stroke-linecap="round"/>`);
+    P.push(`<line x1="${c.cx + c.r}" y1="${c.cy}" x2="${c.cx + c.r + 28}" y2="${c.cy - 18}" stroke="var(--amber)" stroke-width="3" stroke-linecap="round"/>`);
+  }
+  if (scene.features.hat && at(scene.features.hat)) {
+    const c = at(scene.features.hat);
+    P.push(`<rect x="${c.cx - 26}" y="${c.cy - c.r - 5}" width="52" height="5" fill="var(--ink)"/><rect x="${c.cx - 15}" y="${c.cy - c.r - 26}" width="30" height="22" fill="var(--ink)"/>`);
+  }
+  if (scene.features.scarf && at(scene.features.scarf)) {
+    const c = at(scene.features.scarf);
+    P.push(`<rect x="${c.cx - c.r}" y="${c.cy - c.r - 2}" width="${c.r * 2}" height="8" fill="var(--fail)"/>`);
+  }
+  if (scene.features.buttons && at(scene.features.buttons)) {
+    const c = at(scene.features.buttons);
+    [-12, 2, 16].forEach((d) => P.push(`<circle cx="${c.cx}" cy="${c.cy + d}" r="3.5" fill="var(--ink)"/>`));
+  }
+  // anything with nothing to attach to hangs in the air, which is the point
+  scene.floating.forEach((f, i) => {
+    P.push(`<polygon points="212,${52 + i * 22} 234,${56 + i * 22} 212,${60 + i * 22}" fill="var(--amber)"/>`);
+    P.push(`<text x="240" y="${62 + i * 22}" font-family="var(--mono)" font-size="10" fill="var(--fail)">${f}?</text>`);
+  });
+  const empty = !scene.rolled.length && !scene.stack.length && !scene.floating.length;
+  return `<svg class="mon" viewBox="0 0 300 200" role="img" aria-label="the snowman these instructions built">
+    <line x1="0" y1="${groundY}" x2="300" y2="${groundY}" stroke="var(--line-2)" stroke-width="1.5"/>
+    ${P.join("")}
+    ${empty ? `<text x="150" y="100" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--muted)">nothing was built</text>` : ""}
   </svg>`;
 }
-/* Which of the two readings of "draw" did this run take? The refusal branch is
-   the interesting one: it read "draw" as make a picture, found that it could
-   not, and said so. Same instruction, different question answered. */
-function readingOf(out) {
-  const t = String(out || "");
-  const cannot = /\b(cannot|can ?not|can't|cant|unable|not able|don't have|no ability|text[- ]based|as an? (ai|text|language model))\b/i.test(t);
-  const visual = /\b(image|images|picture|pictures|draw|drawing|visual|visuals|art|artwork|render)\b/i.test(t);
-  if (cannot && visual) return "picture";
-  if (/^\s*\d+[.)]/m.test(t)) return "steps";
-  return "description";
-}
-const READING_NOTE = {
-  picture: "read \u201cdraw\u201d as MAKE A PICTURE \u2014 then said it could not",
-  steps: "read \u201cdraw\u201d as WRITE INSTRUCTIONS",
-  description: "read \u201cdraw\u201d as DESCRIBE IT",
+
+/* ---- state -------------------------------------------------------------- */
+const W4W = {
+  mode: "solo",                 // solo = hands-on, class = the projector 2x2
+  executor: "literal", which: "vague",
+  vague: W4W_TASK.vagueSeed, precise: "",
+  draft: W4W_TASK.vagueSeed,    // the student's own pseudocode
+  runs: [], running: false, ctl: null, speed: 700, N: 5,
+  log: [], attempts: [], prevLines: null, prevMatched: null,
+  scene: freshScene(), stepLog: [], playing: false, timer: null, cursor: -1,
 };
-function renderTM() {
-  const done = TM.runs.filter((r) => r.out);
+const w4wText = () => (W4W.which === "vague" ? W4W.vague : W4W.precise).trim();
+const w4wQuadrant = () => W4W.executor + "-" + W4W.which;
+const isNumbered = (t) => String(t || "").split("\n").filter((l) => l.trim()).every((l) => /^\s*\d+[.)]/.test(l));
+
+function w4wRevision(lines) {
+  const prev = W4W.prevLines;
+  if (!prev) return "first";
+  if (prev.length === lines.length && prev.every((x, i) => x === lines[i])) return "reworded_only";
+  if (prev.length === lines.length && [...prev].sort().join("|") === [...lines].sort().join("|")) return "reordered";
+  if (lines.length > prev.length) { let j = 0; for (const l of lines) if (l === prev[j]) j++; if (j === prev.length) return "added_step"; }
+  if (prev.length === lines.length) return "reworded_only";
+  return "rewritten";
+}
+
+/* ---- hands-on: one student, one instruction, played out a line at a time -- */
+function w4wPlay() {
+  if (W4W.playing) return;
+  const text = $("w4wfield").value;
+  const { lines } = w4wRun(text);
+  if (!lines.length) return;
+  W4W.scene = freshScene(); W4W.stepLog = []; W4W.cursor = -1; W4W.playing = true;
+  const revisionType = w4wRevision(lines);
+  W4W.prevLines = lines;
+  const id = "w4w" + W4W.attempts.length;
+  const d = attemptDerived("w4w-solo", text);
+  emit("attempt_submitted", { attemptId: id, taskId: "w4w-solo", artifact: text.replace(/\n/g, " / "), ...d,
+    stepCount: lines.length, numbered: isNumbered(text), revisionType });
+  emit("instruction_submitted", { text: text.replace(/\n/g, " / "), stepCount: lines.length, revisionType,
+    numbered: isNumbered(text), quadrant: "solo" });
+
+  let i = 0;
+  const beat = () => {
+    if (i >= lines.length) {
+      W4W.playing = false;
+      const chk = w4wCheck(W4W.scene);
+      const dead = W4W.stepLog.findIndex((x) => !x.ok);
+      emit("instruction_executed", { matched: chk.matched, mismatch: chk.miss, failurePoint: dead < 0 ? null : dead, quadrant: "solo" });
+      emit("attempt_evaluated", { attemptId: id, outcome: chk.matched ? "pass" : "fail", failureType: chk.matched ? null : "target_not_met",
+        matched: chk.matched, prevMatched: W4W.prevMatched });
+      W4W.attempts.push({ text: lines.join(" / "), revisionType, matched: chk.matched, miss: chk.miss, numbered: isNumbered(text) });
+      W4W.prevMatched = chk.matched;
+      renderW4W(); return;
+    }
+    W4W.cursor = i;
+    W4W.stepLog.push({ i, ...w4wStep(W4W.scene, lines[i]) });
+    emit("walkthrough_step", { stepIndex: i, line: lines[i], effect: W4W.stepLog[i].msg, quadrant: "solo" });
+    i++; renderW4W();
+    W4W.timer = setTimeout(beat, W4W.speed);
+  };
+  renderW4W(); W4W.timer = setTimeout(beat, 250);
+}
+
+/* ---- projector: five runs of one instruction against one machine --------- */
+async function w4wRunFive() {
+  if (W4W.running) return;
+  const text = w4wText(); if (!text) return;
+  const quadrant = w4wQuadrant(), instructionId = quadrant + "-" + hash(text).toString(36);
+  W4W.runs = Array.from({ length: W4W.N }, () => ({ out: null }));
+  W4W.running = true; W4W.ctl = new AbortController();
+  // Projector rows are class-level: no participant attribution, by design.
+  emit("instruction_submitted", { participantCode: null, text, stepCount: text.split("\n").filter(Boolean).length,
+    revisionType: "class", numbered: isNumbered(text), quadrant });
+  renderW4W();
+  for (let k = 0; k < W4W.N; k++) {
+    if (!W4W.running) break;
+    let out = null, src = "literal";
+    if (W4W.executor === "literal") { out = text; await new Promise((r) => setTimeout(r, 260)); }
+    else {
+      try { out = await ask(text + "\n\n" + W4W_TASK.suffix, { signal: W4W.ctl.signal }); } catch (e) { break; }
+      if (out == null) { out = W4W_TAPE[W4W.which][k % 5]; src = "recording"; } else src = "live";
+    }
+    if (!W4W.running) break;
+    const { scene } = w4wRun(out);
+    const chk = w4wCheck(scene);
+    const first = W4W.runs[0].out;
+    W4W.runs[k] = { out, src, scene, chk, same: k > 0 && first != null && out.trim() === first.trim(),
+      inferred: src === "literal" ? [] : w4wInferred(text, out) };
+    emit("run_executed", { participantCode: null, instructionId, runIndex: k + 1, output: out.slice(0, 60),
+      sameAsRun1: k === 0 ? null : W4W.runs[k].same, matched: chk.matched, inferredCount: W4W.runs[k].inferred.length, quadrant });
+    renderW4W();
+  }
+  const done = W4W.runs.filter((r) => r.out);
   const uniq = new Set(done.map((r) => r.out.trim()));
-  const interpreted = done.filter((r) => r.src !== "literal");
-  const readingKinds = [...new Set(interpreted.map((r) => readingOf(r.out)))];
-  const showReadings = readingKinds.length > 1;
-  const cellState = (ex, wh) => {
-    const row = [...TM.log].reverse().find((l) => l.quadrant === ex + "-" + wh);
-    return row ? row.distinct + (row.distinct === 1 ? " answer" : " answers") : "not run";
-  };
-  const cellHtml = (ex, wh) => {
-    const on = TM.executor === ex && TM.which === wh;
-    const row = [...TM.log].reverse().find((l) => l.quadrant === ex + "-" + wh);
-    return `<button class="qcell${on ? " on" : ""}${row ? " ran" : ""}" data-ex="${ex}" data-wh="${wh}">
-      <span class="qv">${row ? (row.distinct === 1 ? "the same answer" : row.distinct + " different answers") : "not run yet"}</span>
-      <span class="qs">${row ? "out of " + row.runs + " identical asks" : ""}</span></button>`;
-  };
-  const grid = `<div class="qgrid">
-    <div></div><div class="qhead">Vague instruction</div><div class="qhead">Precise instruction</div>
-    <div class="qside">Literal machine</div>${cellHtml("literal", "vague")}${cellHtml("literal", "precise")}
-    <div class="qside">Real model</div>${cellHtml("model", "vague")}${cellHtml("model", "precise")}
-  </div>`;
-  $("stage").innerHTML = `
+  W4W.log.push({ text: text.replace(/\n/g, " / "), quadrant, runs: done.length, distinct: uniq.size,
+    matched: done.filter((r) => r.chk.matched).length, outcome: "" });
+  W4W.running = false; renderW4W();
+}
+
+/* ---- render -------------------------------------------------------------- */
+function renderW4W() {
+  const head = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-    <div class="spread"><div><span class="eyebrow">Tool 3 · decomposition + stochastic reasoning</span><h1 style="font-size:24px;margin-top:2px">Two Machines</h1></div>
-      <span class="eyebrow">projector demo · whole class</span></div>
-    <p class="lede">One instruction, run <b>five times</b>, against two different machines. Nothing changes between the five runs — so anything different came from the machine, not from you.</p>
-    <div class="how"><div><b>1</b>Vague, on the literal machine</div><div><b>2</b>Fix it</div><div><b>3</b>Vague, on the real model</div><div><b>4</b>Precise, on the real model</div></div>
-  </section>
-
-  <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
-    <div class="spread"><span class="eyebrow">the four cells · tap one</span>
-      <span class="hint">task: ${esc(TM_TASK.title)}</span></div>
-    <p class="hint">Whatever the class decides to ask for, the tool does not judge whether the answer is
-      <i>good</i> — you and the room do that out loud. What it counts is how many <b>different</b> answers came
-      back from five identical asks. That number is the measurement, and it means the same thing whatever the task is.</p>
-    ${grid}
-  </section>
-
-  <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
+    <div class="spread"><div><span class="eyebrow">Tool 3 · decomposition + stochastic reasoning</span>
+      <h1 style="font-size:24px;margin-top:2px">Word4Word</h1></div>
+      <span class="eyebrow">${W4W.mode === "solo" ? "your own build" : "projector · whole class"}</span></div>
+    <p class="lede">Write the steps for building a snowman. The machine does <b>word for word</b> what you wrote, one line at a time — no more, and nothing you left out.</p>
     <div class="row">
-      <span class="eyebrow">machine</span>
-      ${["literal", "model"].map((e) => `<button class="btn sm ${TM.executor === e ? "" : "ghost"}" data-ex2="${e}">${e === "literal" ? "Literal" : "Real model"}</button>`).join("")}
-      <span class="chip" title="added to every run, both machines">+ “${esc(TM_SUFFIX)}”</span>
-      <span class="hint">${TM.executor === "literal"
-        ? "Deterministic. Same words in, same words out, every single time — that is the point of this column."
-        : liveOn() ? "A real model, answer caching off, so a repeat really is a repeat." : "No live model here, so this plays five <b>pre-recorded</b> real runs. Labelled on each card."}</span>
+      <button class="btn sm ${W4W.mode === "solo" ? "" : "ghost"}" data-w4wmode="solo">Build your own</button>
+      <button class="btn sm ${W4W.mode === "class" ? "" : "ghost"}" data-w4wmode="class">The four cells</button>
+      <span class="hint">${W4W.mode === "solo"
+        ? "Your work here is saved against your code."
+        : "Projector only. These runs are logged for the class, not for any one student."}</span>
     </div>
-    <div class="tmins">
-      <div class="${TM.which === "vague" ? "sel" : ""}">
-        <div class="spread"><span class="eyebrow">the vague instruction · the class writes this</span>
-          <button class="btn ghost sm" data-wh2="vague">${TM.which === "vague" ? "selected" : "use this"}</button></div>
-        <textarea id="tmvague" rows="2" ${TM.running ? "disabled" : ""}>${esc(TM.vague)}</textarea>
-      </div>
-      <div class="${TM.which === "precise" ? "sel" : ""}">
-        <div class="spread"><span class="eyebrow">the precise version · the class fixes it</span>
-          <div class="row" style="gap:6px">
-            <button class="btn ghost sm" data-wh2="precise">${TM.which === "precise" ? "selected" : "use this"}</button>
-            ${TM.precise.trim() ? "" : `<button class="btn ghost sm" id="tmseed">fill in a suggestion</button>`}
-          </div></div>
-        <textarea id="tmprecise" rows="3" placeholder="${esc(TM_TASK.precisePlaceholder)}" ${TM.running ? "disabled" : ""}>${esc(TM.precise)}</textarea>
-      </div>
-    </div>
-    <div class="row">
-      <button class="btn" id="tmrun" ${TM.running || !tmText() ? "disabled" : ""}>${TM.running ? "Running " + TM.reveal + " of " + TM.N + "…" : "Run this " + TM.N + " times"}</button>
-      <button class="btn ghost sm" id="tmstop" ${TM.running ? "" : "disabled"}>Stop</button>
-      <label class="hint" style="display:flex;gap:6px;align-items:center">speed
-        <select id="tmspeed" style="background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:2px 5px;font-family:var(--mono);font-size:11px">
-          <option value="1400"${TM.speed == 1400 ? " selected" : ""}>slow</option>
-          <option value="850"${TM.speed == 850 ? " selected" : ""}>steady</option>
-          <option value="350"${TM.speed == 350 ? " selected" : ""}>quick</option></select></label>
-      <span class="hint">running <b>${esc(tmQuadrant().replace("-", " · "))}</b></span>
-    </div>
-    ${TM.runs.length ? `<div class="runs">${TM.runs.map((r, i) => {
-      if (!r.out) return `<div class="run waiting"><div class="n"><span>run ${i + 1}</span><span>…</span></div><div class="txt">waiting</div></div>`;
-      const cls = i === 0 ? "same" : r.same ? "same" : "diff";
-      return `<div class="run ${cls}">
-        <div class="n"><span>run ${i + 1}${r.src === "recording" ? " · recording" : ""}</span><span>${i === 0 ? "first" : r.same ? "same as run 1" : "different"}</span></div>
-        ${r.src === "literal" || !showReadings ? "" : `<div class="reading">${esc(READING_NOTE[readingOf(r.out)])}</div>`}
-        ${Object.keys(parseMonster(r.out)).length ? monsterSVG(r.out) : ""}
-        <div class="txt">${esc(r.out)}</div>
-        </div>`;
-    }).join("")}</div>` : ""}
-    ${(() => { const k = {}; done.filter((r) => r.src !== "literal").forEach((r) => { const x = readingOf(r.out); k[x] = (k[x] || 0) + 1; });
-      const kinds = Object.entries(k);
-      return done.length >= 2 && kinds.length > 1
-        ? `<div class="banner" style="border-left-color:var(--accent);background:var(--accent-soft)"><span>⚡</span><div>
-            The five runs did not agree on <b>what you asked for</b>: ${kinds.map(([x, n]) => `${n} \u00d7 ${({picture: "tried to make a picture", steps: "wrote instructions", description: "wrote a description"})[x]}`).join(", ")}.
-            “Draw” can mean make a picture or write instructions, and nothing in the instruction says which — so each run picked one.
-            That is the variation being in the <b>question</b>, not just the wording.</div></div>`
-        : ""; })()}
-    ${done.length >= 2 ? `<div class="tally">
-      <div><b>${done.length}</b><span>identical asks</span></div>
-      <div><b style="color:${uniq.size > 1 ? "var(--accent)" : "var(--muted)"}">${uniq.size}</b><span>different answers</span></div>
-      <div style="margin-left:auto;max-width:44ch"><p class="hint">${TM.executor === "literal"
-        ? (uniq.size === 1 ? "Five identical asks, one answer. The machine did not change its mind — so whatever went wrong is in the <b>instruction</b>, not the machine." : "Unexpected: the literal machine should never vary. That is a bug.")
-        : (uniq.size > 1 ? "Same words in, " + uniq.size + " different answers out. This machine does not have <i>one</i> answer to give you." : "All five came back identical this time — that happens on very constrained asks. Try the vague one.")}</p></div>
-    </div>` : ""}
-  </section>
+  </section>`;
 
-  ${TM.log.length ? `
-  <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
-    <span class="eyebrow">Facilitator log</span>
-    <div class="scroller"><table class="ftable">
-      <thead><tr><th>Instruction (verbatim)</th><th>Quadrant</th><th>Outcome (you judge)</th><th>Distinct</th><th>Revision type</th><th>Runs</th></tr></thead>
-      <tbody>${TM.log.map((l, i) => `<tr>
-        <td style="font-family:var(--mono);font-size:11.5px">${esc(l.text)}</td>
-        <td style="font-family:var(--mono);font-size:11px">${esc(l.quadrant)}</td>
-        <td><select data-tmout="${i}">${["—", "did what we wanted", "partly", "not what we wanted"].map((o) => `<option ${o === (l.outcome || "—") ? "selected" : ""}>${o}</option>`).join("")}</select></td>
-        <td style="font-family:var(--mono)">${l.distinct}</td>
-        <td><select data-tmrev="${i}">${["first","added_step","reordered","reworded_only","rewritten"].map((o) => `<option ${o === l.revisionType ? "selected" : ""}>${o}</option>`).join("")}</select></td>
-        <td style="font-family:var(--mono)">${l.runs}</td></tr>`).join("")}</tbody></table></div>
-    <p class="hint">The quadrant column is what makes decomposition and variance readable from the same table afterwards. Without it every attempt collapses into one undifferentiated list.</p>
-    <div class="row"><button class="btn ghost" id="backhub">Back to hub</button></div>
-  </section>` : ""}`;
+  const palette = `
+    <div>
+      <span class="eyebrow">the only three things it understands · tap to add a line</span>
+      <div class="chips" style="margin-top:6px">
+        ${["ROLL a big ball", "ROLL a medium ball", "ROLL a small ball",
+           "STACK the medium ball on the big ball", "STACK the small ball on the medium ball",
+           "ADD a face to the small ball", "ADD arms to the medium ball",
+           "ADD a hat to the small ball"].map((v) => `<button class="chip" data-w4wcmd="${esc(v)}">${esc(v)}</button>`).join("")}
+      </div>
+    </div>`;
 
-  const v = $("tmvague"), pr = $("tmprecise");
-  if (v) v.oninput = () => { TM.vague = v.value; const b = $("tmrun"); if (b) b.disabled = TM.running || !tmText(); };
-  if (pr) pr.oninput = () => {
-    TM.precise = pr.value;
-    // Do NOT re-render here: replacing the textarea mid-keystroke loses focus
-    // and the caret, which is why only one character at a time would land.
-    const on = !!pr.value.trim();
-    document.querySelectorAll('[data-wh2="precise"]').forEach((b) => b.disabled = !on);
-    document.querySelectorAll('[data-wh="precise"]').forEach((b) => b.disabled = !on);
-    const run = $("tmrun"); if (run) run.disabled = TM.running || !tmText();
-  };
-  document.querySelectorAll("[data-ex2]").forEach((b) => b.onclick = () => {
-    if (TM.running || TM.executor === b.dataset.ex2) return;
-    emit("quadrant_switched", { from: tmQuadrant(), to: b.dataset.ex2 + "-" + TM.which });
-    TM.executor = b.dataset.ex2; TM.runs = []; renderTM(); });
-  const seed = $("tmseed"); if (seed) seed.onclick = () => {
-    TM.precise = TM_TASK.preciseSeed; TM.which = "precise"; TM.runs = []; renderTM(); };
-  document.querySelectorAll("[data-wh2]").forEach((b) => b.onclick = () => {
-    if (TM.running || TM.which === b.dataset.wh2) return;
-    emit("quadrant_switched", { from: tmQuadrant(), to: TM.executor + "-" + b.dataset.wh2 });
-    TM.which = b.dataset.wh2; TM.runs = []; renderTM(); });
-  document.querySelectorAll("[data-ex]").forEach((b) => b.onclick = () => {
-    if (TM.running) return;
-    const to = b.dataset.ex + "-" + b.dataset.wh;
-    const needsText = b.dataset.wh === "precise" && !TM.precise.trim();
-    if (to !== tmQuadrant()) emit("quadrant_switched", { from: tmQuadrant(), to });
-    TM.executor = b.dataset.ex; TM.which = b.dataset.wh; TM.runs = []; renderTM();
-    if (needsText) { const f = $("tmprecise"); if (f) f.focus(); } });
-  $("tmrun").onclick = tmRun;
-  $("tmstop").onclick = () => { TM.running = false; if (TM.ctl) TM.ctl.abort(); renderTM(); };
-  $("tmspeed").onchange = (e) => { TM.speed = +e.target.value; };
-  document.querySelectorAll("[data-tmrev]").forEach((s) => s.onchange = () => TM.log[+s.dataset.tmrev].revisionType = s.value);
-  document.querySelectorAll("[data-tmout]").forEach((s) => s.onchange = () => {
-    TM.log[+s.dataset.tmout].outcome = s.value === "\u2014" ? "" : s.value;
-    emit("facilitator_judgement", { quadrant: TM.log[+s.dataset.tmout].quadrant, outcome: s.value }); });
+  const goal = `
+    <div class="goal">
+      <span class="eyebrow">what you are building</span>
+      <p><b>Three balls stacked biggest at the bottom, a face on the head, arms on the middle.</b></p>
+      <p class="hint">A hat, buttons or a scarf are yours to add or leave out — they are not checked.</p>
+    </div>`;
+
+  let body = "";
+  if (W4W.mode === "solo") {
+    const chk = w4wCheck(W4W.scene);
+    const last = W4W.attempts[W4W.attempts.length - 1];
+    body = `
+    <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
+      ${goal}
+      <div class="scene">
+        <div>${snowmanSVG(W4W.scene)}
+          ${!W4W.playing && W4W.stepLog.length ? `<div class="${chk.matched ? "shrink" : "banner"}" style="margin-top:10px">
+            ${chk.matched ? "<div><b>✓</b><span>it matches</span></div>" : `<span>✗</span><div>${esc(chk.miss.join("; "))}</div>`}</div>` : ""}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+          ${palette}
+          <span class="eyebrow">your steps · one per line, starting with a number</span>
+          <textarea id="w4wfield" rows="8" style="font-family:var(--mono);font-size:13.5px" ${W4W.playing ? "disabled" : ""}>${esc(W4W.draft)}</textarea>
+          <div class="row">
+            <button class="btn" id="w4wrun" ${W4W.playing ? "disabled" : ""}>${W4W.playing ? "Building…" : "Build it"}</button>
+            <button class="btn ghost sm" id="w4wstop" ${W4W.playing ? "" : "disabled"}>Stop</button>
+            <label class="hint" style="display:flex;gap:6px;align-items:center">speed
+              <select id="w4wspeed" style="background:var(--surface-2);border:1px solid var(--line);border-radius:2px;padding:2px 5px;font-family:var(--mono);font-size:11px">
+                <option value="1200"${W4W.speed == 1200 ? " selected" : ""}>slow</option>
+                <option value="700"${W4W.speed == 700 ? " selected" : ""}>steady</option>
+                <option value="250"${W4W.speed == 250 ? " selected" : ""}>quick</option></select></label>
+            ${last && !W4W.playing ? `<span class="hint">last try · ${last.matched ? "matched" : "missed"} · ${last.revisionType}</span>` : ""}
+          </div>
+          ${W4W.stepLog.length ? `<div><span class="eyebrow">what it did</span><div class="glog" style="margin-top:6px">${
+            W4W.stepLog.map((l) => `<div class="${l.i === W4W.cursor && W4W.playing ? "now" : ""}"><span class="i">${l.i + 1}</span><span class="${l.ok ? "" : "noop"}">${esc(l.msg)}</span></div>`).join("")}</div></div>` : ""}
+        </div>
+      </div>
+    </section>
+    ${W4W.attempts.length ? `<section class="card pad" style="display:flex;flex-direction:column;gap:9px">
+      <span class="eyebrow">your tries</span>
+      <div class="scroller"><table class="ftable"><thead><tr><th>#</th><th>Steps (verbatim)</th><th>Numbered</th><th>Revision</th><th>Result</th></tr></thead><tbody>
+        ${W4W.attempts.map((a, i) => `<tr><td style="font-family:var(--mono)">${i + 1}</td>
+          <td style="font-family:var(--mono);font-size:11.5px">${esc(a.text)}</td>
+          <td>${a.numbered ? "yes" : "no"}</td><td style="font-family:var(--mono);font-size:11px">${a.revisionType}</td>
+          <td style="color:${a.matched ? "var(--pass)" : "var(--fail)"}">${a.matched ? "matched" : esc(a.miss[0] || "missed")}</td></tr>`).join("")}
+      </tbody></table></div></section>` : ""}`;
+  } else {
+    const cell = (ex, wh) => {
+      const row = [...W4W.log].reverse().find((l) => l.quadrant === ex + "-" + wh);
+      const on = W4W.executor === ex && W4W.which === wh;
+      return `<button class="qcell${on ? " on" : ""}${row ? " ran" : ""}" data-w4wex="${ex}" data-w4wwh="${wh}">
+        <span class="qv">${row ? (row.distinct === 1 ? "the same answer" : row.distinct + " different answers") : "not run yet"}</span>
+        <span class="qs">${row ? row.matched + " of " + row.runs + " built the snowman" : "·"}</span></button>`;
+    };
+    const done = W4W.runs.filter((r) => r.out);
+    const uniq = new Set(done.map((r) => r.out.trim()));
+    body = `
+    <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
+      ${goal}
+      <div class="qgrid">
+        <div></div><div class="qhead">Vague instruction</div><div class="qhead">Precise instruction</div>
+        <div class="qside">Word4Word</div>${cell("literal", "vague")}${cell("literal", "precise")}
+        <div class="qside">Real model</div>${cell("model", "vague")}${cell("model", "precise")}
+      </div>
+    </section>
+    <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
+      <div class="row"><span class="eyebrow">machine</span>
+        ${["literal", "model"].map((e) => `<button class="btn sm ${W4W.executor === e ? "" : "ghost"}" data-w4wex2="${e}">${e === "literal" ? "Word4Word" : "Real model"}</button>`).join("")}
+        <span class="hint">${W4W.executor === "literal"
+          ? "Does exactly what the line says. Same words in, same snowman out, five times."
+          : liveOn() ? "A real model, caching off, so a repeat really is a repeat." : "No live model here, so this plays five <b>pre-recorded</b> real runs, labelled on each card."}</span>
+      </div>
+      <div class="tmins">
+        <div class="${W4W.which === "vague" ? "sel" : ""}">
+          <div class="spread"><span class="eyebrow">the vague one · the class writes this</span>
+            <button class="btn ghost sm" data-w4wwh2="vague">${W4W.which === "vague" ? "selected" : "use this"}</button></div>
+          <textarea id="w4wvague" rows="3" ${W4W.running ? "disabled" : ""}>${esc(W4W.vague)}</textarea>
+        </div>
+        <div class="${W4W.which === "precise" ? "sel" : ""}">
+          <div class="spread"><span class="eyebrow">the precise one · the class fixes it</span>
+            <div class="row" style="gap:6px"><button class="btn ghost sm" data-w4wwh2="precise">${W4W.which === "precise" ? "selected" : "use this"}</button>
+            ${W4W.precise.trim() ? "" : `<button class="btn ghost sm" id="w4wseed">fill in a suggestion</button>`}</div></div>
+          <textarea id="w4wprecise" rows="3" placeholder="Numbered steps, one per line…" ${W4W.running ? "disabled" : ""}>${esc(W4W.precise)}</textarea>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" id="w4wfive" ${W4W.running || !w4wText() ? "disabled" : ""}>${W4W.running ? "Running…" : "Run this " + W4W.N + " times"}</button>
+        <button class="btn ghost sm" id="w4wstopfive" ${W4W.running ? "" : "disabled"}>Stop</button>
+        <span class="hint">running <b>${esc(w4wQuadrant().replace("-", " · "))}</b></span>
+      </div>
+      ${W4W.runs.length ? `<div class="runs">${W4W.runs.map((r, i) => {
+        if (!r.out) return `<div class="run waiting"><div class="n"><span>run ${i + 1}</span><span>…</span></div><div class="txt">waiting</div></div>`;
+        return `<div class="run ${i === 0 || r.same ? "same" : "diff"}">
+          <div class="n"><span>run ${i + 1}${r.src === "recording" ? " · recording" : ""}</span><span>${i === 0 ? "first" : r.same ? "same as run 1" : "different"}</span></div>
+          ${snowmanSVG(r.scene)}
+          ${r.inferred.length ? `<div class="reading">filled in ${r.inferred.length}: ${esc(r.inferred.join("; "))}</div>` : ""}
+          <div class="txt" style="font-family:var(--mono);font-size:11.5px">${esc(r.out)}</div>
+          <div class="qs2" style="color:${r.chk.matched ? "var(--pass)" : "var(--fail)"}">${r.chk.matched ? "✓ built the snowman" : "✗ " + esc(r.chk.miss[0])}</div></div>`;
+      }).join("")}</div>` : ""}
+      ${done.length >= 2 ? `<div class="tally">
+        <div><b>${done.length}</b><span>identical asks</span></div>
+        <div><b style="color:${uniq.size > 1 ? "var(--accent)" : "var(--muted)"}">${uniq.size}</b><span>different answers</span></div>
+        <div><b style="color:${done.filter((r) => r.chk.matched).length === done.length ? "var(--pass)" : "var(--fail)"}">${done.filter((r) => r.chk.matched).length}</b><span>built the snowman</span></div>
+        <div style="margin-left:auto;max-width:40ch"><p class="hint">${W4W.executor === "literal"
+          ? "The same instruction gives the same snowman every time. So whatever is wrong is in the <b>instruction</b>."
+          : done.some((r) => r.inferred.length)
+            ? "This machine filled in steps nobody wrote. That is why it looks smarter — and why you cannot tell which parts were yours."
+            : "Nothing left to fill in, so it varies only in the parts that do not matter."}</p></div>
+      </div>` : ""}
+    </section>
+    ${W4W.log.length ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px">
+      <span class="eyebrow">Facilitator log</span>
+      <div class="scroller"><table class="ftable">
+        <thead><tr><th>Instruction (verbatim)</th><th>Quadrant</th><th>Built it</th><th>Distinct</th><th>Outcome (you judge)</th></tr></thead>
+        <tbody>${W4W.log.map((l, i) => `<tr><td style="font-family:var(--mono);font-size:11.5px">${esc(l.text)}</td>
+          <td style="font-family:var(--mono);font-size:11px">${esc(l.quadrant)}</td>
+          <td style="font-family:var(--mono)">${l.matched} / ${l.runs}</td>
+          <td style="font-family:var(--mono)">${l.distinct}</td>
+          <td><select data-w4wout="${i}">${["—", "did what we wanted", "partly", "not what we wanted"].map((o) => `<option ${o === (l.outcome || "—") ? "selected" : ""}>${o}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div>
+      <p class="hint">The quadrant column is what makes decomposition and variance readable from one table afterwards. <b>Built it</b> is the checker; <b>Outcome</b> is yours.</p>
+    </section>` : ""}`;
+  }
+
+  $("stage").innerHTML = head + body + `<section class="card pad"><div class="row"><button class="btn ghost" id="backhub">Back to hub</button></div></section>`;
+  wireW4W();
+}
+
+function wireW4W() {
+  document.querySelectorAll("[data-w4wmode]").forEach((b) => b.onclick = () => {
+    clearTimeout(W4W.timer); W4W.playing = false; W4W.running = false;
+    W4W.mode = b.dataset.w4wmode;
+    if (W4W.mode === "solo") phaseStart("w4w-solo", "na", ["verbPalette", "targetShown", "stepByStep"]);
+    else { emit("quadrant_switched", { participantCode: null, from: "solo", to: w4wQuadrant() });
+      phaseStart("w4w-class", "na", ["projector"]); }
+    renderW4W(); });
+  const f = $("w4wfield"); if (f) f.oninput = () => W4W.draft = f.value;
+  document.querySelectorAll("[data-w4wcmd]").forEach((b) => b.onclick = () => {
+    const fl = $("w4wfield"); if (!fl) return;
+    const lines = fl.value.split("\n").filter((l) => l.trim());
+    lines.push((lines.length + 1) + ". " + b.dataset.w4wcmd);
+    fl.value = lines.join("\n"); W4W.draft = fl.value; fl.focus(); fl.scrollTop = fl.scrollHeight; });
+  const run = $("w4wrun"); if (run) run.onclick = w4wPlay;
+  const stop = $("w4wstop"); if (stop) stop.onclick = () => { clearTimeout(W4W.timer); W4W.playing = false; renderW4W(); };
+  const sp = $("w4wspeed"); if (sp) sp.onchange = (e) => W4W.speed = +e.target.value;
+
+  const v = $("w4wvague"); if (v) v.oninput = () => { W4W.vague = v.value; const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText(); };
+  const pr = $("w4wprecise"); if (pr) pr.oninput = () => {
+    W4W.precise = pr.value;
+    document.querySelectorAll('[data-w4wwh2="precise"]').forEach((b) => b.disabled = false);
+    const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText(); };
+  const seed = $("w4wseed"); if (seed) seed.onclick = () => { W4W.precise = W4W_TASK.preciseSeed; W4W.which = "precise"; W4W.runs = []; renderW4W(); };
+  document.querySelectorAll("[data-w4wex2]").forEach((b) => b.onclick = () => {
+    if (W4W.running || W4W.executor === b.dataset.w4wex2) return;
+    emit("quadrant_switched", { participantCode: null, from: w4wQuadrant(), to: b.dataset.w4wex2 + "-" + W4W.which });
+    W4W.executor = b.dataset.w4wex2; W4W.runs = []; renderW4W(); });
+  document.querySelectorAll("[data-w4wwh2]").forEach((b) => b.onclick = () => {
+    if (W4W.running || W4W.which === b.dataset.w4wwh2) return;
+    emit("quadrant_switched", { participantCode: null, from: w4wQuadrant(), to: W4W.executor + "-" + b.dataset.w4wwh2 });
+    W4W.which = b.dataset.w4wwh2; W4W.runs = []; renderW4W(); });
+  document.querySelectorAll("[data-w4wex]").forEach((b) => b.onclick = () => {
+    if (W4W.running) return;
+    W4W.executor = b.dataset.w4wex; W4W.which = b.dataset.w4wwh; W4W.runs = []; renderW4W();
+    if (W4W.which === "precise" && !W4W.precise.trim()) { const fl = $("w4wprecise"); if (fl) fl.focus(); } });
+  const five = $("w4wfive"); if (five) five.onclick = w4wRunFive;
+  const stop5 = $("w4wstopfive"); if (stop5) stop5.onclick = () => { W4W.running = false; if (W4W.ctl) W4W.ctl.abort(); renderW4W(); };
+  document.querySelectorAll("[data-w4wout]").forEach((s2) => s2.onchange = () => {
+    W4W.log[+s2.dataset.w4wout].outcome = s2.value === "—" ? "" : s2.value;
+    emit("facilitator_judgement", { participantCode: null, quadrant: W4W.log[+s2.dataset.w4wout].quadrant, outcome: s2.value }); });
   const bh = $("backhub"); if (bh) bh.onclick = () => go("hub");
 }
 
@@ -1274,7 +1397,7 @@ function renderTM() {
 const TOOLS = [
   { id: "ftr", name: "Find the Rule", day: 3, con: "hypothesis testing", built: true, blurb: "Build questions from pills, find the one hidden rule the partner is following, then commit and test it." },
   { id: "pg", name: "Prompt Golf", day: 3, con: "abstraction · debugging", built: true, blurb: "Hit the target in as few words as possible. Opens by fixing someone else's broken prompt." },
-  { id: "tm", name: "Two Machines", day: 3, con: "decomposition · stochastic reasoning", built: true, tag: "projector", blurb: "One instruction, five runs, two machines. One never changes its mind; the other never stops." },
+  { id: "w4w", name: "Word4Word", day: 2, con: "decomposition · pseudocode", built: true, tag: "day 2", blurb: "Write the steps to build a snowman. It does word for word what you wrote — no more, and nothing you left out." },
 ];
 function renderHub() {
   $("stage").innerHTML = `
@@ -1327,10 +1450,10 @@ function renderCode() {
 
 /* ============================ routing + chrome ============================ */
 function go(screen) {
-  TM.running = false;
+  W4W.running = false; W4W.playing = false; clearTimeout(W4W.timer);
   if (S.screen !== "hub" && screen !== S.screen) emit("session_end", { reason: "navigated_away" });
   S.screen = screen;
-  S.tool = { hub: "hub", code: "hub", ftr: "find-the-rule", pg: "prompt-golf", tm: "two-machines" }[screen] || "hub";
+  S.tool = { hub: "hub", code: "hub", ftr: "find-the-rule", pg: "prompt-golf", w4w: "word4word" }[screen] || "hub";
   window.scrollTo({ top: 0, behavior: "instant" });
   if (screen === "hub") renderHub();
   else if (screen === "code") renderCode();
@@ -1339,7 +1462,13 @@ function go(screen) {
     phaseStart("pg-high", "high", ["priorPromptsVisible", "wordCountLive", "targetChecklist"]);
     emit("task_start", { taskId: "pg-c1", round: 0 }); renderPG(); }
   // Whole-class: no participant code on this tool's rows, by design.
-  else if (screen === "tm") { S.support = "na"; emit("session_start", { tool: "two-machines", day: S.day, deviceId: S.deviceId, wholeClass: true }); renderTM(); }
+  else if (screen === "w4w") {
+    S.support = "na";
+    emit("session_start", { tool: "word4word", day: S.day, deviceId: S.deviceId });
+    // Hands-on by default and attributed; the projector cells drop the code.
+    phaseStart("w4w-solo", "na", ["verbPalette", "targetShown", "stepByStep"]);
+    emit("task_start", { taskId: "w4w-solo", round: 1 });
+    renderW4W(); }
 }
 $("daypick").onchange = (e) => { S.day = +e.target.value; save(); if (S.screen === "hub") renderHub(); };
 $("hubbtn").onclick = () => go("hub");
