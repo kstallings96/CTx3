@@ -1487,8 +1487,9 @@ function renderCode() {
       </div>
       <p class="hint" id="codemsg">No O or I, no 0, 1 or 5 in the code — those get misread on a card.</p>
       <div class="row"><button class="btn" id="codego">Start</button></div>
-      <hr class="hr">
-      <div><span class="eyebrow" style="display:block;margin-bottom:6px">Demo roster</span><div class="roster">${ROSTER.slice(0, 5).map((c) => `<b>${c}</b>`).join("")}</div></div>
+      ${hasBackend ? "" : `<hr class="hr">
+      <div><span class="eyebrow" style="display:block;margin-bottom:6px">Demo roster — try any of these</span>
+        <div class="roster">${ROSTER.slice(0, 5).map((c) => `<b>${c}</b>`).join("")}</div></div>`}
       <p class="note">Your name is only here so a teacher can match this device to your paper packet. It is stored once, with your code, and appears nowhere in what you do afterwards.</p>
     </div>
   </section>`;
