@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "rescore": "node scripts/rescore.mjs"
+    "rescore": "node scripts/rescore.mjs",
+    "demo": "npm run build && node scripts/bundle-demo.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4"
