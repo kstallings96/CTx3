@@ -1,6 +1,6 @@
 import { log, flushNow, bufferedCount, exportJSON, clearBuffer, startSession, hasBackend } from "./lib/events.js";
 import { askModel, modelAvailable } from "./lib/model.js";
-import { ROSTER } from "./roster.js";
+import { ROSTER, GRADE } from "./roster.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
 import { sha256hex } from "./lib/sha256.js";
 
@@ -1514,7 +1514,7 @@ function renderCode() {
     // Identifying fields go to the sessions row and nowhere else. They are
     // passed here as arguments rather than held in the event state, so there
     // is no path by which they reach an event payload.
-    startSession(v, S.deviceId, S.day, { first_name: first, last_initial: initial });
+    startSession(v, S.deviceId, S.day, { first_name: first, last_initial: initial, grade: GRADE });
     emit("session_start", { participantCode: v, tool: "hub", day: S.day, deviceId: S.deviceId, recorded: false });
     // Sign in, then password, then activity.
     S.gateFor = S.pinned;
@@ -1688,7 +1688,10 @@ function start(snap) {
   // The name is deliberately not persisted to localStorage, so a resumed
   // device re-registers with the code alone and the sessions row it already
   // wrote keeps the name from the first sign-in.
-  if (ROSTER.includes(S.code)) startSession(S.code, S.deviceId, S.day);
+  // A resumed device re-registers. The name is not persisted, so this row is
+  // rejected as a duplicate of the one the first sign-in wrote -- which is the
+  // point: that row still has the name.
+  if (ROSTER.includes(S.code)) startSession(S.code, S.deviceId, S.day, null, { resuming: true });
   renderRail();
   // A pinned URL beats the restored screen: a device reloaded mid-period must
   // come back to the tool the station is for, not to wherever it happened to

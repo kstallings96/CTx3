@@ -31,6 +31,11 @@
 -- Tables. These run on a fresh project; on a project that already has
 -- RowdyRoboVac's tables they are skipped and the ALTERs below do the work.
 -- ---------------------------------------------------------------------
+-- NOT NULL on this table, inherited from RowdyRoboVac and satisfied rather
+-- than relaxed by CTx3: id, first_name, last_initial, grade. Those
+-- constraints are load-bearing for RowdyRoboVac's data and dropping them to
+-- make a new instrument fit would be the wrong trade. CTx3 sends a derived
+-- uuid, the name from sign-in, and a grade constant (src/roster.js).
 create table if not exists sessions (
   id uuid primary key default gen_random_uuid(),
   instrument text not null default 'rowdyrobo',   -- 'ctx3' | 'rowdyrobo' | 'mosaic' | 'manifest'
@@ -59,7 +64,10 @@ create table if not exists events (
   id bigserial primary key,
   instrument text not null default 'rowdyrobo',
   tool text,                           -- the activity inside the instrument
-  session_id uuid,                     -- RowdyRoboVac's key: sessions.id
+  -- NOT NULL with a foreign key to sessions.id on the live database. Both
+  -- instruments supply it; the client queue does not flush until the session
+  -- row exists, so nothing can be written that would violate the key.
+  session_id uuid,
   participant_code text,               -- CTx3's key; null on whole-class rows, by design
   device_id text,
   seq int not null,
@@ -114,11 +122,18 @@ update events   set instrument = 'rowdyrobo' where instrument is null;
 -- student of the day would silently fail to start.
 -- ---------------------------------------------------------------------
 
--- CTx3: a session is one code on one device. RowdyRoboVac's session rows are
--- excluded and are already unique by their uuid primary key.
-create unique index if not exists sessions_dedup_code_idx on sessions
-  (instrument, participant_code, coalesce(device_id, ''))
-  where participant_code is not null;
+-- An earlier version of this file created one. It is harmful now, for the
+-- reason below, and re-running this file removes it.
+drop index if exists sessions_dedup_code_idx;
+
+-- Sessions need no extra index. `sessions.id` is the dedup key for BOTH
+-- instruments: RowdyRoboVac generates one per run, and CTx3 derives one from
+-- (instrument, participant code, device, day) so the same student on the same
+-- device on the same day always addresses the same row. A separate unique
+-- index on (code, device) would have been actively harmful -- it would have
+-- rejected a CTx3 row whose derived id was new but whose code and device were
+-- not, and every event pointing at that id would then have failed the
+-- foreign key and been lost.
 
 -- CTx3: one seq per code per device.
 create unique index if not exists events_dedup_code_idx on events

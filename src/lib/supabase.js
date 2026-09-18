@@ -57,9 +57,17 @@ function scrub(payload) {
   return clean;
 }
 
+/* The session row's uuid, set once startSession lands. events.session_id is
+   NOT NULL with a foreign key to it, so nothing can be written before then —
+   which is already true, because the queue does not flush until the session
+   is ready. */
+let sessionId = null;
+export function setSessionId(id) { sessionId = id; }
+
 export function eventRows(events) {
   return events.map((e) => ({
     instrument: INSTRUMENT,
+    session_id: sessionId,
     tool: e.tool ?? null,
     participant_code: e.payload?.participantCode || null,
     device_id: e.deviceId ?? null,
@@ -104,7 +112,6 @@ export async function insertEvents(events) {
 /** Fire-and-forget flush for page unload, where an await cannot finish. */
 export function beaconEvents(events) {
   if (!url || !anonKey || events.length === 0) return false;
-  if (typeof navigator.sendBeacon !== "function") return false;
   // `fetch` with keepalive, NOT sendBeacon.
   //
   // sendBeacon cannot set headers, so the key had to go in the query string,

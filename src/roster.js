@@ -13,3 +13,14 @@ export const ROSTER = [
   "KTQ47", "BXM82", "RHD36", "VNJ94", "TCW28", "GPL73", "FZB69", "MDR42",
   "JHN63", "PWR29", "XCB74", "DTM38", "VQF62", "HKZ93",
 ];
+
+/**
+ * The grade these participants are in.
+ *
+ * `sessions.grade` is NOT NULL in the shared study database — RowdyRoboVac
+ * collects it per student and the column predates CTx3. A single-grade pilot
+ * does not need to ask fourteen 8th graders what grade they are in, so it is
+ * a constant here. If a cohort ever spans grades this becomes a sign-in field
+ * rather than a constant.
+ */
+export const GRADE = "8";
