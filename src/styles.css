@@ -10,6 +10,7 @@
   --accent:#0C7480; --accent-ink:#07555E; --accent-soft:#D7EDEF;
   --amber:#9A6210; --amber-soft:#FAEFDB;
   --violet:#5B4FC4; --violet-soft:#E6E3FA;
+  --leaf:#2E8B57; --leaf-soft:#DFF0E4; --leaf-ink:#1F6B41; --bark:#6E7F6A;
   --pass:#146B52; --pass-soft:#D9EFE6;
   --fail:#A8392B; --fail-soft:#FAE3DF;
   --grid:rgba(12,116,128,.07);
@@ -26,6 +27,8 @@
     --accent:#58D2D6; --accent-ink:#8FE6E8; --accent-soft:#0C2B31;
     --amber:#E8A63F; --amber-soft:#33250D;
     --violet:#9B8CFF; --violet-soft:#1D1A3D;
+  --leaf:#5FCF8E; --leaf-soft:#0F2A1D; --leaf-ink:#8FE3B2; --bark:#7C9180;
+    --leaf:#5FCF8E; --leaf-soft:#0F2A1D; --leaf-ink:#8FE3B2; --bark:#7C9180;
     --pass:#4FD69C; --pass-soft:#0B2B20;
     --fail:#F2705C; --fail-soft:#331612;
     --grid:rgba(88,210,214,.055);
@@ -142,12 +145,6 @@ textarea:focus,input[type=text]:focus{border-color:var(--accent);box-shadow:var(
 .steps span.done{border-color:var(--pass);color:var(--pass);background:var(--pass-soft)}
 
 /* ── transcript ── */
-.chat{display:flex;flex-direction:column;gap:9px;max-height:330px;overflow-y:auto;padding:4px 2px}
-.msg{max-width:78%;padding:9px 13px;border-radius:3px;font-size:14px;line-height:1.5}
-.msg.you{align-self:flex-end;background:var(--accent-soft);color:var(--accent-ink);border:1px solid color-mix(in srgb,var(--accent) 28%,transparent)}
-.msg.bot{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--violet)}
-.msg.bot.refuse{background:var(--amber-soft);border-left-color:var(--amber)}
-.msg .who{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px}
 .slots{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:15px;line-height:2}
 .slot{display:inline-flex;gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:3px}
 .slot button{border:0;background:transparent;border-radius:2px;padding:4px 9px;font-size:13.5px;color:var(--muted)}
@@ -419,3 +416,93 @@ input[type=password]:focus {
   box-shadow: inset 0 1px 3px rgb(0 0 0 / 22%), 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .primary::placeholder { color: var(--accent-ink); opacity: .55; }
+
+/* ==================================================================
+   BIT, AND A CHAT THAT LOOKS LIKE A CHAT
+
+   The conversation used to be three flat rectangles in a column, which
+   told a student nothing about who was speaking or where their turn went.
+   It is now a chat: a named partner with a face at the top, turns on
+   alternating sides with tails, and a small BIT beside every reply.
+
+   BIT is Mosaic's helper, reused deliberately. A student who met it on
+   Monday already knows what it is for, and one character across the week
+   reads as one study rather than four unrelated apps.
+
+   COLOUR CARRIES MEANING. Green is the machine talking; teal is your turn
+   to act. That split is why the palette gained a green rather than being
+   re-themed into one — a student can tell a reply from a control without
+   reading either.
+   ================================================================== */
+
+.bot { flex: none; display: block; }
+.bot-shell { fill: var(--surface-3); stroke: var(--line-2); stroke-width: 1.2; }
+.bot-eye { fill: var(--ink); }
+.bot-core { fill: var(--leaf); transition: fill .3s; }
+.bot-idle .bot-core { animation: bot-breathe 3.4s ease-in-out infinite; }
+.bot-thinking .bot-core { fill: var(--accent); animation: bot-breathe .9s ease-in-out infinite; }
+.bot-pleased .bot-core { fill: var(--pass); }
+.bot-arm { transform-origin: 50% 20%; }
+.bot-thinking .bot-arm-r { animation: bot-wave .9s ease-in-out infinite; }
+@keyframes bot-breathe { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
+@keyframes bot-wave { 0%, 100% { transform: rotate(0) } 50% { transform: rotate(-12deg) } }
+
+.chatcard { display: flex; flex-direction: column; gap: 12px; }
+
+.chathead {
+  display: flex; align-items: center; gap: 12px;
+  padding-bottom: 11px; border-bottom: 1px solid var(--line);
+}
+.chatwho { display: flex; flex-direction: column; line-height: 1.25; margin-right: auto; }
+.chatwho b { font-family: var(--display); font-size: 17px; letter-spacing: .04em; }
+.chatwho span { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--leaf-ink); }
+.probecount { font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 19px; font-weight: 600; color: var(--muted); }
+.probecount i { font-style: normal; font-size: 12px; opacity: .65; }
+
+/* Turns, with a side and a tail, so who said what needs no label. */
+.chat { display: flex; flex-direction: column; gap: 12px; max-height: 340px;
+  overflow-y: auto; padding: 4px 2px; }
+.turn { display: flex; align-items: flex-end; gap: 8px; }
+.turn.you { justify-content: flex-end; }
+.turn .bubble { position: relative; max-width: 76%; padding: 10px 14px;
+  font-size: 14.5px; line-height: 1.5; border-radius: 14px; }
+
+.turn.bot .bubble {
+  background: var(--leaf-soft); color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--leaf) 42%, transparent);
+  border-bottom-left-radius: 4px;
+}
+.turn.you .bubble {
+  background: var(--accent-soft); color: var(--accent-ink);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  border-bottom-right-radius: 4px;
+}
+.turn.bot.refuse .bubble {
+  background: var(--amber-soft);
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+}
+.tinybot { flex: none; opacity: .9; margin-bottom: -2px; }
+.turn.you + .turn.bot { margin-top: 2px; }
+
+/* A leaf-green note, for the thing the partner wants you to notice. */
+.banner.leafy { border-left-color: var(--leaf); background: var(--leaf-soft); }
+.banner.leafy > span { filter: grayscale(.2); }
+
+.pip.used { background: var(--leaf); border-color: var(--leaf); box-shadow: none; }
+
+/* Word4Word gets the same treatment, because it is the same idea: a machine
+   that answers, and a person who acts. The machine's voice is green. */
+.glog > div { border-left-color: var(--leaf); }
+.glog > div.now { border-left-color: var(--accent); background: var(--accent-soft); }
+.glog .noop { color: var(--muted); font-style: italic; }
+.glog > div:has(.noop) { border-left-color: var(--line-2); }
+
+/* The step-by-step build reads as the machine talking, so it takes the
+   partner colour rather than the action colour. */
+.how { border-left: 2px solid var(--leaf); }
+.scene .mon { background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; }
+
+/* The literal column in the four cells is the same machine as the step log. */
+.run.same { border-color: color-mix(in srgb, var(--leaf) 40%, var(--line)); }

@@ -311,13 +311,37 @@ function renderFTR() {
     ${FTR.revealed ? `<div class="reveal">The rule is: <b>${r.label}</b>.</div>` : ""}` : ""}
   </section>`;
 
+  // BIT, the same small robot Mosaic uses. Reusing the character across the
+  // week is worth more than a new drawing: a student who met it on Monday
+  // already knows what it is for, and one helper across four tools reads as
+  // one study rather than four unrelated apps.
+  //
+  // The mood shows in the core and nothing else, so the partner's state is
+  // legible without spending a word on it.
+  const bit = (mood, w) => `
+    <svg class="bot bot-${mood}" viewBox="0 0 62 74" width="${w}" height="${Math.round(w * 74 / 62)}" aria-hidden="true" focusable="false">
+      <rect class="bot-shell" x="9" y="30" width="44" height="38" rx="17"/>
+      <rect class="bot-shell bot-arm bot-arm-l" x="1.5" y="36" width="10" height="24" rx="5"/>
+      <rect class="bot-shell bot-arm bot-arm-r" x="50.5" y="36" width="10" height="24" rx="5"/>
+      <rect class="bot-shell" x="13" y="6" width="36" height="28" rx="14"/>
+      <circle class="bot-eye" cx="24" cy="20" r="3.1"/>
+      <circle class="bot-eye" cx="38" cy="20" r="3.1"/>
+      <circle class="bot-core" cx="31" cy="49" r="7"/>
+    </svg>`;
+
+  const mood = FTR.phase === "close" ? "pleased" : FTR.probes.length ? "idle" : "thinking";
   const chat = `
-  <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-    <div class="banner" style="border-left-color:var(--accent);background:var(--accent-soft)"><span>👀</span><div>${r.look}</div></div>
+  <section class="card pad chatcard">
+    <div class="chathead">
+      ${bit(mood, 46)}
+      <div class="chatwho"><b>BIT</b><span>${FTR.probes.length ? "following one hidden rule" : "waiting for your first question"}</span></div>
+      <span class="probecount">${used}<i>/12</i></span>
+    </div>
+    <div class="banner leafy"><span>&#128065;</span><div>${r.look}</div></div>
     <div class="chat" id="chat">${FTR.probes.length ? FTR.probes.map((x) => `
-      <div class="msg you"><span class="who">you</span>${esc(x.text)}</div>
-      <div class="msg bot${x.refuse ? " refuse" : ""}"><span class="who">partner</span>${esc(x.reply)}</div>`).join("")
-      : `<div class="msg bot"><span class="who">partner</span>Ask me anything. I have opinions.</div>`}</div>
+      <div class="turn you"><div class="bubble">${esc(x.text)}</div></div>
+      <div class="turn bot${x.refuse ? " refuse" : ""}"><span class="tinybot">${bit("idle", 26)}</span><div class="bubble">${esc(x.reply)}</div></div>`).join("")
+      : `<div class="turn bot"><span class="tinybot">${bit("thinking", 26)}</span><div class="bubble">Ask me anything. I have opinions.</div></div>`}</div>
     <div class="probemeter"><div class="pips">${Array.from({ length: 12 }, (_, i) => `<span class="pip${i < used ? " used" : ""}"></span>`).join("")}</div><span>${used} of 12 questions used</span></div>
   </section>`;
 
@@ -947,6 +971,22 @@ function renderW4W() {
   // vocabulary was supposed to be the work. They type what they mean and the
   // machine does what they typed.
 
+  const w4wBit = (mood) => `
+    <svg class="bot bot-${mood}" viewBox="0 0 62 74" width="40" height="48" aria-hidden="true" focusable="false">
+      <rect class="bot-shell" x="9" y="30" width="44" height="38" rx="17"/>
+      <rect class="bot-shell bot-arm bot-arm-l" x="1.5" y="36" width="10" height="24" rx="5"/>
+      <rect class="bot-shell bot-arm bot-arm-r" x="50.5" y="36" width="10" height="24" rx="5"/>
+      <rect class="bot-shell" x="13" y="6" width="36" height="28" rx="14"/>
+      <circle class="bot-eye" cx="24" cy="20" r="3.1"/>
+      <circle class="bot-eye" cx="38" cy="20" r="3.1"/>
+      <circle class="bot-core" cx="31" cy="49" r="7"/>
+    </svg>`;
+  const machineHead = `
+    <div class="chathead">
+      ${w4wBit(W4W.playing ? "thinking" : W4W.stepLog.length ? "pleased" : "idle")}
+      <div class="chatwho"><b>Word4Word</b><span>${W4W.playing ? "building\u2026" : "does exactly what you wrote"}</span></div>
+    </div>`;
+
   const goal = `
     <div class="goal">
       <span class="eyebrow">what you are building</span>
@@ -963,7 +1003,8 @@ function renderW4W() {
     const chk = w4wCheck(W4W.scene);
     const last = W4W.attempts[W4W.attempts.length - 1];
     body = `
-    <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
+    <section class="card pad yours" style="display:flex;flex-direction:column;gap:14px">
+      ${machineHead}
       ${goal}
       <div class="scene">
         <div>${sceneSVG(W4W.scene)}
@@ -989,7 +1030,7 @@ function renderW4W() {
                 <option value="250"${W4W.speed == 250 ? " selected" : ""}>quick</option></select></label>
             ${last && !W4W.playing ? `<span class="hint">last try · ${(last.placed || []).length} part${(last.placed || []).length === 1 ? "" : "s"} · ${esc(last.revisionType)}</span>` : ""}
           </div>
-          ${W4W.stepLog.length ? `<div><span class="eyebrow">what it did</span><div class="glog" style="margin-top:6px">${
+          ${W4W.stepLog.length ? `<div><span class="eyebrow">what it did, line by line</span><div class="glog" style="margin-top:6px">${
             W4W.stepLog.map((l) => `<div class="${l.i === W4W.cursor && W4W.playing ? "now" : ""}"><span class="i">${l.i + 1}</span><span class="${l.ok ? "" : "noop"}">${esc(l.msg)}</span></div>`).join("")}</div></div>` : ""}
         </div>
       </div>
