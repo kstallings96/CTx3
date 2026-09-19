@@ -3,7 +3,7 @@ import { askModel, modelAvailable, modelReason, modelName } from "./lib/model.js
 import { pseudonym, GRADE } from "./roster.js";
 import { hash } from "./lib/hash.js";
 import { RULES, RULE_ORDER, FTR_SEQUENCE, PILLS, PICKS, HELD_OUT, COLOURS,
-         askText, comboKey, cap, matchClaim, inferPills, knowsTopic, answerFor } from "./rules.js";
+         askText, comboKey, cap, matchClaim, lowPool, answerFor } from "./rules.js";
 import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision,
          buildPrompt, checkSafe, SAFE_MESSAGE, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
@@ -178,37 +178,31 @@ const rule = () => RULES[FTR.ruleId];
 /* The partner's reply for the rule currently running. */
 const ftrAnswer = (pills, contentFrom) => answerFor(FTR.ruleId, pills, contentFrom);
 
-function ftrReply(pills, askedText) {
+function ftrReply(pills) {
   if (FTR.ruleId === "one_behind") {
     const prev = FTR.probes.length ? FTR.probes[FTR.probes.length - 1].pills : null;
     return { text: ftrAnswer(pills, prev || pills), refuse: false, lagged: !!prev };
   }
-  const body = ftrAnswer(pills);
-  // A question about nothing it knows gets a redirect first, so the answer
-  // reads as a character with one interest rather than a broken machine. The
-  // redirect obeys the rule too -- check-rules.mjs enforces that -- so the
-  // puzzle is unchanged.
-  if (askedText != null && !knowsTopic(askedText)) {
-    const off = rule().offTopic;
-    if (off) return { text: off + " " + body, refuse: false, offTopic: true };
-  }
-  return { text: body, refuse: false };
+  // Every question now comes from the pill builder or the question pool, so
+  // the partner is never asked something it cannot answer and the off-topic
+  // redirect is unreachable from the UI. `offTopic` stays on each rule and
+  // stays checked, because it is one line of insurance against a future
+  // free-text affordance reintroducing the non-sequitur.
+  return { text: ftrAnswer(pills), refuse: false };
 }
-function ftrSendProbe(freeText) {
+function ftrSendProbe(chosen) {
   if (FTR.probes.length >= 12) return;
-  const low = !ftrHigh();
-  const pills = low ? null : Object.assign({}, FTR.pills);
+  // Both conditions send a real combo now, so slot values exist either way
+  // and "varied exactly one feature" is exact in both. It used to need
+  // hand-coding whenever the low phase was free text.
+  const pills = chosen ? Object.assign({}, chosen) : Object.assign({}, FTR.pills);
   const idx = FTR.probes.length, last = FTR.probes[idx - 1];
-  const text = low ? String(freeText || "").trim() : askText(pills);
+  const text = askText(pills);
   if (!text) return;
   let singleFeature = null;
   if (pills && FTR.prevPills) singleFeature = PILLS.filter((sl) => pills[sl.key] !== FTR.prevPills[sl.key]).length === 1;
-  const isRepeat = pills ? FTR.probes.some((x) => x.pills && comboKey(x.pills) === comboKey(pills))
-    : FTR.probes.some((x) => x.text.trim().toLowerCase() === text.trim().toLowerCase());
-  // In free text the partner answers whatever was asked, using the same rule
-  // engine: the pills are inferred loosely so the bot still has something to
-  // pick, but the RULE is what the student is hunting either way.
-  const reply = ftrReply(pills || inferPills(text), pills ? null : text);
+  const isRepeat = FTR.probes.some((x) => x.pills && comboKey(x.pills) === comboKey(pills));
+  const reply = ftrReply(pills);
   FTR.probes.push({ text, pills, reply: reply.text, refuse: reply.refuse, at: Date.now() });
   if (pills) FTR.prevPills = pills;
   const d = attemptDerived("ftr-" + FTR.ruleId, text);
@@ -218,7 +212,7 @@ function ftrSendProbe(freeText) {
   const disconfirming = probeCouldDisconfirm(text, pills);
   FTR.probes[idx].disconfirming = disconfirming;
   emit("probe_sent", { text, probeIndex: idx, pills: pills ? comboKey(pills) : null,
-    slotValues: pills ? { ...pills } : null, freeText: !pills,
+    slotValues: { ...pills }, freeText: false, fromPool: Boolean(chosen),
     msSincePrevious: last ? Date.now() - last.at : null, msSinceTaskStart: Date.now() - FTR.taskStart,
     ...(singleFeature === null ? {} : { singleFeatureVariation: singleFeature }),
     repeatOfEarlierProbe: isRepeat, disconfirmingProbe: disconfirming,
@@ -371,12 +365,24 @@ function renderFTR() {
     <div class="probemeter"><div class="pips">${Array.from({ length: 12 }, (_, i) => `<span class="pip${i < used ? " used" : ""}"></span>`).join("")}</div><span>${used} of 12 questions used</span></div>
   </section>`;
 
+  // LOW SUPPORT IS A JUMBLED LIST, NOT A TYPING BOX. A pilot student typed
+  // real questions at the partner and got canned non-sequiturs back, which
+  // is a partner that looks broken rather than a weaker scaffold \u2014 the
+  // condition would have measured frustration. Same forty-eight questions as
+  // the high condition; what is gone is the decomposition into pills, so
+  // finding two questions that differ in exactly one way is now the
+  // student's own work.
+  const pool = ftrHigh() ? null : lowPool(FTR.ruleId);
+  const askedKeys = new Set(FTR.probes.map((x) => x.pills && comboKey(x.pills)).filter(Boolean));
   const composer = FTR.phase !== "probe" ? "" : !ftrHigh() ? `
     <section class="card pad yours" style="display:flex;flex-direction:column;gap:10px">
-      <span class="eyebrow">Ask it anything \u00b7 your own words this time</span>
-      <textarea id="freeprobe" class="primary" rows="2" placeholder="Type a question and send it\u2026">${esc(FTR.freeText || "")}</textarea>
-      <div class="row"><button class="btn" id="sendprobe" ${used >= 12 ? "disabled" : ""}>Send it</button>
-        <span class="hint">No builder and no notes field this round. ${used} of 12 used.</span></div>
+      <span class="eyebrow">Pick a question to ask \u00b7 no builder this round</span>
+      <p class="hint">The same questions, jumbled up. Which two to compare is up to you.</p>
+      <div class="pool" id="pool">${pool.map((c) => {
+        const k = comboKey(c);
+        return `<button class="poolq${askedKeys.has(k) ? " asked" : ""}" data-pool="${esc(k)}" ${used >= 12 ? "disabled" : ""}>${esc(askText(c))}</button>`;
+      }).join("")}</div>
+      <span class="hint">${used} of 12 used.</span>
     </section>` : `
     <section class="card pad yours" style="display:flex;flex-direction:column;gap:12px">
       <span class="eyebrow">Build a question</span>
@@ -476,11 +482,12 @@ function wireFTR() {
     FTR.leg = i; ftrStart(leg.ruleId, leg.support);
   });
   document.querySelectorAll(".slot").forEach((sl) => sl.querySelectorAll("button").forEach((b) => b.onclick = () => { FTR.pills[sl.dataset.slot] = b.dataset.opt; renderFTR(); }));
-  const fp = $("freeprobe");
-  if (fp) { fp.oninput = () => FTR.freeText = fp.value;
-    fp.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("sendprobe").click(); } }; }
   const sp = $("sendprobe");
-  if (sp) sp.onclick = () => { if (ftrHigh()) ftrSendProbe(); else { const v = ($("freeprobe").value || "").trim(); if (!v) return; FTR.freeText = ""; ftrSendProbe(v); } };
+  if (sp) sp.onclick = () => ftrSendProbe();
+  document.querySelectorAll("[data-pool]").forEach((b) => b.onclick = () => {
+    const [adj, noun, len] = b.dataset.pool.split("|");
+    ftrSendProbe({ adj, noun, len });
+  });
   const sh = $("savehypo"); if (sh) sh.onclick = () => {
     const v = $("hypofield").value.trim(); if (!v || v === FTR.hypo) return;
     FTR.hypo = v; emit("hypothesis_noted", { text: v, afterProbeIndex: FTR.probes.length - 1, revisionIndex: FTR.hypoRev++ });

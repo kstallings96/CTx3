@@ -40,8 +40,34 @@ Instead: **two rules of the same tier**, run back to back.
 **High support:** slot palette for probe construction, hypothesis field
 visible. `scaffoldsActive: ["slotPalette","hypothesisField"]`.
 
-**Low support:** free text probes, no hypothesis field, a *different rule of
-the same tier*. `scaffoldsActive: []`.
+**Low support:** the same forty-eight questions as a **jumbled list**, no
+question builder, no hypothesis field, a *different rule of the same tier*.
+`scaffoldsActive: []`.
+
+### Why not a free-text box
+
+It was one, and a pilot student did the obvious thing: asked the partner
+real questions — *"how tall are you"* — and got a canned non-sequitur back.
+That is not a weaker scaffold, it is a partner that looks broken, and the
+condition would have measured frustration rather than unsupported
+performance.
+
+The scaffold that high support actually provides is **the decomposition**:
+three dimensions laid out as rows of pills, so varying exactly one thing is
+a single click. The low condition removes that and nothing else. Same
+question space, same answers, but the questions arrive whole and unsorted,
+and finding a minimal pair means reading the list and holding the comparison
+in your head. Only eleven of the forty-seven adjacent pairs in the shuffled
+list differ by one feature, so the list does not do the work for them.
+
+The order is seeded by the rule id alone, so every student in every section
+sees the identical list in the identical order.
+
+**This also fixed the measurement.** Steps 2 and 4 used to be exact under
+the palette and hand-coded in free text. Every probe now carries exact slot
+values in both conditions, so "varied exactly one feature" and "sent a
+disconfirming probe" are computable throughout and `stepScoringExact` is
+true everywhere.
 
 Rule difficulty held constant, support varied. High first, always.
 
@@ -53,9 +79,10 @@ Step sequence, emitted as `stepReached`:
 4. Designs a probe that would *disconfirm* the current hypothesis.
 5. Commits a rule that correctly predicts held-out cases.
 
-Step 4 is computable under the slot palette — a probe is disconfirming if its
-slot values are ones the stated hypothesis predicts should behave differently.
-In free text it needs hand-coding; flag those with `stepScoringExact: false`.
+Step 4 is computable from slot values — a probe is disconfirming if its slot
+values are ones the stated hypothesis predicts should behave differently.
+Both conditions carry exact slot values, so it needs no hand-coding in
+either and `stepScoringExact` is true throughout.
 
 Note that step 3 is unavailable in the low-support phase by construction,
 since the hypothesis field is gone. That is intended: the drop it produces is
@@ -64,22 +91,25 @@ part of what the range is measuring. Do not "fix" it by keeping the field.
 ## The probe builder — high support phase
 
 Detecting whether a free-text probe varies exactly one feature from the
-previous probe is not reliably automatable. So constrain the interface at
-Level 1 to make it exact by construction.
+previous one is not reliably automatable. Both conditions therefore choose
+from a fixed question space; what differs is whether the space is presented
+already decomposed.
 
-Level 1 probing uses a slot palette, not a text box. Something like:
+High support uses a slot palette:
 
 ```
 Ask it to [ describe | list | explain ] a [ dog | city | number | song ]
 in [ one word | one sentence | a paragraph ]
 ```
 
-Three slots, four options each. Changing exactly one slot is then a logged
-fact rather than an inference. Students can see the assembled sentence before
-sending.
+Three slots, four and four and three options. Changing exactly one slot is a
+logged fact rather than an inference, and the assembled sentence is visible
+before sending.
 
-Level 3 is free text. Accept that single-feature variation there will need
-hand-coding on a sample.
+Low support draws from the same 4 x 4 x 3 space, but as complete sentences
+in a scrolling list, shuffled, with no preview and no "you changed one
+thing" feedback. Questions already asked are marked and remain clickable — a
+repeat is data, not an error.
 
 ## The rules ladder
 
@@ -210,7 +240,7 @@ reply in forty breaks it, the student doing the task properly — reading
 closely, hunting a counterexample — is the one who gets it wrong.
 
 "Every" is four rules x forty-eight question combinations x three or four
-interchangeable frames, plus the held-out cases and the free-text path. No
+interchangeable frames, plus the held-out cases and the inferred-pill path. No
 hand-check covers that, and one did not: `short_words` shipped with frames
 containing "course", "every" and "wrong", and **twenty-five of fifty-eight
 replies broke the very rule they were meant to demonstrate**.

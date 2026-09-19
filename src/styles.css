@@ -613,3 +613,28 @@ input[type=password]:focus {
   border-color: var(--amber); border-style: solid;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber) 28%, transparent);
 }
+
+/* ------------------------------------------------------------------
+   THE LOW-SUPPORT QUESTION POOL
+
+   Deliberately a plain list. The high condition lays the three dimensions
+   out as rows of pills so varying one thing is a single click; here the
+   questions are whole, jumbled and identical in weight, and finding a
+   minimal pair means reading. That difference is the manipulation.
+   ------------------------------------------------------------------ */
+.pool {
+  display: flex; flex-direction: column; gap: 5px;
+  max-height: 290px; overflow-y: auto;
+  padding: 8px; border: 1px solid var(--line-2); border-radius: var(--r-ctl);
+  background: var(--field);
+}
+.poolq {
+  text-align: left; padding: 8px 11px; font-size: 13.5px; line-height: 1.35;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-ctl); color: var(--ink);
+}
+.poolq:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.poolq:disabled { opacity: .45; cursor: not-allowed; }
+/* Already asked: dimmed, but still clickable — a repeat is data, not an error. */
+.poolq.asked { color: var(--muted); background: var(--surface-2); border-style: dashed; }
+.poolq.asked::after { content: " · asked"; color: var(--muted); font-size: 11.5px; }
