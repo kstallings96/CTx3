@@ -427,7 +427,7 @@ function renderFTR() {
         <button class="btn ghost" id="backhub">Back to hub</button></div>
     </section>`;
   }
-  $("stage").innerHTML = head + chat + composer + hypo + toCommitLow + commit + close;
+  $("stage").innerHTML = head + composer + chat + hypo + toCommitLow + commit + close;
   const c = $("chat"); if (c) c.scrollTop = c.scrollHeight;
   wireFTR();
 }
