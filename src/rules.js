@@ -60,6 +60,7 @@ export const RULES = {
   no_e: { level: 1, name: "Level 1", tierWord: "lexical", label: "never uses the letter E",
     check: (t) => !/e/i.test(t), predicts: "the reply contains no letter E",
     judge: { must: [NEG, /\b(letter\s+)?e'?s?\b/i] },
+    offTopic: "I do only top picks.",
     look: "Read its answers very closely. The same thing is true about <b>every single one</b>.",
     hints: ["Ask about two totally different things and put the answers side by side. It is not about what they mean.",
             "It is about how the answers are spelled — which letters are allowed to show up.",
@@ -78,6 +79,7 @@ export const RULES = {
     check: (t) => (t.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi) || []).length === 1,
     predicts: "the reply contains exactly one number",
     judge: { must: [/\b(numbers?|digits?|numerals?)\b/i], not: [NEGNEAR("numbers?|digits?|numerals?")] },
+    offTopic: "I only do favourites.",
     look: "Its answers are about whatever you asked — but something else <b>keeps turning up</b>. Line a few up next to each other.",
     hints: ["Ask about things that have nothing to do with counting.",
             "Something shows up in every answer that you never asked for.",
@@ -135,6 +137,7 @@ export const RULES = {
     check: (t) => (t.match(/[a-z']+/gi) || []).every((w) => w.replace(/'/g, "").length <= 4),
     predicts: "every word is four letters or fewer",
     judge: { must: [/\b(four|4|short|small|tiny|brief|long|length)\b/i, /\b(letters?|words?|characters?)\b/i] },
+    offTopic: "I just rank top ones.",
     look: "Every answer feels oddly clipped, like it is being cut off. Look at the <b>words themselves</b>.",
     hints: ["Read one answer out loud. It sounds strange, but it is not about what it means.",
             "It is not how many words. It is something about each word on its own.",
@@ -158,6 +161,7 @@ export const RULES = {
   colour: { level: 2, name: "Level 2b", tierWord: "categorical", label: "always works a colour into its answer",
     check: (t) => has(t, COLOURS), predicts: "the reply names a colour",
     judge: { must: [/\bcolou?rs?\b/i], not: [NEGNEAR("colou?rs?")] },
+    offTopic: "I only do favourites.",
     look: "Its answers are about whatever you asked \u2014 but something else <b>keeps turning up</b>. Line a few up next to each other.",
     hints: ["Ask about two completely different things and read both answers to the end.",
             "Something turns up in the answers that you never asked about.",
@@ -240,6 +244,20 @@ export const comboKey = (p) => p.adj + "|" + p.noun + "|" + p.len;
  * repeat-probe analysis depends on — while making different questions look
  * different, so what stays constant across them is the rule and nothing else.
  */
+/**
+ * Did the question name anything the partner knows about?
+ *
+ * The partner can only have opinions about the four nouns on the pills. A
+ * student who asks "how tall are you" used to get "Chihuahua, and that is my
+ * red line." -- a non-sequitur that reads as the machine being broken rather
+ * than as a character with one interest. It now says so first, in a sentence
+ * that obeys the rule, and then answers the only kind of question it has.
+ */
+export function knowsTopic(text) {
+  const t = String(text || "").toLowerCase();
+  return PILLS[1].opts.some((o) => t.includes(o.split(" ").pop()));
+}
+
 export function inferPills(text) {
   const t = (text || "").toLowerCase();
   const h = hash(t);
@@ -260,4 +278,74 @@ export function answerFor(ruleId, pills, contentFrom) {
   const frames = r.say[pills.len];
   const f = frames[hash(comboKey(sourcePills) + "|" + pills.len + "|" + ruleId) % frames.length];
   return f(cap(pick));
+}
+
+/* ---- claims a student might make ---------------------------------------- */
+
+/**
+ * WHAT THE JUDGE IS FOR, restated after watching a student use it.
+ *
+ * The first version only ever asked "does this text describe the rule I am
+ * currently running?". Anything else came back *unscored, flagged for a
+ * human* — including "it always says a food", which is a perfectly clear,
+ * perfectly testable claim that simply happens to be wrong. A student who
+ * reasons their way to a wrong answer and is told the machine cannot read
+ * their handwriting learns nothing; a student who is told "you predicted a
+ * food, here are three replies, two of them are dogs" learns the actual
+ * lesson of the day.
+ *
+ * So the judge now matches against a list of CLAIMS rather than one rule.
+ * Each claim knows how a student phrases it and how to check whether it is
+ * true of a given reply. Committing runs the matched claim against the three
+ * held-out replies and reports honestly. `casesMatched` — the thing step 5
+ * scores — is true only when the claim actually holds for all three, so a
+ * confident wrong answer scores as a confident wrong answer.
+ *
+ * The four real rules come first so a correct answer always wins the match.
+ */
+const FOODS = ["food", "flavour", "flavor", "pizza", "topping", "ice cream", "cream",
+  "dough", "honey", "cheese", "pecan", "mint", "malt", "plum", "lime", "corn", "kale",
+  "beef", "ham", "basil", "onion", "cake", "bubblegum", "butter", "pineapple", "pepperoni"];
+const PEOPLE = ["curry", "jordan", "luka", "shaq", "kidd", "bird", "rose", "hill",
+  "jokic", "doncic", "wembanyama", "steph", "nikola", "victor"];
+
+export const CLAIMS = [
+  ...["no_e", "short_words", "one_number", "colour"].map((id) => ({
+    id, says: RULES[id].predicts, judge: RULES[id].judge, test: RULES[id].check,
+  })),
+  { id: "food", says: "the reply names a food",
+    judge: { must: [/\b(food|foods|eat|edible|snack|meal|dish|tasty|flavou?rs?)\b/i] },
+    test: (t) => has(t, FOODS) },
+  { id: "person", says: "the reply names a person",
+    judge: { must: [/\b(person|people|name|names|player|players|celebrity|famous|human)\b/i] },
+    test: (t) => has(t, PEOPLE) },
+  { id: "positive", says: "the reply is always positive about it",
+    judge: { must: [/\b(positive|nice|kind|happy|cheer\w*|friendly|agrees?|likes? everything|never mean)\b/i] },
+    test: (t) => /\b(love|great|best|good|solid|easy|gold|hands down|of course|duh)\b/i.test(t) },
+  { id: "short_reply", says: "the reply is only a few words long",
+    judge: { must: [/\b(short|brief|quick|few words|not many words|tiny answer)\b/i],
+             not: [/\b(letters?|each word|every word|four|4)\b/i] },
+    test: (t) => (String(t).trim().split(/\s+/).length <= 6) },
+  { id: "opinion", says: "the reply gives an opinion rather than a fact",
+    judge: { must: [/\b(opinion|opinions|favourite|favorite|prefers?|thinks?|feels?)\b/i] },
+    test: () => true },
+];
+
+/**
+ * Which claim is this student making? Null when nothing here can read it.
+ * Returns the claim plus the phrase to highlight, so the close screen can
+ * show them the part the judge acted on.
+ */
+export function matchClaim(text) {
+  const t = String(text || "");
+  if (!t.trim()) return null;
+  for (const c of CLAIMS) {
+    const j = c.judge;
+    if (!j) continue;
+    if (j.not && j.not.some((rx) => rx.test(t))) continue;
+    const hits = j.must.map((rx) => t.match(rx));
+    if (hits.some((h) => !h)) continue;
+    return { claim: c, matched: hits[hits.length - 1][0] };
+  }
+  return null;
 }

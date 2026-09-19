@@ -230,3 +230,49 @@ It also checks that no two rules in the set are satisfied by the same
 answers — the test that would have caught `no_the`, which was undiscoverable
 next to `no_e` because "the" contains an E.
 
+
+## What a first student test changed
+
+Three things, all found by watching one thirteen-year-old use it.
+
+### The judge tests the student's claim, not the rule
+
+It used to ask only "does this text describe the rule I am running?" and
+answer *unscored, flagged for a human* to anything else — including **"it
+always says a food"**, which is clear, testable, and simply wrong. A student
+who reasons their way to a wrong answer and is told the machine cannot read
+their handwriting learns nothing.
+
+`CLAIMS` in `src/rules.js` is a list of things a student might assert, each
+with how they phrase it and how to check it against a reply. Committing runs
+the matched claim against the three held-out replies and reports per case.
+"It always says a food" now comes back **1/3**, showing the two replies that
+were a dog and a basketball player. `casesMatched` — what step 5 scores — is
+true only when the claim holds all three times, so a confident wrong answer
+scores as one.
+
+### A question it cannot answer gets a redirect, not a non-sequitur
+
+Asked "how tall are you", the partner replied *"Chihuahua, and that is my red
+line."* It only has opinions about four nouns, and anything else fell through
+to a hashed pick — which reads as a broken machine rather than a character
+with one interest.
+
+Each rule now carries an `offTopic` opener, written to satisfy its own rule,
+prepended when the question names nothing it knows: *"I just rank top ones.
+Chow, easy."* `npm run check:rules` verifies the opener plus every possible
+reply still obeys the rule, because a careless word there breaks the puzzle
+exactly as a careless word in a frame does.
+
+### The rule box is not a chat box
+
+A student typed a reply to BIT into the rule field. Both boxes were the same
+shape, sat under the same conversation, and only a small label told them
+apart — and after three turns of chat, a box below a chat is a box you talk
+in.
+
+The notes and commit fields are now paper: warm fill, dashed edge, no blue.
+The label sits on the field and says **"BIT cannot see this"**, and the
+commit screen says plainly not to write back. Blue is for talking to
+something; paper is for writing for yourself.
+

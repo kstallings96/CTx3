@@ -23,8 +23,8 @@
  *     including the ones the interface's own starter chips invite.
  */
 import {
-  RULES, RULE_ORDER, FTR_SEQUENCE, PILLS, HELD_OUT, COLOURS,
-  askText, answerFor, judgeRule, inferPills,
+  RULES, RULE_ORDER, FTR_SEQUENCE, PILLS, HELD_OUT, CLAIMS,
+  askText, answerFor, matchClaim, inferPills,
 } from "../src/rules.js";
 
 let failures = 0;
@@ -98,11 +98,31 @@ for (const ruleId of RULE_ORDER) {
       `"…${worst}" — students will name this instead of the rule`);
   }
 
-  // 3. the judge reads what a student actually writes
-  for (const good of PHRASINGS[ruleId].yes)
-    if (!judgeRule(r, good)) fail(ruleId, "judge REFUSES a correct answer", JSON.stringify(good));
-  for (const bad of PHRASINGS[ruleId].no)
-    if (judgeRule(r, bad)) fail(ruleId, "judge ACCEPTS a wrong answer", JSON.stringify(bad));
+  // 3. the judge reads what a student actually writes, and reads it as the
+  //    RIGHT claim -- a correct answer must not be matched to some other
+  //    claim that happens to share a word with it.
+  for (const good of PHRASINGS[ruleId].yes) {
+    const hit = matchClaim(good);
+    if (!hit) fail(ruleId, "judge REFUSES a correct answer", JSON.stringify(good));
+    else if (hit.claim.id !== ruleId)
+      fail(ruleId, `a correct answer was read as "${hit.claim.id}"`, JSON.stringify(good));
+  }
+  for (const bad of PHRASINGS[ruleId].no) {
+    const hit = matchClaim(bad);
+    if (hit && hit.claim.id === ruleId) fail(ruleId, "judge ACCEPTS a wrong answer", JSON.stringify(bad));
+  }
+
+  // 4. the off-topic redirect obeys the rule too. It is prepended to a real
+  //    answer, so a careless word in it breaks the puzzle exactly as a
+  //    careless word in a frame does.
+  if (r.offTopic) {
+    const bad = replies.filter((x) => !r.check(r.offTopic + " " + x.text));
+    if (bad.length)
+      fail(ruleId, `the off-topic opener breaks the rule in ${bad.length} of ${replies.length} replies`,
+        JSON.stringify(r.offTopic + " " + bad[0].text));
+  } else {
+    fail(ruleId, "no off-topic opener", "a question it cannot answer would get a non-sequitur");
+  }
 
   const ok = broken.length === 0;
   console.log(`${ok ? "ok  " : "BAD "} ${ruleId.padEnd(13)} ${replies.length} replies · `
@@ -131,6 +151,34 @@ for (const a of RULE_ORDER) for (const b of RULE_ORDER) {
   if (both === COMBOS.length)
     fail("overlap", `every ${a} answer also satisfies ${b}`,
       "the two rules are not independently discoverable");
+}
+
+/* Every claim the judge can match must be testable and complete. A claim
+   whose test throws would take the close screen down mid-lesson. */
+for (const c of CLAIMS) {
+  try { c.test("Mint chip, obviously."); }
+  catch (e) { fail("claims", `claim "${c.id}" threw when tested`, String(e && e.message)); }
+  if (!c.says || !c.judge || !c.judge.must) fail("claims", `claim "${c.id}" is incomplete`, JSON.stringify(Object.keys(c)));
+}
+
+/* The four real rules have to come first, so a correct answer is never
+   stolen by a looser claim that happens to share a word with it. */
+if (CLAIMS.slice(0, 4).map((c) => c.id).join() !== RULE_ORDER.join())
+  fail("claims", "the four rules are not the first four claims",
+    CLAIMS.slice(0, 4).map((c) => c.id).join() + " vs " + RULE_ORDER.join());
+
+/* A wrong-but-testable guess has to come back WRONG rather than unreadable —
+   that is the whole reason claims exist. "It always says a food" is the
+   guess a real student made; against the colour rule it must be matched,
+   tested, and found not to hold. */
+{
+  const held = HELD_OUT.map((p) => answerFor("colour", p));
+  const hit = matchClaim("it always says a food");
+  if (!hit) fail("claims", "a clear wrong guess was unreadable", '"it always says a food"');
+  else if (hit.claim.test && held.every((t) => hit.claim.test(t)))
+    fail("claims", "a wrong guess tested as correct", `"food" held for all three colour replies: ${JSON.stringify(held)}`);
+  else console.log(`ok   wrong guesses   "it always says a food" -> read as "${hit.claim.id}", holds for `
+    + held.filter((t) => hit.claim.test(t)).length + "/3");
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nEvery rule holds across every question it can be asked.");

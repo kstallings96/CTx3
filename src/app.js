@@ -3,7 +3,7 @@ import { askModel, modelAvailable, modelReason, modelName } from "./lib/model.js
 import { pseudonym, GRADE } from "./roster.js";
 import { hash } from "./lib/hash.js";
 import { RULES, RULE_ORDER, FTR_SEQUENCE, PILLS, PICKS, HELD_OUT, COLOURS,
-         askText, comboKey, cap, judgeRule, inferPills, answerFor } from "./rules.js";
+         askText, comboKey, cap, matchClaim, inferPills, knowsTopic, answerFor } from "./rules.js";
 import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision,
          buildPrompt, checkSafe, SAFE_MESSAGE, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
@@ -173,17 +173,26 @@ function paintMode() {
 
 const FTR = { ruleId: "no_e", leg: 0, support: "high", freeText: "", phase: "probe", probes: [], pills: { adj: "best", noun: "ice cream flavour", len: "in a few words" },
   prevPills: null, hypo: "", hypoRev: 0, committed: "", taskStart: 0, asked: new Set(),
-  revealed: false, matched: null, hints: 0, cases: null, confident: false };
+  revealed: false, matched: null, hints: 0, cases: null, confident: false, claim: null, casesMatched: false };
 const rule = () => RULES[FTR.ruleId];
 /* The partner's reply for the rule currently running. */
 const ftrAnswer = (pills, contentFrom) => answerFor(FTR.ruleId, pills, contentFrom);
 
-function ftrReply(pills) {
+function ftrReply(pills, askedText) {
   if (FTR.ruleId === "one_behind") {
     const prev = FTR.probes.length ? FTR.probes[FTR.probes.length - 1].pills : null;
     return { text: ftrAnswer(pills, prev || pills), refuse: false, lagged: !!prev };
   }
-  return { text: ftrAnswer(pills), refuse: false };
+  const body = ftrAnswer(pills);
+  // A question about nothing it knows gets a redirect first, so the answer
+  // reads as a character with one interest rather than a broken machine. The
+  // redirect obeys the rule too -- check-rules.mjs enforces that -- so the
+  // puzzle is unchanged.
+  if (askedText != null && !knowsTopic(askedText)) {
+    const off = rule().offTopic;
+    if (off) return { text: off + " " + body, refuse: false, offTopic: true };
+  }
+  return { text: body, refuse: false };
 }
 function ftrSendProbe(freeText) {
   if (FTR.probes.length >= 12) return;
@@ -199,7 +208,7 @@ function ftrSendProbe(freeText) {
   // In free text the partner answers whatever was asked, using the same rule
   // engine: the pills are inferred loosely so the bot still has something to
   // pick, but the RULE is what the student is hunting either way.
-  const reply = ftrReply(pills || inferPills(text));
+  const reply = ftrReply(pills || inferPills(text), pills ? null : text);
   FTR.probes.push({ text, pills, reply: reply.text, refuse: reply.refuse, at: Date.now() });
   if (pills) FTR.prevPills = pills;
   const d = attemptDerived("ftr-" + FTR.ruleId, text);
@@ -233,19 +242,36 @@ function ftrCommit() {
   FTR.committed = text;
   emit("rule_committed", { text, ruleId: FTR.ruleId, probesUsed: FTR.probes.length,
     statedHypothesisBeforeTest: true, msFromLockToTest: FTR.lockedAt ? Date.now() - FTR.lockedAt : null });
-  const r = rule(), m = judgeRule(r, text);
-  FTR.confident = !!m; FTR.matched = m;
-  FTR.cases = HELD_OUT.map((pl) => ({ q: askText(pl),
-    actual: r.conversational ? "Gives you the answer to whatever you asked immediately before this one." : ftrAnswer(pl) }));
-  FTR.cases.forEach((c) => emit("prediction_tested", { caseId: c.q.slice(0, 22), predicted: FTR.confident ? r.predicts : "unscored",
-    match: FTR.confident ? true : null, judgeConfident: FTR.confident }));
+  // Test the claim the STUDENT made, not the rule they were supposed to find.
+  // "It always says a food" is clear and testable and simply wrong, and
+  // telling a student the machine could not read it teaches nothing -- where
+  // showing them three replies, two of them dogs, teaches the whole lesson.
+  const r = rule(), hit = matchClaim(text);
+  FTR.claim = hit ? hit.claim : null;
+  FTR.confident = !!hit;
+  FTR.matched = hit ? hit.matched : null;
+  FTR.cases = HELD_OUT.map((pl) => {
+    const actual = r.conversational
+      ? "Gives you the answer to whatever you asked immediately before this one."
+      : ftrAnswer(pl);
+    return { q: askText(pl), actual, holds: hit ? Boolean(hit.claim.test(actual)) : null };
+  });
+  // Right only if the claim actually holds every time. A confident wrong
+  // answer scores as a confident wrong answer.
+  FTR.casesMatched = Boolean(hit) && FTR.cases.every((c) => c.holds);
+  FTR.cases.forEach((c) => emit("prediction_tested", { caseId: c.q.slice(0, 22),
+    predicted: hit ? hit.claim.says : "unscored", claimId: hit ? hit.claim.id : null,
+    match: c.holds, judgeConfident: FTR.confident }));
   emit("attempt_submitted", { attemptId: "commit-" + FTR.ruleId, taskId: "ftr-" + FTR.ruleId,
-    artifact: text, statedHypothesisBeforeTest: true, casesMatched: FTR.confident,
+    artifact: text, statedHypothesisBeforeTest: true, casesMatched: FTR.casesMatched,
+    claimId: FTR.claim ? FTR.claim.id : null, claimWasTheRule: FTR.claim ? FTR.claim.id === FTR.ruleId : null,
     disconfirmingProbe: FTR.probes.some((x) => x.disconfirming === true) });
-  emit("attempt_evaluated", { attemptId: "commit-" + FTR.ruleId, outcome: FTR.confident ? "pass" : "partial", failureType: null });
+  emit("attempt_evaluated", { attemptId: "commit-" + FTR.ruleId,
+    outcome: FTR.casesMatched ? "pass" : FTR.confident ? "fail" : "partial",
+    failureType: FTR.casesMatched ? null : FTR.confident ? "wrong_rule" : "unreadable" });
   emit("task_complete", { taskId: "ftr-" + FTR.ruleId, msElapsed: Date.now() - FTR.taskStart,
-    attemptCount: FTR.probes.length, casesMatched: FTR.confident });
-  phaseComplete(FTR.confident ? 5 : 3);
+    attemptCount: FTR.probes.length, casesMatched: FTR.casesMatched });
+  phaseComplete(FTR.casesMatched ? 5 : 3);
   FTR.phase = "close"; renderFTR();
 }
 function ftrStart(ruleId, support) {
@@ -368,8 +394,9 @@ function renderFTR() {
 
   const hypo = FTR.phase === "probe" && ftrHigh() ? `
     <section class="card pad">
-      <div class="hypo"><span class="eyebrow">I think it's…</span>
-        <textarea id="hypofield" rows="2" placeholder="Optional. Change it as often as you like — every save is logged.">${esc(FTR.hypo)}</textarea>
+      <div class="hypo notebook"><span class="eyebrow">Your notes · BIT cannot see this</span>
+        <p class="hint" style="margin:-2px 0 2px">Not a message. This is your own working-out — what do you think the rule is so far?</p>
+        <textarea id="hypofield" rows="2" placeholder="I think it always…">${esc(FTR.hypo)}</textarea>
         <div class="row"><button class="btn ghost sm" id="savehypo">Save this</button><span class="hint" id="hyposaved">${FTR.hypoRev ? "saved · revision " + FTR.hypoRev : "not saved yet"}</span></div>
       </div>
       <div class="row" style="margin-top:12px"><button class="btn ghost" id="tocommit" ${used ? "" : "disabled"}>I'm ready to commit →</button>
@@ -384,9 +411,11 @@ function renderFTR() {
 
   const commit = FTR.phase === "commit" ? `
     <section class="card pad yours" style="display:flex;flex-direction:column;gap:12px">
-      <span class="eyebrow">Commit</span><h3 style="font-size:19px">In plain words, what is the rule?</h3>
+      <span class="eyebrow">Your answer · BIT cannot see this</span>
+      <h3 style="font-size:19px">In plain words, what is the rule?</h3>
+      <p class="hint">Do not write back to BIT here — it will not read it. Describe the pattern you spotted, as a sentence about what it always or never does.</p>
       <div class="chips"><span class="hint">start with</span>${["It never…","It always…","It refuses when…"].map((s) => `<button class="chip" data-start="${esc(s)}">${s}</button>`).join("")}</div>
-      <textarea id="commitfield" class="primary" rows="3" placeholder="It never…" ${FTR.locked ? "disabled" : ""}>${esc(FTR.locked || FTR.hypo)}</textarea>
+      <textarea id="commitfield" class="primary notebook-field" rows="3" placeholder="It always…" ${FTR.locked ? "disabled" : ""}>${esc(FTR.locked || FTR.hypo)}</textarea>
       <div class="readable" id="readable"></div>
       ${FTR.locked
         ? `<div class="row"><span class="chip" style="background:var(--pass-soft);border-color:var(--pass);color:var(--pass)">\u2713 locked in</span>
@@ -398,29 +427,36 @@ function renderFTR() {
 
   let close = "";
   if (FTR.phase === "close" && FTR.cases) {
-    const conf = FTR.confident;
+    const conf = FTR.confident, claim = FTR.claim, allHold = FTR.casesMatched;
+    const held = FTR.cases.filter((c) => c.holds).length;
     const marked = conf && FTR.matched ? esc(FTR.committed).replace(esc(FTR.matched), `<mark>${esc(FTR.matched)}</mark>`) : esc(FTR.committed);
     const next = FTR_SEQUENCE[FTR.leg + 1] || null;
     close = `
     <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
       <div><span class="eyebrow">the rule you wrote</span>
-        <p style="margin-top:6px;font-size:15px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:10px 12px">${marked}</p>
-        <p class="hint" style="margin-top:7px">${conf ? "The judge found the part it could act on (highlighted) and turned it into a prediction."
-          : "The judge could not find a part it knew how to act on, so it refused to score rather than guess."}</p></div>
+        <p class="yourrule">${marked}</p>
+        <p class="hint" style="margin-top:7px">${conf
+          ? `It read that as: <b>${esc(claim.says)}</b>. So it went and checked.`
+          : "It could not find a part it knew how to check, so it did not guess."}</p></div>
       <hr class="hr">
       <div><span class="eyebrow">three questions you never asked it</span>
-        <p class="hint" style="margin-top:5px">Left is what your rule says should happen. Right is what it actually does.</p></div>
+        <p class="hint" style="margin-top:5px">Left is what your rule says should happen. Right is what actually came back.</p></div>
       <div class="casegrid">${FTR.cases.map((c) => `
         <div class="case"><div class="q">${esc(c.q)}</div>
           <div class="cols">
-            <div class="col"><span class="lbl">your rule predicts</span>${conf ? esc(r.predicts) : "<em>judge not confident</em>"}</div>
-            <div class="col"><span class="lbl">what it actually says</span>${esc(c.actual)}</div>
+            <div class="col"><span class="lbl">you predicted</span>${conf ? esc(claim.says) : "<em>nothing it could check</em>"}</div>
+            <div class="col"><span class="lbl">what it actually said</span>${esc(c.actual)}</div>
           </div>
-          <div class="verdict ${conf ? "ok" : "un"}">${conf ? "match · scored" : "unscored · flagged for hand-scoring"}</div>
+          <div class="verdict ${c.holds === null ? "un" : c.holds ? "ok" : "no"}">${
+            c.holds === null ? "not checked" : c.holds ? "your rule holds here" : "your rule does not hold here"}</div>
         </div>`).join("")}</div>
-      ${conf ? `<div class="spread"><div><span class="eyebrow">predictive accuracy</span><div class="score">3<span style="font-size:20px;color:var(--muted)">/3</span></div></div>
-        <p class="hint" style="max-width:34ch">The hidden rule was: <b>${r.label}</b>. ${FTR.probes.length} questions, ${FTR.hypoRev} hypothesis revision(s), ${FTR.hints} hint(s).</p></div>`
-      : `<div class="banner"><span>⚠</span><div>All three marked <b>unscored</b> rather than guessing a zero — in the pilot these are flagged for hand-scoring. The hidden rule was: <b>${r.label}</b>.</div></div>`}
+      ${conf ? `<div class="spread"><div><span class="eyebrow">how often your rule held</span>
+          <div class="score" style="color:${allHold ? "var(--pass)" : "var(--fail)"}">${held}<span style="font-size:20px;color:var(--muted)">/3</span></div></div>
+        <p class="hint" style="max-width:36ch">${allHold
+          ? `That is the rule. It was: <b>${esc(r.label)}</b>.`
+          : `The rule was actually: <b>${esc(r.label)}</b>. Yours was close enough to test, which is the part that counts — a guess you can check beats a guess you cannot.`}
+          ${FTR.probes.length} questions, ${FTR.hypoRev} revision(s), ${FTR.hints} hint(s).</p></div>`
+      : `<div class="banner"><span>!</span><div>Nothing here could be turned into a check, so this one is <b>set aside for a person to read</b> rather than marked zero. The rule was: <b>${esc(r.label)}</b>.</div></div>`}
       <div class="row">${next
           ? `<button class="btn" data-next-leg="${FTR.leg + 1}">Next: rule ${FTR.leg + 2} of ${FTR_SEQUENCE.length}, ${next.support === "high" ? "with help" : "on your own"} →</button>`
           : `<span class="chip">All ${FTR_SEQUENCE.length} done</span>`}
@@ -456,7 +492,7 @@ function wireFTR() {
     emit("support_used", { kind: "reveal_rule", taskId: "ftr-" + FTR.ruleId }); renderFTR(); };
   const cf = $("commitfield");
   if (cf) { const upd = () => { const el = $("readable"); if (!el) return; const v = cf.value.trim();
-      const ok = Boolean(judgeRule(rule(), v));
+      const ok = Boolean(matchClaim(v));
       if (!v) { el.className = "readable"; el.innerHTML = `<span class="hint">The judge is a keyword matcher, not a model. It will tell you here whether it can read what you wrote.</span>`; return; }
       el.className = "readable " + (ok ? "yes" : "no");
       el.innerHTML = ok ? `<span>✓</span><span>The judge can act on this. Your rule will be scored against all three cases.</span>`

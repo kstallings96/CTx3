@@ -576,3 +576,40 @@ input[type=password]:focus {
   text-transform: none; font-weight: 600; }
 .daysel, .daysel label { letter-spacing: 0; text-transform: none; font-family: var(--body); font-size: 12px; }
 .probecount { font-family: var(--display); }
+
+/* The rule the student wrote, quoted back before it is checked. */
+.yourrule { margin-top: 6px; font-size: 15.5px; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 11px 13px; }
+.verdict.no { background: var(--fail-soft); color: var(--fail); }
+
+/* ------------------------------------------------------------------
+   NOT A MESSAGE
+
+   A student in the pilot typed a reply to BIT into the rule box. Both
+   boxes were the same shape, sat under the same conversation, and only a
+   small label told them apart — and after three turns of chat, a box
+   below a chat is a box you talk in.
+
+   So the notebook is paper: warm fill, a soft dashed edge, no blue. The
+   blue field is where you talk to something; this one is where you write
+   for yourself, and the label says so on the field rather than above it.
+   ------------------------------------------------------------------ */
+.notebook, .notebook-field {
+  background: var(--amber-soft);
+  border: 1.5px dashed color-mix(in srgb, var(--amber) 55%, var(--line-2));
+}
+.notebook { border-left-width: 1.5px; border-radius: var(--r-card); padding: 12px; }
+.notebook > .eyebrow { color: var(--amber); }
+.notebook textarea { background: var(--surface); border-style: solid; }
+
+/* The commit box is the one field on that screen, so it keeps the primary
+   ring — but in paper colours, not the colour of talking to BIT. */
+.notebook-field {
+  border-width: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber) 14%, transparent);
+}
+.notebook-field::placeholder { color: var(--amber); opacity: .7; }
+.notebook-field:focus {
+  border-color: var(--amber); border-style: solid;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber) 28%, transparent);
+}
