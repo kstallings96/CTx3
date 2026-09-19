@@ -44,30 +44,48 @@ visible. `scaffoldsActive: ["slotPalette","hypothesisField"]`.
 question builder, no hypothesis field, a *different rule of the same tier*.
 `scaffoldsActive: []`.
 
-### Why not a free-text box
+### What is and is not a support
 
-It was one, and a pilot student did the obvious thing: asked the partner
-real questions — *"how tall are you"* — and got a canned non-sequitur back.
-That is not a weaker scaffold, it is a partner that looks broken, and the
-condition would have measured frustration rather than unsupported
-performance.
+This took three tries, and the first two were not manipulations at all.
 
-The scaffold that high support actually provides is **the decomposition**:
-three dimensions laid out as rows of pills, so varying exactly one thing is
-a single click. The low condition removes that and nothing else. Same
-question space, same answers, but the questions arrive whole and unsorted,
-and finding a minimal pair means reading the list and holding the comparison
-in your head. Only eleven of the forty-seven adjacent pairs in the shuffled
-list differ by one feature, so the list does not do the work for them.
+**A free-text box** invited students to treat the partner as a real chatbot.
+A pilot student asked *"how tall are you"* and got a canned non-sequitur:
+that is a partner that looks broken, not a weaker scaffold.
 
-The order is seeded by the rule id alone, so every student in every section
-sees the identical list in the identical order.
+**A jumbled list of the same forty-eight questions** was no better. The
+structure is written out in every sentence — *"What's the [adj] [noun]?
+Answer [length]"* — so a student reading three of them has the dimensions
+anyway. It swapped a radio-button interface for a list interface and changed
+nothing about the thinking.
 
-**This also fixed the measurement.** Steps 2 and 4 used to be exact under
-the palette and hand-coded in free text. Every probe now carries exact slot
-values in both conditions, so "varied exactly one feature" and "sent a
-disconfirming probe" are computable throughout and `stepScoringExact` is
-true everywhere.
+**The question builder is now identical in both conditions.** It is part of
+the task, not a support, and holding it constant removes an interface
+confound and keeps single-feature detection exact everywhere.
+
+What varies is the **prompting** — the things that scaffold the reasoning
+without making the puzzle itself easier:
+
+| | High | Low |
+|---|---|---|
+| Question builder | yes | **yes** — constant |
+| Transcript | yes | **yes** — constant |
+| "Read its answers closely…" nudge | yes | no |
+| Hints, and "just tell me the rule" | yes | no |
+| Somewhere to write a hypothesis | yes | no |
+| Assembled-question preview | yes | no |
+| "2 pills changed since your last one" | yes | no |
+
+The transcript stays in both on purpose. Hiding it would load working
+memory, which makes the task *harder* rather than *less supported*, and
+confounding difficulty with support is the exact mistake this section exists
+to prevent.
+
+> **Three of these were leaking.** The nudge, the hints and the reveal were
+> rendered in both conditions while `phase_start` recorded
+> `scaffoldsActive: []` for the low one. The design said one thing and the
+> log said another, and nothing was comparing them. `auditScaffolds()` in
+> `src/app.js` now walks the declared list against the DOM on every render
+> in dev and warns on any mismatch in either direction.
 
 Rule difficulty held constant, support varied. High first, always.
 

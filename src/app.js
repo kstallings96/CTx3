@@ -3,7 +3,7 @@ import { askModel, modelAvailable, modelReason, modelName } from "./lib/model.js
 import { pseudonym, GRADE } from "./roster.js";
 import { hash } from "./lib/hash.js";
 import { RULES, RULE_ORDER, FTR_SEQUENCE, PILLS, PICKS, HELD_OUT, COLOURS,
-         askText, comboKey, cap, matchClaim, lowPool, answerFor } from "./rules.js";
+         askText, comboKey, cap, matchClaim, answerFor } from "./rules.js";
 import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision,
          buildPrompt, checkSafe, SAFE_MESSAGE, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
@@ -13,7 +13,7 @@ import { sha256hex } from "./lib/sha256.js";
 const LS = "d3station.v2";
 const S = { code: "", first: "", initial: "", pinned: null, unlocked: [], gateFor: null, gateTries: 0, day: 3, screen: "hub", tool: "hub", events: [], seq: 0,
   support: "na", phaseId: null, phaseScaffolds: [],
-  forceOffline: false, brandTaps: 0, lastAttempt: null, deviceId: "dev-" + Math.random().toString(36).slice(2, 8) };
+  forceOffline: false, brandTaps: 0, lastAttempt: null, deviceId: deviceId() };
 const nowISO = () => new Date().toISOString();
 const $ = (id) => document.getElementById(id);
 const nameChip = () => (S.first ? `${S.first} ${S.initial}.` : "—");
@@ -45,6 +45,40 @@ function phaseComplete(highestStepReached) {
   emit("phase_complete", { phaseId: S.phaseId, highestStepReached });
   S.phaseId = null;
 }
+/**
+ * The device's own id, in its own key.
+ *
+ * This used to be `"dev-" + Math.random()` evaluated at module load and
+ * never written down, which was silently catastrophic. The session uuid is
+ * derived from (instrument, code, device, day), and a resumed device skips
+ * the insert because the row already exists -- so after ANY reload the id
+ * was different, it addressed a session row that had never been created,
+ * and every event failed `events_session_id_fkey` and sat in the queue
+ * retrying forever. A student whose Chromebook slept lost the rest of their
+ * period, and the app showed no sign of it.
+ *
+ * It lives outside the session blob because `?reset` must NOT clear it: the
+ * id identifies the machine, not the student at it, and two students who
+ * shared a laptop sharing a device id is a fact worth recording rather than
+ * a collision to avoid.
+ */
+function deviceId() {
+  // The key is inlined rather than a module const: this is called from the
+  // initialiser of `S`, which runs before any `const` declared below it, and
+  // the resulting ReferenceError was being swallowed by the catch -- so the
+  // first fix for this bug silently did nothing at all.
+  try {
+    const got = localStorage.getItem("ctx3.device.v1");
+    if (got) return got;
+    const made = "dev-" + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem("ctx3.device.v1", made);
+    return made;
+  } catch (e) {
+    // Storage blocked. A per-load id still works for a single sitting.
+    return "dev-" + Math.random().toString(36).slice(2, 10);
+  }
+}
+
 function save() { try { localStorage.setItem(LS, JSON.stringify({ code: S.code, first: S.first, initial: S.initial, day: S.day, seq: S.seq, unlocked: S.unlocked, events: S.events.slice(-400) })); } catch (e) {} }
 function load() {
   try { const d = JSON.parse(localStorage.getItem(LS) || "null"); if (!d) return;
@@ -277,8 +311,15 @@ function ftrStart(ruleId, support) {
      Low support: free text, and the guess is only captured at the two-stage
      commit. The hypothesis is STILL recorded either way \u2014 otherwise step 3
      is unreachable in the low condition and the range is manufactured. */
+  /* What high support actually withholds. The slot palette is NOT here: it
+     is identical in both conditions, so it is part of the task rather than
+     a support. Everything listed is a prompt that scaffolds the reasoning
+     without making the puzzle itself easier -- the distinction this spec
+     exists to protect. */
   phaseStart("ftr-" + ruleId, cond,
-    cond === "high" ? ["slotPalette", "hypothesisField", "assembledPreview"] : []);
+    cond === "high"
+      ? ["ruleNudge", "hints", "hypothesisField", "assembledPreview", "probeFeedback"]
+      : []);
   emit("task_start", { taskId: "ftr-" + ruleId, round: RULES[ruleId].level, ruleId, supportCondition: cond });
   renderFTR();
 }
@@ -322,7 +363,7 @@ function renderFTR() {
       <span class="chip">Rule ${FTR.leg + 1} of ${FTR_SEQUENCE.length}</span>
       <span class="chip">${ftrHigh() ? "with help" : "on your own"}</span>
     </div>
-    ${FTR.phase !== "close" ? `
+    ${FTR.phase !== "close" && ftrHigh() ? `
     <div class="row">
       <button class="btn ghost sm" id="gethint" ${FTR.hints >= 3 ? "disabled" : ""}>${FTR.hints ? `Another hint (${3 - FTR.hints} left)` : "Stuck? Get a hint"}</button>
       <button class="btn ghost sm" id="revealrule">Just tell me the rule</button>
@@ -357,7 +398,7 @@ function renderFTR() {
       <div class="chatwho"><b>BIT</b><span>${FTR.probes.length ? "following one hidden rule" : "waiting for your first question"}</span></div>
       <span class="probecount">${used}<i>/12</i></span>
     </div>
-    <div class="banner leafy"><span>&#128065;</span><div>${r.look}</div></div>
+    ${ftrHigh() ? `<div class="banner leafy"><span>&#128065;</span><div>${r.look}</div></div>` : ""}
     <div class="chat" id="chat">${FTR.probes.length ? FTR.probes.map((x) => `
       <div class="turn you"><div class="bubble">${esc(x.text)}</div></div>
       <div class="turn bot${x.refuse ? " refuse" : ""}"><span class="tinybot">${bit("idle", 26)}</span><div class="bubble">${esc(x.reply)}</div></div>`).join("")
@@ -365,36 +406,43 @@ function renderFTR() {
     <div class="probemeter"><div class="pips">${Array.from({ length: 12 }, (_, i) => `<span class="pip${i < used ? " used" : ""}"></span>`).join("")}</div><span>${used} of 12 questions used</span></div>
   </section>`;
 
-  // LOW SUPPORT IS A JUMBLED LIST, NOT A TYPING BOX. A pilot student typed
-  // real questions at the partner and got canned non-sequiturs back, which
-  // is a partner that looks broken rather than a weaker scaffold \u2014 the
-  // condition would have measured frustration. Same forty-eight questions as
-  // the high condition; what is gone is the decomposition into pills, so
-  // finding two questions that differ in exactly one way is now the
-  // student's own work.
-  const pool = ftrHigh() ? null : lowPool(FTR.ruleId);
-  const askedKeys = new Set(FTR.probes.map((x) => x.pills && comboKey(x.pills)).filter(Boolean));
-  const composer = FTR.phase !== "probe" ? "" : !ftrHigh() ? `
-    <section class="card pad yours" style="display:flex;flex-direction:column;gap:10px">
-      <span class="eyebrow">Pick a question to ask \u00b7 no builder this round</span>
-      <p class="hint">The same questions, jumbled up. Which two to compare is up to you.</p>
-      <div class="pool" id="pool">${pool.map((c) => {
-        const k = comboKey(c);
-        return `<button class="poolq${askedKeys.has(k) ? " asked" : ""}" data-pool="${esc(k)}" ${used >= 12 ? "disabled" : ""}>${esc(askText(c))}</button>`;
-      }).join("")}</div>
-      <span class="hint">${used} of 12 used.</span>
-    </section>` : `
+  /**
+   * THE QUESTION INTERFACE IS THE SAME IN BOTH CONDITIONS.
+   *
+   * It has been a free-text box, then a jumbled list of the same forty-eight
+   * questions. Neither was a support manipulation. The list in particular
+   * spells the structure out in every sentence -- "What's the [adj] [noun]?
+   * Answer [length]" -- so a student reading three of them has the
+   * dimensions anyway; it swapped a radio-button UI for a list UI and
+   * changed nothing about the thinking.
+   *
+   * So the builder is constant, which also removes an interface confound and
+   * keeps single-feature detection exact in both conditions. What varies is
+   * the PROMPTING: the nudge that says what kind of thing to look at, the
+   * hints, the place to write a hypothesis down, the preview, and the
+   * feedback telling you your probe was controlled. Those are supports in
+   * the Fischer sense -- they scaffold the reasoning without making the task
+   * itself easier.
+   *
+   * The transcript stays visible in both. Hiding it would make the task
+   * harder rather than less supported, and confounding difficulty with
+   * support is the exact mistake this spec was rewritten to avoid.
+   */
+  const composer = FTR.phase !== "probe" ? "" : `
     <section class="card pad yours" style="display:flex;flex-direction:column;gap:12px">
       <span class="eyebrow">Build a question</span>
       <div class="slots">What's the
         ${PILLS.map((s, i) => `<span class="slot" data-slot="${s.key}">${s.opts.map((o) =>
           `<button aria-pressed="${FTR.pills[s.key] === o}" data-opt="${esc(o)}">${o}</button>`).join("")}</span>${i === 1 ? "? Answer" : ""}`).join(" ")}
       </div>
-      <div class="assembled">${esc(askText(FTR.pills))}</div>
+      ${ftrHigh() ? `<div class="assembled">${esc(askText(FTR.pills))}</div>` : ""}
       <div class="row">
         <button class="btn" id="sendprobe" ${used >= 12 ? "disabled" : ""}>Send it</button>
-        ${changed !== null ? `<span class="hint">${changed === 0 ? "identical to a question you already sent" : changed + " pill" + (changed === 1 ? "" : "s") + " changed since your last one"}</span>` : ""}
-        ${dup && changed !== 0 ? `<span class="hint">you have sent this exact combination before</span>` : ""}
+        ${ftrHigh() ? `<span class="hint">${changed === null ? "your first question — nothing to compare it to yet"
+          : changed === 0 ? "identical to a question you already sent"
+          : changed + " pill" + (changed === 1 ? "" : "s") + " changed since your last one"}</span>` : ""}
+        ${ftrHigh() && dup && changed !== 0 ? `<span class="hint">you have sent this exact combination before</span>` : ""}
+        ${ftrHigh() ? "" : `<span class="hint">${used} of 12 used.</span>`}
       </div>
     </section>`;
 
@@ -473,7 +521,39 @@ function renderFTR() {
   const c = $("chat"); if (c) c.scrollTop = c.scrollHeight;
   wireFTR();
 }
+/**
+ * Does the screen match what the log says about it?
+ *
+ * `scaffoldsActive` claimed `[]` for the low condition while the hint
+ * buttons, the reveal and the "look closely" nudge were all still on screen.
+ * Nothing caught it because nothing was looking: the array is written in one
+ * place and the markup in another, and they drifted.
+ *
+ * Dev-only, and it only warns -- a mismatch is a bug in the study design,
+ * not something to crash a classroom over.
+ */
+const SCAFFOLD_DOM = {
+  ruleNudge: () => document.querySelector(".banner.leafy"),
+  hints: () => document.getElementById("gethint"),
+  hypothesisField: () => document.getElementById("hypofield"),
+  assembledPreview: () => document.querySelector(".assembled"),
+  probeFeedback: () => [...document.querySelectorAll(".hint")]
+    .some((h) => /pill.? changed|identical to a question|nothing to compare/.test(h.textContent)),
+};
+function auditScaffolds() {
+  if (!import.meta.env.DEV || FTR.phase !== "probe") return;
+  const declared = new Set(S.phaseScaffolds || []);
+  for (const [name, find] of Object.entries(SCAFFOLD_DOM)) {
+    const present = Boolean(find());
+    if (present && !declared.has(name))
+      console.warn(`[ctx3] scaffold "${name}" is on screen but not in scaffoldsActive (${S.support})`);
+    if (!present && declared.has(name))
+      console.warn(`[ctx3] scaffold "${name}" is in scaffoldsActive but not on screen (${S.support})`);
+  }
+}
+
 function wireFTR() {
+  auditScaffolds();
   // One way forward and no way sideways. The sequence is fixed (FTR_SEQUENCE)
   // and the only control is "next".
   document.querySelectorAll("[data-next-leg]").forEach((b) => b.onclick = () => {
@@ -484,10 +564,6 @@ function wireFTR() {
   document.querySelectorAll(".slot").forEach((sl) => sl.querySelectorAll("button").forEach((b) => b.onclick = () => { FTR.pills[sl.dataset.slot] = b.dataset.opt; renderFTR(); }));
   const sp = $("sendprobe");
   if (sp) sp.onclick = () => ftrSendProbe();
-  document.querySelectorAll("[data-pool]").forEach((b) => b.onclick = () => {
-    const [adj, noun, len] = b.dataset.pool.split("|");
-    ftrSendProbe({ adj, noun, len });
-  });
   const sh = $("savehypo"); if (sh) sh.onclick = () => {
     const v = $("hypofield").value.trim(); if (!v || v === FTR.hypo) return;
     FTR.hypo = v; emit("hypothesis_noted", { text: v, afterProbeIndex: FTR.probes.length - 1, revisionIndex: FTR.hypoRev++ });

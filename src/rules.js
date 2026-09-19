@@ -245,40 +245,6 @@ export const PICKS = {
 export const HELD_OUT = [{ adj: "best", noun: "pizza topping", len: "in one sentence" },
   { adj: "weirdest", noun: "dog breed", len: "in a few words" },
   { adj: "most overrated", noun: "male basketball player", len: "in a paragraph" }];
-/**
- * The low-support question pool.
- *
- * Low support used to be a free-text box, and a pilot student did the
- * obvious thing: asked the partner real questions and got canned
- * non-sequiturs back. That is not a weaker scaffold, it is a partner that
- * looks broken, and the condition would have measured frustration rather
- * than unsupported performance.
- *
- * It is the same forty-eight questions as the high condition, shuffled and
- * unsorted. What is removed is the DECOMPOSITION: high support hands you the
- * three dimensions as rows of pills, so varying exactly one thing is a
- * single click. Here the questions are whole and jumbled, and finding a
- * minimal pair means reading the list and holding the comparison yourself.
- * That is the scaffold the manipulation is supposed to remove.
- *
- * Two things fall out of it. Every question is answerable, so the partner
- * never looks broken; and every probe still carries exact slot values, so
- * "varied exactly one feature" and "sent a disconfirming probe" are
- * computable in BOTH conditions instead of needing hand-coding in one.
- *
- * The order is seeded by the rule id alone, so every student in every
- * section sees the identical list in the identical order.
- */
-export function lowPool(ruleId) {
-  const all = [];
-  for (const adj of PILLS[0].opts)
-    for (const noun of PILLS[1].opts)
-      for (const len of PILLS[2].opts) all.push({ adj, noun, len });
-  // Deterministic shuffle: sort by a hash of the combo, so neighbours in the
-  // list are not neighbours in the question space.
-  return all.sort((a, b) => hash(comboKey(a) + ruleId) - hash(comboKey(b) + ruleId));
-}
-
 export const askText = (p) => "What's the " + p.adj + " " + p.noun + "? Answer " + p.len + ".";
 export const comboKey = (p) => p.adj + "|" + p.noun + "|" + p.len;
 
