@@ -27,7 +27,7 @@
 
 <div class="shell">
   <main class="stage" id="stage"></main>
-  <aside class="rail">
+  <aside class="rail" id="rail" hidden>
     <section class="card">
       <div class="railhead"><h4>Event stream</h4><span class="count" id="evcount">0 events</span></div>
       <div class="stream" id="stream"></div>
@@ -54,7 +54,7 @@
     </section>
   </aside>
 </div>
-<p class="footer">Demo build. Events buffer to <span class="kbd">localStorage</span> exactly as the real build does before sync; nothing leaves this page except model calls, and the name asked for at sign-in is not stored at all in this demo. When a live model is available the page calls it on the viewer’s own Claude account with caching off, so repeats really are repeats. Otherwise every reply comes from a deterministic stand-in and is labelled as one. Authored to <span class="kbd">SPEC-find-the-rule.md</span>, <span class="kbd">SPEC-prompt-golf.md</span>, <span class="kbd">SPEC-word4word.md</span>, <span class="kbd">EVENTS.md</span> and <span class="kbd">DEVELOPMENTAL-RANGE.md</span>.</p>
+<p class="footer" id="footer" hidden>Demo build. Events buffer to <span class="kbd">localStorage</span> exactly as the real build does before sync; nothing leaves this page except model calls, and the name asked for at sign-in is not stored at all in this demo. When a live model is available the page calls it on the viewer’s own Claude account with caching off, so repeats really are repeats. Otherwise every reply comes from a deterministic stand-in and is labelled as one. Authored to <span class="kbd">SPEC-find-the-rule.md</span>, <span class="kbd">SPEC-prompt-golf.md</span>, <span class="kbd">SPEC-word4word.md</span>, <span class="kbd">EVENTS.md</span> and <span class="kbd">DEVELOPMENTAL-RANGE.md</span>.</p>
 <script type="module" src="/src/app.js"></script>
 </body>
 </html>

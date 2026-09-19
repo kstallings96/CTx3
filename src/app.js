@@ -55,6 +55,8 @@ function load() {
   } catch (e) {}
 }
 function renderRail() {
+  // Nothing to paint while the panel is closed, and this runs on every event.
+  const rail = $("rail"); if (rail && rail.hidden) return;
   $("stream").innerHTML = S.events.slice(-70).map((e) => {
     let cls = SPINE.has(e.type) ? "spine" : "";
     const p = e.payload || {};
@@ -295,17 +297,15 @@ function renderFTR() {
       <div class="steps">${steps.map((s) => `<span class="${FTR.phase === s ? "now" : steps.indexOf(s) < steps.indexOf(FTR.phase) ? "done" : ""}">${s}</span>`).join("")}</div>
     </div>
     <p class="lede">This chat partner is following one hidden rule. It will never tell you what the rule is — you have to work it out from what it says back.</p>
-    <div class="how"><div><b>1</b>Build a question and send it</div><div><b>2</b>Spot what is always true</div><div><b>3</b>Write the rule down</div><div><b>4</b>Test it on 3 new questions</div></div>
+    ${FTR.probes.length ? "" : `<div class="how"><div><b>1</b>Build a question and send it</div><div><b>2</b>Spot what is always true</div><div><b>3</b>Write the rule down</div><div><b>4</b>Test it on 3 new questions</div></div>`}
     <div class="row">
       <span class="chip">Rule ${FTR.leg + 1} of ${FTR_SEQUENCE.length}</span>
       <span class="chip">${ftrHigh() ? "with help" : "on your own"}</span>
-      <span class="hint">Four rules, in a set order. Two of a kind back to back: the first with the question builder, the second without it. Same difficulty, different amount of help.</span>
     </div>
     ${FTR.phase !== "close" ? `
     <div class="row">
       <button class="btn ghost sm" id="gethint" ${FTR.hints >= 3 ? "disabled" : ""}>${FTR.hints ? `Another hint (${3 - FTR.hints} left)` : "Stuck? Get a hint"}</button>
       <button class="btn ghost sm" id="revealrule">Just tell me the rule</button>
-      <span class="hint">Every press is logged as <span class="kbd">support_used</span>.</span>
     </div>
     ${FTR.hints ? `<div class="hintlist">${r.hints.slice(0, FTR.hints).map((h, i) => `<div><b>${i + 1}</b><span>${h}</span></div>`).join("")}</div>` : ""}
     ${FTR.revealed ? `<div class="reveal">The rule is: <b>${r.label}</b>.</div>` : ""}` : ""}
@@ -322,13 +322,13 @@ function renderFTR() {
   </section>`;
 
   const composer = FTR.phase !== "probe" ? "" : !ftrHigh() ? `
-    <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
+    <section class="card pad yours" style="display:flex;flex-direction:column;gap:10px">
       <span class="eyebrow">Ask it anything \u00b7 your own words this time</span>
-      <textarea id="freeprobe" rows="2" placeholder="Type a question and send it\u2026">${esc(FTR.freeText || "")}</textarea>
+      <textarea id="freeprobe" class="primary" rows="2" placeholder="Type a question and send it\u2026">${esc(FTR.freeText || "")}</textarea>
       <div class="row"><button class="btn" id="sendprobe" ${used >= 12 ? "disabled" : ""}>Send it</button>
         <span class="hint">No builder and no notes field this round. ${used} of 12 used.</span></div>
     </section>` : `
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
+    <section class="card pad yours" style="display:flex;flex-direction:column;gap:12px">
       <span class="eyebrow">Build a question</span>
       <div class="slots">What's the
         ${PILLS.map((s, i) => `<span class="slot" data-slot="${s.key}">${s.opts.map((o) =>
@@ -340,7 +340,6 @@ function renderFTR() {
         ${changed !== null ? `<span class="hint">${changed === 0 ? "identical to a question you already sent" : changed + " pill" + (changed === 1 ? "" : "s") + " changed since your last one"}</span>` : ""}
         ${dup && changed !== 0 ? `<span class="hint">you have sent this exact combination before</span>` : ""}
       </div>
-      <p class="hint">Three pills, so “I changed exactly one thing” is a logged fact rather than something a researcher has to infer from free text.</p>
     </section>`;
 
   const hypo = FTR.phase === "probe" && ftrHigh() ? `
@@ -360,10 +359,10 @@ function renderFTR() {
     </div></section>` : "";
 
   const commit = FTR.phase === "commit" ? `
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
+    <section class="card pad yours" style="display:flex;flex-direction:column;gap:12px">
       <span class="eyebrow">Commit</span><h3 style="font-size:19px">In plain words, what is the rule?</h3>
       <div class="chips"><span class="hint">start with</span>${["It never…","It always…","It refuses when…"].map((s) => `<button class="chip" data-start="${esc(s)}">${s}</button>`).join("")}</div>
-      <textarea id="commitfield" rows="3" placeholder="It never…" ${FTR.locked ? "disabled" : ""}>${esc(FTR.locked || FTR.hypo)}</textarea>
+      <textarea id="commitfield" class="primary" rows="3" placeholder="It never…" ${FTR.locked ? "disabled" : ""}>${esc(FTR.locked || FTR.hypo)}</textarea>
       <div class="readable" id="readable"></div>
       ${FTR.locked
         ? `<div class="row"><span class="chip" style="background:var(--pass-soft);border-color:var(--pass);color:var(--pass)">\u2713 locked in</span>
@@ -665,7 +664,7 @@ function renderPG() {
       ${PG.phase === "t3" && PG.best.t1 && PG.best.t2 ? `<div><span class="eyebrow">your two winning prompts</span>
         <div class="cmp" style="margin-top:6px"><div class="p">${esc(PG.best.t1.text)}</div><div class="p">${esc(PG.best.t2.text)}</div></div></div>` : ""}
       <div><span class="eyebrow">useful phrases · tap to add</span><div class="chips" style="margin-top:6px">${PG_WORDS.map((w) => `<button class="chip" data-word="${esc(w)}">${w}</button>`).join("")}</div></div>
-      <div><span class="eyebrow">your prompt — say the same thing in fewer words</span><textarea id="pgfield" rows="2" placeholder="Write the shortest prompt that hits the target…">${esc(PG.draft)}</textarea></div>
+      <div><span class="eyebrow">your prompt — say the same thing in fewer words</span><textarea id="pgfield" class="primary" rows="2" placeholder="Write the shortest prompt that hits the target…">${esc(PG.draft)}</textarea></div>
       <div class="spread"><div class="wc"><b id="wcnum">0</b><span>words</span></div>
         <div class="row">${best ? `<span class="hint">best so far · <b style="font-family:var(--mono)">${best.wc}</b> words</span>` : ""}
           <button class="btn ghost sm" id="pghelp">Fill in one that works</button>
@@ -979,7 +978,7 @@ function renderW4W() {
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
           <span class="eyebrow">your steps · one per line, starting with a number</span>
-          <textarea id="w4wfield" rows="8" style="font-family:var(--mono);font-size:13.5px" ${W4W.playing ? "disabled" : ""}>${esc(W4W.draft)}</textarea>
+          <textarea id="w4wfield" class="primary" rows="8" style="font-family:var(--mono);font-size:13.5px" ${W4W.playing ? "disabled" : ""}>${esc(W4W.draft)}</textarea>
           <div class="row">
             <button class="btn" id="w4wrun" ${W4W.playing ? "disabled" : ""}>${W4W.playing ? "Building…" : "Build it"}</button>
             <button class="btn ghost sm" id="w4wstop" ${W4W.playing ? "" : "disabled"}>Stop</button>
@@ -1170,7 +1169,7 @@ function renderGate() {
       ? "Your teacher will give you the password for this activity."
       : "Your teacher will give you a password. It opens the activity the class is doing today."}</p>
     <div class="codewrap">
-      <input class="codein pw" id="pwfield" type="password" maxlength="32" autocomplete="off"
+      <input class="codein pw primary" id="pwfield" type="password" maxlength="32" autocomplete="off"
         spellcheck="false" placeholder="••••••" aria-label="Activity password">
       <p class="hint" id="pwmsg">Capital letters do not matter.</p>
       <div class="row"><button class="btn" id="pwgo">Open</button></div>
@@ -1215,9 +1214,9 @@ function renderCode() {
     <div class="codewrap">
       <div class="namerow">
         <label><span class="eyebrow">First name</span>
-          <input type="text" id="firstname" class="bigname" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Alex"></label>
+          <input type="text" id="firstname" class="bigname primary" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Kayleigh"></label>
         <label><span class="eyebrow">Last initial</span>
-          <input type="text" id="lastinitial" class="bigname" maxlength="1" autocomplete="off" spellcheck="false" placeholder="R"></label>
+          <input type="text" id="lastinitial" class="bigname" maxlength="1" autocomplete="off" spellcheck="false" placeholder="S"></label>
       </div>
       <p class="hint" id="codemsg">Spell your first name the same way each day, so your work stays together.</p>
       <div class="row"><button class="btn" id="codego">Start</button></div>
@@ -1363,7 +1362,34 @@ window.addEventListener("popstate", () => {
 $("daypick").onchange = (e) => { S.day = +e.target.value; save(); if (S.screen === "hub") renderHub(); };
 $("hubbtn").onclick = () => go("hub");
 $("resetcode").onclick = () => go("code");
-$("brand").onclick = () => { S.brandTaps++; if (S.brandTaps >= 5) { S.brandTaps = 0; showJSON(); } setTimeout(() => { S.brandTaps = 0; }, 2200); };
+/**
+ * The facilitator panel.
+ *
+ * Students see one column and nothing else. The event stream, the derived
+ * figures and the export controls are for the person running the study, and
+ * on a student's screen they are clutter that competes with the thing they
+ * are supposed to be looking at.
+ *
+ * It is not deleted, though: the JSON export is the documented last resort
+ * when a device never reached the network (DEPLOY.md), and losing it would
+ * mean losing a participant. Five taps on the CTx3 wordmark, or `?facilitator`
+ * in the URL, brings the whole panel back.
+ */
+function toggleRail(on) {
+  const rail = $("rail"); if (!rail) return;
+  const show = on === undefined ? rail.hidden : on;
+  rail.hidden = !show;
+  document.querySelector(".shell").style.gridTemplateColumns = show ? "minmax(0,1fr) 356px" : "minmax(0,1fr)";
+  document.querySelector(".shell").style.maxWidth = show ? "1340px" : "860px";
+  // The footer explains the build to a reader of the repo, not to a student.
+  const f = $("footer"); if (f) f.hidden = !show;
+  if (show) renderRail();
+}
+$("brand").onclick = () => {
+  S.brandTaps++;
+  if (S.brandTaps >= 5) { S.brandTaps = 0; toggleRail(); }
+  setTimeout(() => { S.brandTaps = 0; }, 2200);
+};
 function showJSON() {
   const box = $("jsonbox"); box.hidden = false;
   box.value = exportJSON(S.code, S.day);
@@ -1388,6 +1414,7 @@ function start(snap) {
   // state, because everything downstream -- the hub button, the back buttons,
   // where sign-in lands -- has to agree about it.
   S.pinned = pinnedTool();
+  if (qs.has("facilitator")) toggleRail(true);
   // A pinned URL carries its own day, so ?day= becomes optional on it.
   // "The facilitator opened /word4word but forgot ?day=2" is a study-day
   // failure that costs you the whole period's data, and it is cheaper to

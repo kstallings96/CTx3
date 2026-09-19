@@ -360,6 +360,24 @@ database**. `scripts/bundle-demo.mjs` refuses to write a demo containing a
 than quietly publishing something that files rows against real participant
 codes. Never publish the output of a plain `npm run build`.
 
+## The facilitator panel
+
+Students see one column: the activity and nothing else. The event stream,
+the derived figures, the force-offline switch and the JSON export are for
+the person running the study, and on a student's screen they are clutter
+competing with the thing they are meant to be looking at.
+
+Two ways to bring them back:
+
+- **Five taps on the CTx3 wordmark**, top left. Five more closes it.
+- **`?facilitator`** on any URL, e.g.
+  `https://<app>.vercel.app/word4word?facilitator`, to have it open from
+  the start on a projector machine.
+
+Nothing is removed — the JSON export is still the last resort when a device
+never reached the network (see below), and it is still there behind the
+gesture.
+
 ## Pulling the data
 
 With the service_role key, from your own machine, never from the app. Starter
@@ -379,7 +397,7 @@ tool that failed to capture a raw input — not drift to shrug at.
 
 ## If a device never reached the network
 
-Tap the **CTx3** header five times, or use **Show JSON export** in the
-facilitator panel. That surfaces everything the device still holds, including
+Tap the **CTx3** header five times to open the facilitator panel, then use
+**Show JSON export**. That surfaces everything the device still holds, including
 events that never flushed. Copy it out and feed it to `npm run rescore`. It is
 the last resort in the resilience chain, not the plan.

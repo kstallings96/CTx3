@@ -75,7 +75,7 @@ input,textarea,select{font:inherit;color:inherit}
   font-weight:500;letter-spacing:.04em;text-transform:uppercase}
 .tbtn:hover{border-color:var(--accent);color:var(--accent-ink)}
 
-.shell{display:grid;grid-template-columns:minmax(0,1fr) 356px;gap:18px;max-width:1340px;margin:0 auto;
+.shell{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;max-width:860px;margin:0 auto;
   padding-block:18px 40px;padding-left:20px;padding-right:20px;align-items:start}
 @media (max-width:1040px){.shell{grid-template-columns:minmax(0,1fr)}}
 .stage{min-width:0;display:flex;flex-direction:column;gap:16px}
@@ -207,6 +207,10 @@ textarea:focus,input[type=text]:focus{border-color:var(--accent);box-shadow:var(
 .scroller{overflow-x:auto}
 
 /* ── instrument rail ── */
+/* `display:flex` on a class beats the user-agent's `[hidden]{display:none}`,
+   so the facilitator panel rendered underneath the activity on every load
+   despite being marked hidden. Say it explicitly. */
+[hidden]{display:none!important}
 .rail{position:sticky;top:76px;display:flex;flex-direction:column;gap:12px}
 @media (max-width:1040px){.rail{position:static}}
 .rail .card{padding:14px}
@@ -342,3 +346,76 @@ mark{background:var(--pass-soft);color:var(--pass);border-radius:2px;padding:0 3
 .glog .i { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-align: right; }
 .glog .noop { color: var(--muted); font-style: italic; }
 .glog > div.now { border-left-color: var(--accent); background: var(--accent-soft); }
+
+/* ------------------------------------------------------------------
+   WHERE DO I TYPE, AND WHERE DO I CLICK
+
+   On a dark card, a field filled with --surface-2 and outlined in --line
+   is a rectangle of very slightly different darkness. A thirteen-year-old
+   with thirty seconds and a projector behind them should not have to hunt
+   for it. Fields are now visibly sunken with a brighter edge, focus lights
+   the whole box, and every button reads as pressable — ghost buttons had no
+   border at all, which made half the controls look like text.
+   ------------------------------------------------------------------ */
+
+textarea,
+input[type=text],
+input[type=password] {
+  background: var(--void);
+  border: 1.5px solid var(--line-2);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 22%);
+  transition: border-color .12s, box-shadow .12s;
+}
+textarea::placeholder,
+input::placeholder { color: var(--muted); opacity: .75; }
+
+textarea:focus,
+input[type=text]:focus,
+input[type=password]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 22%), 0 0 0 3px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* The one field that matters on a screen gets a label that points at it. */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > .eyebrow { color: var(--accent-ink); }
+
+/* Ghost buttons were borderless, so "Back to hub" and "Get a hint" read as
+   prose. They are buttons; they look like buttons. */
+.btn.ghost { border-color: var(--line-2); background: var(--surface-2); }
+.btn.ghost:hover { background: var(--surface-3); border-color: var(--accent); color: var(--accent-ink); }
+
+/* The primary action on any screen should be findable without reading. */
+.btn:not(.ghost) { box-shadow: 0 1px 0 rgb(0 0 0 / 25%), var(--glow); font-weight: 700; }
+
+/* Sign-in is two fields and a button. Give them room and centre the lot. */
+.codewrap { gap: 18px; }
+.namerow { display: grid; grid-template-columns: 1fr 120px; gap: 12px; }
+.namerow label { display: flex; flex-direction: column; gap: 6px; }
+.bigname { font-size: 19px; padding: 13px 14px; }
+@media (max-width: 520px) { .namerow { grid-template-columns: 1fr; } }
+
+/* ------------------------------------------------------------------
+   YOUR TURN
+
+   Four cards on a screen and only one of them wants something from you.
+   The card you act in gets a lit edge and a brighter heading, so "where do
+   I go next" is answered before anything is read.
+   ------------------------------------------------------------------ */
+.card.yours {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent), var(--panel-shadow);
+}
+.card.yours::before,
+.card.yours::after { opacity: 1; border-width: 2px; }
+.card.yours > .eyebrow:first-child { color: var(--accent-ink); }
+
+/* The one box on the screen the student is meant to type in. Everything else
+   can be quiet; this cannot be missed. */
+.primary {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line-2));
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 22%), 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.primary::placeholder { color: var(--accent-ink); opacity: .55; }
