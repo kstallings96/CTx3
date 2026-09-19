@@ -215,5 +215,22 @@ if (CLAIMS.slice(0, 4).map((c) => c.id).join() !== RULE_ORDER.join())
     + held.filter((t) => hit.claim.test(t)).length + "/3");
 }
 
+/* "Always says I" — a real pilot guess. Naming a literal word the replies
+   supposedly always contain is about the most checkable claim there is, and
+   the fixed list could not read it because nobody had thought of it. The
+   judge synthesises a claim from whatever word was named. */
+for (const [guess, ruleId] of [
+  ["always says I", "short_words"],
+  ["it uses my every time", "short_words"],
+  ["it always says the word the", "no_e"],
+]) {
+  const hit = matchClaim(guess);
+  if (!hit) { fail("claims", "a literal-word guess was unreadable", JSON.stringify(guess)); continue; }
+  const held = HELD_OUT.map((p) => answerFor(ruleId, p));
+  const n = held.filter((t) => hit.claim.test(t)).length;
+  if (n === 3) fail("claims", `"${guess}" scored 3/3 against ${ruleId}`, "a wrong guess must not test as correct");
+  else console.log(`ok   literal guess  ${JSON.stringify(guess)} -> "${hit.claim.id}", holds ${n}/3`);
+}
+
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nEvery rule holds across every question it can be asked.");
 process.exit(failures ? 1 : 0);

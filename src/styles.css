@@ -638,3 +638,16 @@ input[type=password]:focus {
 /* Already asked: dimmed, but still clickable — a repeat is data, not an error. */
 .poolq.asked { color: var(--muted); background: var(--surface-2); border-style: dashed; }
 .poolq.asked::after { content: " · asked"; color: var(--muted); font-size: 11.5px; }
+
+/* The hidden rule, revealed. First thing on the close screen, because a
+   student who reaches the end of a round without being told what they were
+   looking for has learned nothing from it. */
+.theanswer {
+  background: var(--leaf-soft);
+  border: 1.5px solid color-mix(in srgb, var(--leaf) 55%, transparent);
+  border-radius: var(--r-card);
+  padding: 13px 15px;
+}
+.theanswer > .eyebrow { color: var(--leaf-ink); }
+.theanswer p { font-family: var(--display); font-size: 21px; font-weight: 600;
+  line-height: 1.25; margin-top: 3px; }

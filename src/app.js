@@ -487,6 +487,14 @@ function renderFTR() {
     const next = FTR_SEQUENCE[FTR.leg + 1] || null;
     close = `
     <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
+      <!-- THE ANSWER GOES FIRST. It used to sit in a banner below three case
+           cards, and a pilot student got to the end of the round and told me
+           she still did not know what the rule had been. Whatever else this
+           screen does, a student must not leave it without being told. -->
+      <div class="theanswer">
+        <span class="eyebrow">the rule was</span>
+        <p>${esc(r.label)}</p>
+      </div>
       <div><span class="eyebrow">the rule you wrote</span>
         <p class="yourrule">${marked}</p>
         <p class="hint" style="margin-top:7px">${conf
@@ -507,10 +515,10 @@ function renderFTR() {
       ${conf ? `<div class="spread"><div><span class="eyebrow">how often your rule held</span>
           <div class="score" style="color:${allHold ? "var(--pass)" : "var(--fail)"}">${held}<span style="font-size:20px;color:var(--muted)">/3</span></div></div>
         <p class="hint" style="max-width:36ch">${allHold
-          ? `That is the rule. It was: <b>${esc(r.label)}</b>.`
-          : `The rule was actually: <b>${esc(r.label)}</b>. Yours was close enough to test, which is the part that counts — a guess you can check beats a guess you cannot.`}
+          ? "That is the rule."
+          : `Yours was close enough to test, which is the part that counts — a guess you can check beats a guess you cannot.`}
           ${FTR.probes.length} questions, ${FTR.hypoRev} revision(s), ${FTR.hints} hint(s).</p></div>`
-      : `<div class="banner"><span>!</span><div>Nothing here could be turned into a check, so this one is <b>set aside for a person to read</b> rather than marked zero. The rule was: <b>${esc(r.label)}</b>.</div></div>`}
+      : `<div class="banner"><span>!</span><div>Nothing here could be turned into a check, so this one is <b>set aside for a person to read</b> rather than marked zero.</div></div>`}
       <div class="row">${next
           ? `<button class="btn" data-next-leg="${FTR.leg + 1}">Next: rule ${FTR.leg + 2} of ${FTR_SEQUENCE.length}, ${next.support === "high" ? "with help" : "on your own"} →</button>`
           : `<span class="chip">All ${FTR_SEQUENCE.length} done</span>`}

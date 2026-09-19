@@ -351,6 +351,45 @@ export const CLAIMS = [
 ];
 
 /**
+ * "It always says I."
+ *
+ * A real student wrote that and the judge could not read it, which is
+ * absurd: naming a literal word the replies supposedly always contain is
+ * about the most checkable claim there is. The fixed list could only handle
+ * claims somebody had thought of in advance, and "always says <word>" is a
+ * whole family of them.
+ *
+ * So this one is synthesised from whatever word the student named. It is
+ * tried LAST, after every fixed claim, so "always says a colour" is still
+ * read as the colour rule rather than as a hunt for the literal word
+ * "colour".
+ */
+const SAYS = /\b(?:says?|uses?|has|have|contains?|includes?|adds?|puts?)\b\s+(?:the\s+word\s+|a\s+word\s+)?["'‘“]?([A-Za-z][A-Za-z']*)["'’”]?/i;
+/* Words that are grammar rather than the thing being named. "says a food"
+   must not become a hunt for the literal word "a". */
+const NOT_A_TARGET = new Set(["a", "an", "the", "some", "its", "it", "that", "this",
+  "them", "they", "you", "word", "words", "thing", "things", "something", "always", "never"]);
+
+function literalClaim(text) {
+  const m = String(text || "").match(SAYS);
+  if (!m) return null;
+  const word = m[1].toLowerCase();
+  // "says a food" must not become a hunt for the literal word "a" — but
+  // "says the word THE" is someone naming a stopword on purpose, and the
+  // filter has to get out of the way for that.
+  const named = /\b(?:the|a)\s+word\s+/i.test(String(text));
+  if (!named && NOT_A_TARGET.has(word)) return null;
+  // Only letters and apostrophes survive the SAYS capture, so there is
+  // nothing regex-special left to escape.
+  const rx = new RegExp("\\b" + word.replace(/'/g, "'") + "\\b", "i");
+  return {
+    id: "literal:" + word,
+    says: 'the reply contains the word "' + word + '"',
+    test: (t) => rx.test(String(t)),
+  };
+}
+
+/**
  * Which claim is this student making? Null when nothing here can read it.
  * Returns the claim plus the phrase to highlight, so the close screen can
  * show them the part the judge acted on.
@@ -365,6 +404,11 @@ export function matchClaim(text) {
     const hits = j.must.map((rx) => t.match(rx));
     if (hits.some((h) => !h)) continue;
     return { claim: c, matched: hits[hits.length - 1][0] };
+  }
+  const lit = literalClaim(t);
+  if (lit) {
+    const m = t.match(SAYS);
+    return { claim: lit, matched: m ? m[1] : null };
   }
   return null;
 }
