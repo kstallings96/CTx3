@@ -66,14 +66,16 @@ export const RULES = {
             "It is about how the answers are spelled — which letters are allowed to show up.",
             "Think of the most common letter in English, then go looking for it."],
     say: {
-      "in a few words": [(x) => x + ", obviously.", (x) => x + ", hands down.", (x) => x + ", all day long.", (x) => "Simply " + x + "."],
+      "in a few words": [(x) => x + ", obviously.", (x) => x + ", hands down.", (x) => x + ", all day long.",
+        (x) => "Simply " + x + ".", (x) => x + ", and I stand by it.", (x) => x + ". Not a hard call."],
       "in one sentence": [(x) => x + ", and it is not a hard call at all.",
         (x) => x + ", and I would not pick anything but that.",
         (x) => x + ", and that is all I want to say about it.",
         (x) => "I am going with " + x + ", and I am not sorry about it."],
       "in a paragraph": [(x) => x + ", and it is not a hard call at all. Not on my top four? Try it again and think a bit. I stand by this and always will.",
         (x) => x + ", and I would not pick anything but that. My pals all say I am wrong. My pals do not know what is good. I stand by all of that.",
-        (x) => x + ", all day long. And if you do not think so, that is on you, not on my list. I will not back down."] } },
+        (x) => x + ", all day long. And if you do not think so, that is on you, not on my list. I will not back down.",
+        (x) => x + ", and that is final. I told my pals, my pals told two pals, and now it is not just my opinion, it is a fact."] } },
 
   one_number: { level: 2, name: "Level 2", tierWord: "categorical", label: "always includes exactly one number",
     check: (t) => (t.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi) || []).length === 1,
@@ -86,14 +88,19 @@ export const RULES = {
             "Count how many numbers are in each answer. It is the same count every single time."],
     say: {
       "in a few words": [(x) => x + " — a solid 10.", (x) => x + ", and that is my number 1.",
-        (x) => x + ", 100%.", (x) => "Easy. " + x + ", every 7 days of the week."],
+        (x) => x + ", 100%.", (x) => "Easy. " + x + ", every 7 days of the week.",
+        (x) => x + ", no contest, not in 20 years.", (x) => x + ", and I would bet 5 dollars on it.",
+        (x) => "Ask me 12 times: " + x + ".", (x) => x + ", top of a list of 30."],
       "in one sentence": [(x) => x + ", and I would give it a 9 without thinking about it.",
         (x) => x + ", and I have felt that way for about 3 years now.",
         (x) => x + ", which beats everything imaginable by a factor of 12.",
-        (x) => "Honestly? " + x + ", and I have said so since I was 6."],
+        (x) => "Honestly? " + x + ", and I have said so since I was 6.",
+        (x) => x + ", and I have not changed my mind in 15 years of being asked.",
+        (x) => "There are 40 contenders and it is still " + x + "."],
       "in a paragraph": [(x) => x + ", easily. I would give it a 9 and argue with anybody who disagrees. Nothing comes close.",
         (x) => x + ", and I have thought so since I was 7. Everything else is a distant second. Do not even bother arguing.",
-        (x) => "It is " + x + ". I have tried all the others and this is the only 1 worth defending. Everything else is noise."] } },
+        (x) => "It is " + x + ". I have tried all the others and this is the only 1 worth defending. Everything else is noise.",
+        (x) => x + ". I have been asked this maybe 50 times and the answer has never wobbled. People bring me alternatives; people are wrong."] } },
 
   /* BANKED for spring — conditional tier is a ceiling item (Fischer places
      abstract mappings at 14-16). Not in the pilot four. */
@@ -150,13 +157,16 @@ export const RULES = {
        one. Read any new frame out loud and count, or just run the check. */
     say: {
       "in a few words": [(x) => x + ", all day.", (x) => "Duh. " + x + ".",
-        (x) => x + ", easy.", (x) => "Has to be " + x + "."],
+        (x) => x + ", easy.", (x) => "Has to be " + x + ".",
+        (x) => x + ", for sure.", (x) => x + ". That is it."],
       "in one sentence": [(x) => x + ", and I do not care who says I am off.",
         (x) => x + " \u2014 no one can talk me out of it.",
-        (x) => "I go with " + x + ", now and for good."],
+        (x) => "I go with " + x + ", now and for good.",
+        (x) => x + ", and I have said so for ages."],
       "in a paragraph": [(x) => x + ", and I do not care who says I am off. My pals all laid out a case. Not one of them held up.",
         (x) => x + " \u2014 no one can talk me out of it. I have had this take for ages and it has yet to let me down.",
-        (x) => "I go with " + x + ". I did try the rest. Not one of them came at all near. So that is that."] } },
+        (x) => "I go with " + x + ". I did try the rest. Not one of them came at all near. So that is that.",
+        (x) => x + ", and I do not care what you say. I am not here to chat. I know what I know, and that is it."] } },
 
   colour: { level: 2, name: "Level 2b", tierWord: "categorical", label: "always works a colour into its answer",
     check: (t) => has(t, COLOURS), predicts: "the reply names a colour",
@@ -167,14 +177,23 @@ export const RULES = {
             "Something turns up in the answers that you never asked about.",
             "You can see it. Every answer has one."],
     say: {
+    /* Seven frames, and the colour does a different job in each: a standard,
+       a boundary, a comparison, an absence of doubt, a figure of speech, a
+       go-ahead, a runner-up. With four, the ENDING was the pattern rather
+       than the colour, and "it has four catchphrases" is both easier to spot
+       and wrong. */
       "in a few words": [(x) => x + ", hands down. Not even a grey area.", (x) => x + ". Everything else is grey.",
-        (x) => x + ", and that is my red line.", (x) => x + " \u2014 gold standard."],
-      "in one sentence": [(x) => x + ", and that is the gold standard for me.",
+        (x) => x + ", and that is my red line.", (x) => x + " \u2014 gold standard.",
+        (x) => "It is black and white: " + x + ".", (x) => x + " gets the green light.",
+        (x) => x + ", and everything else takes silver."],
+      "in one sentence": [(x) => x + ", and I would not swap it for all the gold in the world.",
+        (x) => x + ", and that is the gold standard for me.",
         (x) => x + " \u2014 everything else is grey by comparison.",
         (x) => x + ", and that is a red line I will not cross."],
       "in a paragraph": [(x) => x + ", and that is the gold standard for me. I have tried all of the others. They do not come close.",
         (x) => x + " \u2014 everything else is grey by comparison. People argue with me about this constantly. People are wrong.",
-        (x) => x + ", and that is a red line I will not cross. Ask me again tomorrow and you will get exactly the same answer."] } },
+        (x) => x + ", and that is a red line I will not cross. Ask me again tomorrow and you will get exactly the same answer.",
+        (x) => x + ". Everything else is grey. I have thought about this more than is healthy and the answer has not moved once."] } },
 };
 /* The pilot four: two lexical, two categorical. Four rules across fourteen
    students gives several students per rule at fixed difficulty; eleven rules

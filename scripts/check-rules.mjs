@@ -23,8 +23,8 @@
  *     including the ones the interface's own starter chips invite.
  */
 import {
-  RULES, RULE_ORDER, FTR_SEQUENCE, PILLS, HELD_OUT, CLAIMS,
-  askText, answerFor, matchClaim, inferPills,
+  RULES, RULE_ORDER, FTR_SEQUENCE, PILLS, PICKS, HELD_OUT, CLAIMS,
+  askText, answerFor, matchClaim, inferPills, cap,
 } from "../src/rules.js";
 
 let failures = 0;
@@ -68,6 +68,10 @@ const PHRASINGS = {
 };
 
 const tail = (t) => t.trim().slice(-26).toLowerCase();
+/* Which pick a given question produces, mirrored from answerFor so the
+   frame-usage check can reconstruct what was chosen. */
+const PICK_FOR = (ruleId, p) =>
+  PICKS[p.noun][ruleId === "no_e" ? "noE" : ruleId === "short_words" ? "short" : "any"][PILLS[0].opts.indexOf(p.adj)];
 
 for (const ruleId of RULE_ORDER) {
   const r = RULES[ruleId];
@@ -96,6 +100,36 @@ for (const ruleId of RULE_ORDER) {
   if (n > replies.length / 3) {
     fail(ruleId, `a stock ending appears in ${n} of ${replies.length} replies`,
       `"…${worst}" — students will name this instead of the rule`);
+  }
+
+  // 2b. ENOUGH DIFFERENT FRAMES, AND THE PICKER HAS TO USE THEM.
+  //
+  // Check 2 looks at all 58 replies across three lengths and passed happily
+  // while the categorical rules had four short frames each. A student does
+  // not see 58 replies: they send six or eight probes, nearly all "in a few
+  // words", and with four frames the ending repeats by the third one. "It
+  // has four catchphrases" is then more salient than the rule AND easier to
+  // state, which is what a pilot student reported.
+  //
+  // Counting distinct TAILS does not catch it either: a short answer is
+  // shorter than the tail window, so the pick is inside it and sixteen picks
+  // look like sixteen endings. Count the FRAMES, and separately confirm the
+  // hash actually spreads across them rather than favouring three.
+  for (const len of PILLS[2].opts) {
+    const frames = r.say[len] ? r.say[len].length : 0;
+    const want = len === "in a few words" ? 6 : 4;
+    if (frames < want)
+      fail(ruleId, `only ${frames} frames for "${len}" (want ${want})`,
+        "with few frames the ending becomes the pattern instead of the rule");
+
+    // Which frames does the picker actually reach across the sixteen
+    // questions? A frame that is never chosen is not variety.
+    const used = new Set(COMBOS.filter((p) => p.len === len)
+      .map((p) => r.say[len].findIndex((f) => f(cap(PICK_FOR(ruleId, p))) === answerFor(ruleId, p))));
+    used.delete(-1);
+    if (frames >= want && used.size < Math.min(frames, want))
+      fail(ruleId, `"${len}" defines ${frames} frames but the picker only uses ${used.size}`,
+        "the hash is clustering; students will still see repeats");
   }
 
   // 3. the judge reads what a student actually writes, and reads it as the
