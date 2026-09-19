@@ -3,8 +3,11 @@
    off-white, soft edges, no grid, no corner brackets, no glow.
 
    TWO COLOURS CARRY MEANING AND NOTHING ELSE DOES.
-     water (--accent)  your turn: buttons, the field you type in, focus
-     leaf  (--leaf)    the machine talking: BIT, its replies, the step log
+     sky  (--accent)  your turn: buttons, the field you type in, focus
+     leaf (--leaf)    the machine talking: BIT, its replies, the step log
+   The first pass used a teal for one and a green for the other. They sit 37
+   degrees apart on the wheel and read as the same colour at arm's length,
+   which defeats the only job the split has. Sky and leaf are 74 apart.
    A student can tell a reply from a control without reading either, which is
    the whole reason the palette has two accents instead of one pretty one.
 
@@ -14,12 +17,17 @@
 :root{
   --void:#EFEDE5; --paper:#F7F5EF; --surface:#FFFFFF; --surface-2:#F2F0E8; --surface-3:#E7E3D8;
   --ink:#232B26; --ink-2:#414B44; --muted:#656E64; --line:#E0DCD0; --line-2:#C8C3B4;
-  --accent:#2B7A78; --accent-ink:#1E5A58; --accent-soft:#DCEEEC;
-  --amber:#A9741E; --amber-soft:#F7EEDA;
-  --violet:#6B5FC4; --violet-soft:#E9E6FA;
-  --leaf:#3F8F5B; --leaf-soft:#E2F0E4; --leaf-ink:#2C6B42; --bark:#8A7B66;
-  --pass:#2E7D53; --pass-soft:#E0F0E5;
-  --fail:#B3453A; --fail-soft:#F8E5E2;
+  --accent:#1668C4; --accent-ink:#0F4E96; --accent-soft:#DCEAFA;
+  --amber:#B06A0C; --amber-soft:#FCEED4;
+  --violet:#6B4FD6; --violet-soft:#EAE4FC;
+  --leaf:#2E9E4F; --leaf-soft:#E2F5E6; --leaf-ink:#1E6B36; --bark:#8A7B66;
+  /* Fields are tinted, not white. On a white card a white input is invisible,
+     and "where do I type" is the question this whole screen has to answer
+     before any other. */
+  --field:#EFF4FA; --field-primary:#E2EEFC;
+  --bot-shell:#FFFFFF; --bot-line:#2C3A33;
+  --pass:#1E8A4F; --pass-soft:#DEF3E4;
+  --fail:#C4372A; --fail-soft:#FBE4E0;
   --grid:transparent;
   --glow:0 0 0 0 transparent;
   --panel-shadow:0 1px 2px rgba(35,43,38,.04), 0 6px 20px rgba(35,43,38,.06);
@@ -32,12 +40,15 @@
   :root:not([data-theme="light"]){
     --void:#12160F; --paper:#161A13; --surface:#1E241C; --surface-2:#262D24; --surface-3:#313A2E;
     --ink:#E9EDE4; --ink-2:#C6CEC0; --muted:#8D9687; --line:#333C2F; --line-2:#4A5544;
-    --accent:#6FC5BE; --accent-ink:#9BDCD6; --accent-soft:#17322F;
-    --amber:#DDA544; --amber-soft:#332711;
-    --violet:#9B8CFF; --violet-soft:#221E3D;
-    --leaf:#7BC98F; --leaf-soft:#18301F; --leaf-ink:#A5DFB4; --bark:#A3947C;
-    --pass:#6BC98D; --pass-soft:#16301F;
-    --fail:#E8796A; --fail-soft:#331C18;
+    --accent:#5AA9FF; --accent-ink:#9CCBFF; --accent-soft:#10243D;
+    --amber:#F0B44C; --amber-soft:#3A2B0E;
+    --violet:#A895FF; --violet-soft:#241D44;
+    --leaf:#57D67E; --leaf-soft:#12301C; --leaf-ink:#93E9AC; --bark:#A3947C;
+    --field:#141A12; --field-primary:#11212F;
+  --bot-shell:#F2F5EE; --bot-line:#2A332B;
+    --bot-shell:#F2F5EE; --bot-line:#2A332B;
+    --pass:#57D68C; --pass-soft:#123020;
+    --fail:#FF8474; --fail-soft:#3A1A16;
     --grid:transparent;
     --glow:0 0 0 0 transparent;
     --panel-shadow:0 1px 2px rgba(0,0,0,.25);
@@ -46,12 +57,13 @@
 :root[data-theme="dark"]{
   --void:#12160F; --paper:#161A13; --surface:#1E241C; --surface-2:#262D24; --surface-3:#313A2E;
   --ink:#E9EDE4; --ink-2:#C6CEC0; --muted:#8D9687; --line:#333C2F; --line-2:#4A5544;
-  --accent:#6FC5BE; --accent-ink:#9BDCD6; --accent-soft:#17322F;
-  --amber:#DDA544; --amber-soft:#332711;
-  --violet:#9B8CFF; --violet-soft:#221E3D;
-  --leaf:#7BC98F; --leaf-soft:#18301F; --leaf-ink:#A5DFB4; --bark:#A3947C;
-  --pass:#6BC98D; --pass-soft:#16301F;
-  --fail:#E8796A; --fail-soft:#331C18;
+  --accent:#5AA9FF; --accent-ink:#9CCBFF; --accent-soft:#10243D;
+  --amber:#F0B44C; --amber-soft:#3A2B0E;
+  --violet:#A895FF; --violet-soft:#241D44;
+  --leaf:#57D67E; --leaf-soft:#12301C; --leaf-ink:#93E9AC; --bark:#A3947C;
+  --field:#141A12; --field-primary:#11212F;
+  --pass:#57D68C; --pass-soft:#123020;
+  --fail:#FF8474; --fail-soft:#3A1A16;
   --grid:transparent;
   --glow:0 0 0 0 transparent;
   --panel-shadow:0 1px 2px rgba(0,0,0,.25);
@@ -367,7 +379,7 @@ mark{background:var(--pass-soft);color:var(--pass);border-radius:var(--r-ctl);pa
 textarea,
 input[type=text],
 input[type=password] {
-  background: var(--void);
+  background: var(--field);
   border: 1.5px solid var(--line-2);
   border-radius: 4px;
   box-shadow: inset 0 1px 3px rgb(0 0 0 / 22%);
@@ -420,11 +432,19 @@ input[type=password]:focus {
 
 /* The one box on the screen the student is meant to type in. Everything else
    can be quiet; this cannot be missed. */
+/* The one box the student is meant to type in: tinted toward the action
+   colour, a 2px edge, and a ring. At arm's length from a Chromebook this is
+   the first thing on the screen you notice, which is the point. */
 .primary {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--line-2));
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 22%), 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+  background: var(--field-primary);
+  border: 2px solid color-mix(in srgb, var(--accent) 62%, var(--line-2));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.primary::placeholder { color: var(--accent-ink); opacity: .55; }
+.primary::placeholder { color: var(--accent-ink); opacity: .6; }
+.primary:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 26%, transparent);
+}
 
 /* ==================================================================
    BIT, AND A CHAT THAT LOOKS LIKE A CHAT
@@ -445,9 +465,12 @@ input[type=password]:focus {
    ================================================================== */
 
 .bot { flex: none; display: block; }
-.bot-shell { fill: var(--surface-3); stroke: var(--line-2); stroke-width: 1.2; }
+/* White, like a robot. It was taking --surface-3, which made it a slightly
+   different shade of the card it sat on rather than a character on top of
+   one. The outline does the work of separating it from a white card. */
+.bot-shell { fill: var(--bot-shell); stroke: var(--bot-line); stroke-width: 1.6; }
 .bot, .bot * { opacity: 1; }
-.bot-eye { fill: var(--ink); }
+.bot-eye { fill: var(--bot-line); }
 .bot-core { fill: var(--leaf); transition: fill .3s; }
 .bot-idle .bot-core { animation: bot-breathe 3.4s ease-in-out infinite; }
 .bot-thinking .bot-core { fill: var(--accent); animation: bot-breathe .9s ease-in-out infinite; }
