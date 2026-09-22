@@ -1716,7 +1716,7 @@ function renderCode() {
     <p class="lede">The code from your card, your first name, and the first letter of your last name.</p>
     <div class="codewrap">
       <label style="display:block"><span class="eyebrow">Your code</span>
-        <input type="text" id="pcode" class="bigname primary" maxlength="8" autocomplete="off" spellcheck="false" autocapitalize="characters" placeholder="ABC123" style="text-transform:uppercase;letter-spacing:0.18em"></label>
+        <input type="text" id="pcode" class="bigname primary" maxlength="7" autocomplete="off" spellcheck="false" autocapitalize="characters" placeholder="ABC12" style="text-transform:uppercase;letter-spacing:0.18em"></label>
       <div class="namerow">
         <label><span class="eyebrow">First name</span>
           <input type="text" id="firstname" class="bigname" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Kayleigh"></label>
@@ -1737,7 +1737,7 @@ function renderCode() {
     const first = fn.value.trim(), initial = li.value.trim().toUpperCase();
     const fail = (t) => { msg.textContent = t; msg.style.color = "var(--fail)"; };
     const code = normalizeCode(pc.value);
-    if (!code) { pc.focus(); return fail("Codes look like ABC123 — three letters, then three numbers."); }
+    if (!code) { pc.focus(); return fail("Codes look like ABC12 — three letters, then two numbers."); }
     if (first.length < 2) { fn.focus(); return fail("We need your first name so your teacher knows whose work this is."); }
     if (!/^[A-Za-z][A-Za-z '-]*$/.test(first)) { fn.focus(); return fail("Letters only, please — just your first name."); }
     if (!/^[A-Z]$/.test(initial)) { li.focus(); return fail("One letter for your last initial."); }

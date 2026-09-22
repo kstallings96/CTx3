@@ -140,7 +140,7 @@ drop index if exists sessions_dedup_code_idx;
 -- SCOPED TO CTx3 ON PURPOSE, and it has to be. RowdyRoboVac now sends a
 -- participant code too, and it does NOT send a device_id. Without the
 -- instrument clause its rows would fall into this index as
--- (rowdyrobo, ABC123, '', seq) — and because its seq counter restarts at 1 on
+-- (rowdyrobo, ABC12, '', seq) — and because its seq counter restarts at 1 on
 -- a device that has never played, the same student on a second machine would
 -- collide with their own first machine's seq 1 and every event after it would
 -- be rejected as a duplicate and silently lost. RowdyRoboVac dedups on the
@@ -205,7 +205,7 @@ end $$;
 -- ---------------------------------------------------------------------
 -- The participant roster.
 --
--- Codes look like ABC123: three letters, three digits, printed on a card and
+-- Codes look like ABC12: three letters, two digits, printed on a card and
 -- handed to a student. The same code identifies that student in VibeBuilder,
 -- in CTx3 and in RowdyRoboVac, which is what makes the week join on one key.
 --
@@ -233,7 +233,7 @@ end $$;
 -- silently breaks the join this whole file exists for.
 -- ---------------------------------------------------------------------
 create table if not exists students (
-  username   text primary key,          -- ABC123
+  username   text primary key,          -- ABC12
   role       text not null default 'student',   -- 'student' | 'instructor'
   cohort     text,                      -- optional: which camp/session
   created_at timestamptz not null default now()
@@ -242,8 +242,9 @@ create table if not exists students (
 alter table students add column if not exists role text not null default 'student';
 
 -- The instructor key. KSS17 opens every tool in the week, and is a different
--- shape from a student code (three letters, two digits) so it can never
--- collide with a generated card. Its rows are real rows — exclude them in
+-- shape as a student code; what keeps it from ever being handed to a student
+-- is that the generator never emits the digits 0 or 1, and this key contains a
+-- 1. Its rows are real rows — exclude them in
 -- analysis rather than assuming they are not there:
 --
 --   where participant_code <> 'KSS17'

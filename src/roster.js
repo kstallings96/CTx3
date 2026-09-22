@@ -1,8 +1,8 @@
 /**
  * Who a row belongs to.
  *
- * Students sign in with a participant code printed on a card — ABC123, three
- * letters and three digits — plus their first name and last initial. The code
+ * Students sign in with a participant code printed on a card — ABC12, three
+ * letters and two digits — plus their first name and last initial. The code
  * is the key; the name is there so a teacher can match a device to a paper
  * packet.
  *
@@ -25,8 +25,8 @@
  * backup, and it lives with the facilitator, not in this repo.
  */
 
-/** Codes are ABC123: three letters, then three digits. */
-const CODE_RE = /^[A-Z]{3}[0-9]{3}$/;
+/** Codes are ABC12: three letters, then two digits. */
+const CODE_RE = /^[A-Z]{3}[0-9]{2}$/;
 
 /**
  * The instructor's key.
@@ -35,10 +35,10 @@ const CODE_RE = /^[A-Z]{3}[0-9]{3}$/;
  * RowdyRoboVac — so a facilitator can demo, test a station or walk a student
  * through something without borrowing a card.
  *
- * It is deliberately a DIFFERENT SHAPE from a student code: three letters and
- * two digits, where students get three and three. That means it can never
- * collide with a generated card, and instructor rows are recognisable at a
- * glance in a data dump.
+ * It is the same SHAPE as a student code, so what keeps it from ever being
+ * handed to a student is the generator: it never emits the digits 0 or 1,
+ * because they are misread as O and I off a printed card, and this key
+ * contains a 1. If that exclusion ever changes, this key has to change too.
  *
  * Its rows are real rows — the tools log an instructor session exactly like a
  * student's. Exclude them in analysis rather than assuming they are not there:
@@ -76,7 +76,7 @@ export function normalizeCode(raw) {
 export const GRADE = "8";
 
 /**
- * The class list, in any fixed order, as participant codes: ["ABC123", ...].
+ * The class list, in any fixed order, as participant codes: ["ABC12", ...].
  *
  * Optional, and everything works with it empty. What it buys is BALANCED
  * ASSIGNMENT. AlwaysNever's never tier has three instructions and therefore
