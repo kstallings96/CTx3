@@ -71,7 +71,7 @@ export const STEP_TABLE = {
       needs: ["supportCondition", "pass", "artifact"],
       test: (c) => c.supportCondition === "low" && c.pass === true },
   ],
-  "find-the-rule": [
+  "alwaysnever": [
     { step: 1, id: "probes", label: "Sends probes",
       needs: ["probeIndex"],
       test: (c) => c.probeIndex != null },
@@ -86,7 +86,7 @@ export const STEP_TABLE = {
       needs: ["slotValues", "hypothesisHistory", "probeIndex"],
       test: (c) => c.disconfirmingProbe === true,
       exact: (c) => c.slotValues != null },
-    { step: 5, id: "predicts", label: "Commits a rule that correctly predicts held-out cases",
+    { step: 5, id: "predicts", label: "Commits an instruction that correctly predicts held-out cases",
       needs: ["committedRule", "casesMatched"],
       test: (c) => c.casesMatched === true },
   ],

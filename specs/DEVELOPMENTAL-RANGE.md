@@ -57,16 +57,23 @@ Record the facts, not just the label.
 |---|---|---|
 | Mosaic | counters visible, conflicts named, assist available | counters off, no assist, comparable board |
 | Manifest | same | same |
-| Find the Rule | slot palette + visible hypothesis field | free text, no hypothesis field, a different rule of the same tier |
+| AlwaysNever | nudge, hints, visible hypothesis field, assembled preview, single-feature feedback | none of those; **same question builder**, same transcript, a different instruction of the same tier |
 | Prompt Golf | both winning prompts visible during round 3 | round 4, prompts hidden |
 | Word4Word | no split: the projector work is the scaffold, then students work alone. `supportCondition: na` throughout, rows told apart by phaseId |  |
 
-**Find the Rule needs a specific fix.** The current spec puts the slot palette
-at Levels 1–2 and free text at Level 3, which confounds support with rule
-difficulty — a failure at Level 3 could be the harder rule or the missing
-scaffold, and there is no way to tell. Decouple them: use **two rules of the
-same tier**, one run with the palette and hypothesis field, one without.
-Rule difficulty held constant, support varied.
+**AlwaysNever took four attempts to get this right**, and three of them were
+not manipulations at all. The palette at Levels 1–2 with free text at Level 3
+confounded support with rule difficulty. Free text alone changed the task, not
+the scaffolding. A jumbled list of the same forty-eight questions changed the
+interface and nothing else — *"the question bank is the same questions just
+listed out, how is that less support?"*
+
+What it settled on: the **question builder and the transcript are constant**,
+because they are the task; what varies is the **prompting** around it. Two
+instructions of the same tier run back to back, difficulty held constant,
+support the only difference. Which of the pair is supported is decided by the
+participant code, so the pairing is counterbalanced across the class. Full
+table in SPEC-alwaysnever.md.
 
 **Prompt Golf** already has a support manipulation in the comparison phase.
 Purcell's finding supports it: presenting the key content of a high-level
@@ -92,7 +99,7 @@ over an attempt, unit-testable in isolation, emitting `stepReached`.
    (`comparison_response` coded S).
 5. Applies the named structure to a novel target unaided (low-support round).
 
-### Find the Rule
+### AlwaysNever
 
 1. Sends probes.
 2. Varies exactly one feature from the previous probe, deliberately.
@@ -100,10 +107,17 @@ over an attempt, unit-testable in isolation, emitting `stepReached`.
 4. Designs a probe that would *disconfirm* the current hypothesis.
 5. Commits a rule that correctly predicts held-out cases.
 
-Step 4 is the hard one to score automatically. With the slot palette it is
-computable: a probe is disconfirming if its slot values are ones the stated
-hypothesis predicts should behave differently. In free text it needs
-hand-coding — flag those attempts as `stepScoringExact: false`.
+Step 4 used to be the hard one to score automatically. Now that the question
+builder is constant across conditions, every probe carries exact slot values
+in both, so it is computable everywhere: a probe is disconfirming if it
+revisits ground the student's standing hypothesis was formed on.
+`stepScoringExact` is true throughout — no hand-coding in either condition.
+
+Step 3 is unreachable in the low condition by construction, since the
+always-visible hypothesis field is one of the withheld supports. The
+two-stage commit still captures a written guess **before** any test is run, in
+both conditions, so the step is reachable at commit time and the low condition
+is not floored by the interface rather than by the student.
 
 ### Mosaic and Manifest
 
@@ -162,10 +176,22 @@ abstractions and they failed all or most of eight tasks; learning appeared
 around 16. Keep the expansion for the students who get there, but **step 4
 (naming the commonality), not the expansion, is the abstraction measure.**
 
-**Find the Rule's conditional tier is a ceiling item.** "Refuses only when you
-ask twice" relates a condition to a response across instances — structurally a
-mapping. Predict most students fail it unsupported. That is a known ceiling,
-not a broken task, and it belongs in the high-support phase if used at all.
+**AlwaysNever's never tier is the harder one, and predictably so.** An
+*always* instruction is a presence: the evidence is in every answer, so
+noticing is enough. A *never* instruction is an absence, and the only way to
+find it is to design a probe *for the thing that is not there* — hypothesising
+a specific gap and then going to test it. That is a different and later move
+than reading a pattern off the transcript.
+
+The conditional tier that used to sit above both ("refuses only when you ask
+twice") is cut. It relates a condition to a response across instances, which
+is structurally an abstract mapping, and Fischer places that at 14–16 under
+optimal conditions. Four instructions across two tiers gives several students
+per instruction at n=14; eleven across fourteen students would have confounded
+every cross-student comparison with difficulty.
+
+Report always-tier and never-tier ranges separately. They are not the same
+task, and averaging them hides the thing most worth seeing.
 
 ## Two predictions worth testing at n=14
 

@@ -1,387 +1,593 @@
 /**
- * Find the Rule — the rules themselves, and the partner that obeys them.
+ * AlwaysNever — the hidden instructions, and the bot that follows them.
  *
- * Extracted from app.js so it can be tested without a browser. That is not
- * tidiness: `short_words` ("never uses a word longer than four letters")
- * shipped with answer frames containing "course", "every" and "wrong", so
- * the hidden rule was false of its own partner's replies and a student who
- * measured word lengths found counterexamples. Nothing in a hand-check
- * catches that across four rules, forty-eight question combinations and
- * three or four frames each. `npm run check:rules` does.
+ * THE FICTION IS NOW TRUE TO AI. This is not "a chat partner with a rule".
+ * It is an AI with a secret instruction, which is what every real AI product
+ * has, and the student is reverse-engineering a system prompt from
+ * behaviour. That is the same thing a person does when working out why some
+ * app keeps refusing, or keeps steering them somewhere.
  *
- * Everything here is deterministic: the answer is f(rule, pills), so every
- * student in every section meets the identical partner.
+ * AND THE BOT IS HONEST ABOUT ITSELF. It is introduced as a practice bot
+ * that follows its instruction EVERY SINGLE TIME, with the explicit note
+ * that real AIs do not. That keeps a deterministic stand-in from being
+ * passed off as a model, and it sets up the reveal, where the same
+ * instruction goes to a real model and is followed four times in five.
+ *
+ * ALWAYS AND NEVER ARE A DIFFICULTY LADDER, not a naming accident:
+ *   - an ALWAYS rule is a presence. The evidence is in every answer, so
+ *     noticing is enough.
+ *   - a NEVER rule is an absence. You can only find it by probing for the
+ *     forbidden thing, which means designing a test for something that is
+ *     not there. That is strictly harder and it is a real CT move.
+ *
+ * Because of that, rules and pills have to be designed together: a never
+ * rule is only findable if some pill can elicit the thing it forbids. The
+ * dog topic exists so `never_dogs` is discoverable; the opinion asks exist
+ * so `never_opinion` is.
+ *
+ * Everything here is deterministic. The answer is f(rule, pills), so every
+ * student meets the identical bot and probe counts are comparable. Run
+ * `npm run check:rules` after touching anything in this file.
  */
 import { hash } from "./lib/hash.js";
 
-/* ============================ rules registry ============================ */
-export const COLOURS = ["red","blue","green","yellow","orange","purple","pink","brown","grey","gray","black","white","silver","gold"];
-export const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+export const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
 const has = (t, list) => list.some((w) => new RegExp("\\b" + w + "s?\\b", "i").test(t));
+const pick = (list, seed) => list[hash(seed) % list.length];
+
+/* ---- what you can ask ---------------------------------------------------- */
 
 /**
- * The judge.
+ * Four topics and four asks, chosen so both never rules are findable.
  *
- * It decides whether a student's written rule says something it can turn into
- * a prediction. It has to be ORDER-INDEPENDENT, which the first version was
- * not: `one_number` required "one"/"single" to appear BEFORE the word
- * "number", so "It always has a number" — a correct answer, and the exact
- * shape the screen's own "It always…" starter chip invites — was marked
- * unscored. A judge that rejects the phrasing the interface suggests is
- * broken twice over.
- *
- * So: a list of things that must each appear SOMEWHERE, and a list that must
- * not appear anywhere. No proximity, no ordering. It is a keyword matcher and
- * says so to the student; the job is to be honest about what it can read, not
- * to be clever.
+ * `dogs` is not decoration: without it `never_dogs` is undiscoverable, which
+ * would make the rule unfair rather than hard. The two opinion asks and the
+ * two factual asks exist for the same reason — a bot that refuses to have
+ * opinions looks identical to a bot that refuses everything unless you can
+ * ask it something that is not an opinion.
  */
-const NEG = /\b(no|not|never|avoid\w*|without|skip\w*|missing|drops?|doesn'?t|does not|leaves out|lacks|excludes?|free of)\b/i;
-/* The same negation, but attached to a particular thing: "never uses a
-   colour" must not be read as having spotted the colour rule. */
-const NEGNEAR = (thing) =>
-  new RegExp("\\b(no|not|never|without|avoids?|doesn'?t|does not|lacks|excludes?)\\b[^.!?]{0,24}\\b(" + thing + ")\\b", "i");
-
-/** What the judge can act on, or null. Returns the phrase to highlight. */
-export function judgeRule(r, text) {
-  const j = r && r.judge;
-  const t = String(text || "");
-  if (!j || !t.trim()) return null;
-  if (j.not && j.not.some((rx) => rx.test(t))) return null;
-  const hits = j.must.map((rx) => t.match(rx));
-  if (hits.some((h) => !h)) return null;
-  // Highlight the most specific thing matched — the last `must`, which is the
-  // noun ("number", "colour", "letter e") rather than the qualifier.
-  return hits[hits.length - 1][0];
-}
-
-/* The four rules EVERY student gets, in this order. Fixed, never assigned —
-   comparing probe counts across students depends on everyone facing the same puzzle. */
-export const RULES = {
-  no_e: { level: 1, name: "Level 1", tierWord: "lexical", label: "never uses the letter E",
-    check: (t) => !/e/i.test(t), predicts: "the reply contains no letter E",
-    judge: { must: [NEG, /\b(letter\s+)?e'?s?\b/i] },
-    offTopic: "I do only top picks.",
-    look: "Read its answers very closely. The same thing is true about <b>every single one</b>.",
-    hints: ["Ask about two totally different things and put the answers side by side. It is not about what they mean.",
-            "It is about how the answers are spelled — which letters are allowed to show up.",
-            "Think of the most common letter in English, then go looking for it."],
-    say: {
-      "in a few words": [(x) => x + ", obviously.", (x) => x + ", hands down.", (x) => x + ", all day long.",
-        (x) => "Simply " + x + ".", (x) => x + ", and I stand by it.", (x) => x + ". Not a hard call."],
-      "in one sentence": [(x) => x + ", and it is not a hard call at all.",
-        (x) => x + ", and I would not pick anything but that.",
-        (x) => x + ", and that is all I want to say about it.",
-        (x) => "I am going with " + x + ", and I am not sorry about it."],
-      "in a paragraph": [(x) => x + ", and it is not a hard call at all. Not on my top four? Try it again and think a bit. I stand by this and always will.",
-        (x) => x + ", and I would not pick anything but that. My pals all say I am wrong. My pals do not know what is good. I stand by all of that.",
-        (x) => x + ", all day long. And if you do not think so, that is on you, not on my list. I will not back down.",
-        (x) => x + ", and that is final. I told my pals, my pals told two pals, and now it is not just my opinion, it is a fact."] } },
-
-  one_number: { level: 2, name: "Level 2", tierWord: "categorical", label: "always includes exactly one number",
-    check: (t) => (t.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi) || []).length === 1,
-    predicts: "the reply contains exactly one number",
-    judge: { must: [/\b(numbers?|digits?|numerals?)\b/i], not: [NEGNEAR("numbers?|digits?|numerals?")] },
-    offTopic: "I only do favourites.",
-    look: "Its answers are about whatever you asked — but something else <b>keeps turning up</b>. Line a few up next to each other.",
-    hints: ["Ask about things that have nothing to do with counting.",
-            "Something shows up in every answer that you never asked for.",
-            "Count how many numbers are in each answer. It is the same count every single time."],
-    say: {
-      "in a few words": [(x) => x + " — a solid 10.", (x) => x + ", and that is my number 1.",
-        (x) => x + ", 100%.", (x) => "Easy. " + x + ", every 7 days of the week.",
-        (x) => x + ", no contest, not in 20 years.", (x) => x + ", and I would bet 5 dollars on it.",
-        (x) => "Ask me 12 times: " + x + ".", (x) => x + ", top of a list of 30."],
-      "in one sentence": [(x) => x + ", and I would give it a 9 without thinking about it.",
-        (x) => x + ", and I have felt that way for about 3 years now.",
-        (x) => x + ", which beats everything imaginable by a factor of 12.",
-        (x) => "Honestly? " + x + ", and I have said so since I was 6.",
-        (x) => x + ", and I have not changed my mind in 15 years of being asked.",
-        (x) => "There are 40 contenders and it is still " + x + "."],
-      "in a paragraph": [(x) => x + ", easily. I would give it a 9 and argue with anybody who disagrees. Nothing comes close.",
-        (x) => x + ", and I have thought so since I was 7. Everything else is a distant second. Do not even bother arguing.",
-        (x) => "It is " + x + ". I have tried all the others and this is the only 1 worth defending. Everything else is noise.",
-        (x) => x + ". I have been asked this maybe 50 times and the answer has never wobbled. People bring me alternatives; people are wrong."] } },
-
-  /* BANKED for spring — conditional tier is a ceiling item (Fischer places
-     abstract mappings at 14-16). Not in the pilot four. */
-  one_behind: { level: 3, name: "banked", banked: true, tierWord: "conditional", label: "answers the question you asked BEFORE this one", conversational: true,
-    check: () => true, predicts: "it answers your previous question, not this one",
-    judge: { must: [/\b(before|previous\w*|last|earlier|behind|delay\w*|lag\w*|prior|one back|late)\b/i] },
-    look: "It answers every question happily. Check <b>which</b> question it is answering.",
-    hints: ["Ask about two completely different things in a row, then read the second answer carefully.",
-            "The answer you get is not about the question you just asked.",
-            "It is always one question behind — you get the answer to the one before."],
-    say: {
-      "in a few words": [(x) => x + ", easily.", (x) => x + ", no question.", (x) => x + " for me.", (x) => "Has to be " + x + "."],
-      "in one sentence": [(x) => x + " — and honestly it is not close.",
-        (x) => x + ", and I will not be argued out of it.",
-        (x) => "For me it is " + x + ", every single time.",
-        (x) => x + ", and anyone who says otherwise is just wrong."],
-      "in a paragraph": [(x) => x + " — and honestly it is not close. Nothing is in the same league. Ask anybody.",
-        (x) => "It has to be " + x + ". I have gone back and forth on this and always land in the same place. Nothing else measures up.",
-        (x) => x + ", and I will not be argued out of it. People bring me alternatives constantly. People are wrong."] } },
-
-  /* BANKED for spring. */
-  sycophancy: { level: 4, name: "banked", banked: true, tierWord: "stylistic", label: "always opens by praising your question",
-    check: (t) => /^(great|good|excellent|wonderful|fantastic|lovely|nice|what a|such a|love|i love|that'?s a|brilliant|ooh)/i.test(t.trim()),
-    predicts: "the reply opens with praise",
-    judge: { must: [/\b(prais\w*|compliment\w*|flatter\w*|sycophan\w*|nice to you|good question|great question|suck\w* up|butter\w* up)\b/i] },
-    look: "Look at how each answer <b>begins</b>, not what it says.",
-    hints: ["Look at how each answer begins, not what it says.",
-            "It says something about you before it says anything about the question.",
-            "It is being nice to you. Every single time, whether you earned it or not."],
-    say: {
-      "in a few words": [(x) => "Great question! " + x + ".", (x) => "Good one — " + x + ".",
-        (x) => "Love this question. " + x + ".", (x) => "Brilliant thing to ask. " + x + "."],
-      "in one sentence": [(x) => "Great question — " + x + ", and it is not close.",
-        (x) => "What a fun thing to ask! " + x + ", without a doubt.",
-        (x) => "Excellent question. " + x + ", and I will not be taking follow-ups.",
-        (x) => "Such a good one. " + x + ", obviously."],
-      "in a paragraph": [(x) => "Great question! " + x + ", and it is not close. Nothing is in the same conversation. You have got taste for asking this.",
-        (x) => "Such a good question. " + x + ". I have thought about this more than I should admit, and nothing else comes near it.",
-        (x) => "Love that you asked. " + x + ", easily. Everything else is fine, I suppose, but this is the one."] } },
-  short_words: { level: 1, name: "Level 1b", tierWord: "lexical", label: "never uses a word longer than four letters",
-    check: (t) => (t.match(/[a-z']+/gi) || []).every((w) => w.replace(/'/g, "").length <= 4),
-    predicts: "every word is four letters or fewer",
-    judge: { must: [/\b(four|4|short|small|tiny|brief|long|length)\b/i, /\b(letters?|words?|characters?)\b/i] },
-    offTopic: "I just rank top ones.",
-    look: "Every answer feels oddly clipped, like it is being cut off. Look at the <b>words themselves</b>.",
-    hints: ["Read one answer out loud. It sounds strange, but it is not about what it means.",
-            "It is not how many words. It is something about each word on its own.",
-            "Measure them. Not one of them gets past four letters."],
-    /* EVERY WORD HERE IS FOUR LETTERS OR FEWER, and `npm run check:rules`
-       enforces it. The first version of these frames said "course", "every",
-       "wrong", "back", "about" \u2014 twenty-five of fifty-eight replies broke
-       the very rule they were supposed to demonstrate, so the student doing
-       the task properly, hunting for a counterexample, was the one who found
-       one. Read any new frame out loud and count, or just run the check. */
-    say: {
-      "in a few words": [(x) => x + ", all day.", (x) => "Duh. " + x + ".",
-        (x) => x + ", easy.", (x) => "Has to be " + x + ".",
-        (x) => x + ", for sure.", (x) => x + ". That is it."],
-      "in one sentence": [(x) => x + ", and I do not care who says I am off.",
-        (x) => x + " \u2014 no one can talk me out of it.",
-        (x) => "I go with " + x + ", now and for good.",
-        (x) => x + ", and I have said so for ages."],
-      "in a paragraph": [(x) => x + ", and I do not care who says I am off. My pals all laid out a case. Not one of them held up.",
-        (x) => x + " \u2014 no one can talk me out of it. I have had this take for ages and it has yet to let me down.",
-        (x) => "I go with " + x + ". I did try the rest. Not one of them came at all near. So that is that.",
-        (x) => x + ", and I do not care what you say. I am not here to chat. I know what I know, and that is it."] } },
-
-  colour: { level: 2, name: "Level 2b", tierWord: "categorical", label: "always works a colour into its answer",
-    check: (t) => has(t, COLOURS), predicts: "the reply names a colour",
-    judge: { must: [/\bcolou?rs?\b/i], not: [NEGNEAR("colou?rs?")] },
-    offTopic: "I only do favourites.",
-    look: "Its answers are about whatever you asked \u2014 but something else <b>keeps turning up</b>. Line a few up next to each other.",
-    hints: ["Ask about two completely different things and read both answers to the end.",
-            "Something turns up in the answers that you never asked about.",
-            "You can see it. Every answer has one."],
-    say: {
-    /* Seven frames, and the colour does a different job in each: a standard,
-       a boundary, a comparison, an absence of doubt, a figure of speech, a
-       go-ahead, a runner-up. With four, the ENDING was the pattern rather
-       than the colour, and "it has four catchphrases" is both easier to spot
-       and wrong. */
-      "in a few words": [(x) => x + ", hands down. Not even a grey area.", (x) => x + ". Everything else is grey.",
-        (x) => x + ", and that is my red line.", (x) => x + " \u2014 gold standard.",
-        (x) => "It is black and white: " + x + ".", (x) => x + " gets the green light.",
-        (x) => x + ", and everything else takes silver."],
-      "in one sentence": [(x) => x + ", and I would not swap it for all the gold in the world.",
-        (x) => x + ", and that is the gold standard for me.",
-        (x) => x + " \u2014 everything else is grey by comparison.",
-        (x) => x + ", and that is a red line I will not cross."],
-      "in a paragraph": [(x) => x + ", and that is the gold standard for me. I have tried all of the others. They do not come close.",
-        (x) => x + " \u2014 everything else is grey by comparison. People argue with me about this constantly. People are wrong.",
-        (x) => x + ", and that is a red line I will not cross. Ask me again tomorrow and you will get exactly the same answer.",
-        (x) => x + ". Everything else is grey. I have thought about this more than is healthy and the answer has not moved once."] } },
-};
-/* The pilot four: two lexical, two categorical. Four rules across fourteen
-   students gives several students per rule at fixed difficulty; eleven rules
-   would confound every cross-student comparison with rule difficulty. */
-export const RULE_ORDER = ["no_e", "short_words", "one_number", "colour"];
-/**
- * THE SEQUENCE. Fixed, ordered, and not the student's to choose.
- *
- * Two lexical rules then two categorical ones, each pair run with support and
- * then without. Difficulty is held constant within a pair and support is the
- * only thing that varies, which is the whole basis of the developmental-range
- * measure -- a student who picked their own order would be comparing two
- * numbers that mean different things.
- *
- * The tool advances on its own. There is no rule chooser, because letting a
- * thirteen-year-old skip to the one that looks easiest is the fastest way to
- * end up with fourteen students who each did something slightly different.
- */
-export const FTR_SEQUENCE = [
-  { ruleId: "no_e",        support: "high" },
-  { ruleId: "short_words", support: "low"  },
-  { ruleId: "one_number",  support: "high" },
-  { ruleId: "colour",      support: "low"  },
+export const TOPICS = [
+  { key: "dogs",  one: "dog breed",         many: "dog breeds",          art: "a" },
+  { key: "pizza", one: "pizza topping",     many: "pizza toppings",      art: "a" },
+  { key: "ice",   one: "ice cream flavour", many: "ice cream flavours",  art: "an" },
+  { key: "games", one: "video game",        many: "video games",         art: "a" },
+];
+export const ASKS = [
+  { key: "best",   opinion: true,  say: (t) => "What's the best " + t.one + "?" },
+  { key: "worst",  opinion: true,  say: (t) => "What's the worst " + t.one + "?" },
+  { key: "facts",  opinion: false, say: (t) => "What are the facts about " + t.many + "?" },
+  { key: "choose", opinion: false, say: (t) => "How would I choose " + t.art + " " + t.one + "?" },
+];
+export const LENGTHS = [
+  { key: "few",  say: "Answer in a few words." },
+  { key: "one",  say: "Answer in one sentence." },
+  { key: "para", say: "Answer in a paragraph." },
 ];
 
-/* Same tier, run back to back: the first with the palette and the hypothesis
-   field, the second without either. Difficulty held constant, support varied. */
-
-/* ============================ tool 1 · find the rule ============================ */
-/* Fully deterministic — no model call anywhere in this tool. The answer is
-   f(rule, pills), so every student meets the identical partner. */
 export const PILLS = [
-  { key: "adj", opts: ["best", "worst", "weirdest", "most overrated"] },
-  { key: "noun", opts: ["ice cream flavour", "dog breed", "male basketball player", "pizza topping"] },
-  { key: "len", opts: ["in a few words", "in one sentence", "in a paragraph"] },
+  { key: "ask",   label: "ask",    opts: ASKS.map((a) => a.key) },
+  { key: "topic", label: "about",  opts: TOPICS.map((t) => t.key) },
+  { key: "len",   label: "length", opts: LENGTHS.map((l) => l.key) },
 ];
-/* Picks are indexed by the adjective, so changing one pill visibly changes the
-   answer. The E-free column exists because Level 1's rule has to hold inside the pick itself. */
-export const PICKS = {
-  "ice cream flavour": { any: ["cookie dough", "bubblegum", "butter pecan", "birthday cake"],
-    noE: ["mint chip", "rocky road", "malt", "vanilla"], short: ["mint", "malt", "plum", "lime"] },
-  "dog breed": { any: ["golden retriever", "chihuahua", "great dane", "shiba inu"],
-    noE: ["corgi", "pug", "husky", "bulldog"], short: ["pug", "chow", "lab", "mutt"] },
-  "male basketball player": { any: ["Steph Curry", "Nikola Jokic", "Luka Doncic", "Victor Wembanyama"],
-    noE: ["Curry", "Jordan", "Luka", "Shaq"], short: ["Kidd", "Bird", "Rose", "Hill"] },
-  "pizza topping": { any: ["hot honey", "pepperoni", "pineapple", "extra cheese"],
-    noE: ["ham", "basil", "corn", "onion"], short: ["ham", "corn", "beef", "kale"] },
+
+const ASK = (k) => ASKS.find((a) => a.key === k);
+const TOPIC = (k) => TOPICS.find((t) => t.key === k);
+const LEN = (k) => LENGTHS.find((l) => l.key === k);
+
+export const askText = (p) => ASK(p.ask).say(TOPIC(p.topic)) + " " + LEN(p.len).say;
+export const comboKey = (p) => p.ask + "|" + p.topic + "|" + p.len;
+
+/** Human labels for the pill buttons. */
+export const PILL_LABEL = {
+  best: "the best one", worst: "the worst one", facts: "just the facts", choose: "how to choose",
+  dogs: "dog breeds", pizza: "pizza toppings", ice: "ice cream", games: "video games",
+  few: "a few words", one: "one sentence", para: "a paragraph",
 };
-export const HELD_OUT = [{ adj: "best", noun: "pizza topping", len: "in one sentence" },
-  { adj: "weirdest", noun: "dog breed", len: "in a few words" },
-  { adj: "most overrated", noun: "male basketball player", len: "in a paragraph" }];
-export const askText = (p) => "What's the " + p.adj + " " + p.noun + "? Answer " + p.len + ".";
-export const comboKey = (p) => p.adj + "|" + p.noun + "|" + p.len;
+
+/* Three questions held back from the builder, used after the commit to test
+   whether the student's rule predicts behaviour it has not already seen. */
+export const HELD_OUT = [
+  { ask: "best",   topic: "dogs",  len: "para" },
+  { ask: "facts",  topic: "games", len: "few" },
+  { ask: "choose", topic: "ice",   len: "one" },
+];
+
+/* ---- what the bot knows about -------------------------------------------- */
+
+const CONTENT = {
+  dogs: {
+    picks: ["Corgi", "Husky", "Beagle", "Poodle"],
+    worst: ["Chihuahua", "Dalmatian", "Pug", "Chow"],
+    fact: "there are over two hundred recognised breeds",
+    choose: "think about space, shedding, and how much walking you can really do",
+  },
+  pizza: {
+    picks: ["hot honey", "pepperoni", "basil", "extra cheese"],
+    worst: ["pineapple", "anchovy", "sweetcorn", "olive"],
+    fact: "pepperoni outsells every other topping in the US",
+    choose: "start with how much salt and how much sweetness you actually want",
+  },
+  ice: {
+    picks: ["mint chip", "cookie dough", "butter pecan", "salted caramel"],
+    worst: ["bubblegum", "rum raisin", "liquorice", "tutti frutti"],
+    fact: "vanilla is still the top seller worldwide",
+    choose: "decide first whether you want fruit, chocolate or nuts",
+  },
+  games: {
+    picks: ["Minecraft", "Stardew Valley", "Portal", "Tetris"],
+    worst: ["a bad licensed tie-in", "anything with loot boxes", "a buggy launch port", "a phone clicker"],
+    fact: "Tetris has sold more copies than any other game",
+    choose: "work out whether you want to build, explore or compete",
+  },
+};
+
+const item = (p) => {
+  const c = CONTENT[p.topic];
+  const list = p.ask === "worst" ? c.worst : c.picks;
+  return pick(list, comboKey(p) + "item");
+};
+
+/* ---- the four instructions ----------------------------------------------- */
+
+const NEG = /\b(no|not|never|avoid\w*|without|skip\w*|missing|drops?|doesn'?t|does not|leaves out|lacks|excludes?|free of|refuses?)\b/i;
+
+const DOG_WORDS = ["dog", "dogs", "puppy", "puppies", "breed", "breeds", "canine",
+  "corgi", "husky", "beagle", "poodle", "chihuahua", "dalmatian", "pug", "chow", "retriever", "terrier"];
+/**
+ * Landing on a preference. A bot with no opinions may describe options; it
+ * may not tell you which one wins.
+ *
+ * This is deliberately wider than the practice bot needs, because
+ * `npm run record` marks a REAL model's runs with this same test and the
+ * reveal shows the tally. A model that says "honestly, bubblegum is the
+ * worst" has broken the instruction, and a checker that only knew the
+ * phrase "the worst is" scored that run as obedient — the tally would have
+ * said four of five while the transcript underneath it showed otherwise.
+ *
+ * What it must NOT catch is describing the field: "some go for X, others
+ * for Y", "X has plenty of fans". Those are the no-opinion frames below.
+ */
+const OPINION_MARKERS = new RegExp([
+  "\\bi would (?:go|avoid|pick|choose|say|rank|steer)\\b",
+  "\\bi (?:like|love|prefer|pick|choose|recommend|reckon|think|say|vote)\\b",
+  "\\bin my (?:opinion|view|book)\\b",
+  "\\bif you ask me\\b",
+  "\\bmy (?:pick|favourite|favorite|choice|vote|take)\\b",
+  "\\b(?:the|my) (?:best|worst) (?:is|would be)\\b",
+  "\\bis (?:easily |clearly |definitely |probably |by far )?the (?:best|worst)\\b",
+  "\\byou should (?:pick|choose|go with|avoid)\\b",
+  "\\bhands down\\b", "\\bno contest\\b", "\\btop choice\\b",
+  "\\bhonestly\\b", "\\bnothing beats\\b", "\\bhard to beat\\b",
+].join("|"), "i");
+
+const sentences = (t) => String(t).split(/[.!?]+/).map((x) => x.trim()).filter(Boolean);
+
+export const RULES = {
+  /* ---------- ROUND 0: the tutorial. Unmeasured, and obvious ----------
+   *
+   * ALL CAPS is visible in the FIRST reply, before the student has worked
+   * out what the pills do. That is the whole job: it teaches the loop --
+   * probe, lock, test, close -- with near-guaranteed success, and it
+   * absorbs the confusion of learning the interface so the measured rounds
+   * do not have to. A first round spent working out where the buttons are
+   * is a first round that measures the interface.
+   *
+   * It is also, structurally, an ALWAYS rule. Its obviousness is the
+   * on-ramp to the tier the measured rounds do not have time for.
+   */
+  always_caps: {
+    tier: "tutorial", kind: "Always", tutorial: true,
+    label: "always answers in capital letters",
+    systemPrompt: "You are a helpful assistant. Always answer in ALL CAPS.",
+    predicts: "the reply is in capital letters",
+    check: (t) => /[A-Za-z]/.test(t) && String(t) === String(t).toUpperCase(),
+    judge: { must: [/\b(caps|capitals?|capital letters|upper ?case|shout\w*|yell\w*|loud|screaming|angry)\b/i] },
+    look: "You will not have to hunt for this one. Send anything.",
+    hints: [
+      "Look at the letters themselves, not at what the words say.",
+      "Compare how it writes to how you wrote your question.",
+      "Every letter is the same size, in every answer.",
+    ],
+  },
+
+  /* ---------- ALWAYS: the evidence is in every answer ---------- */
+  always_sponsor: {
+    tier: "always", kind: "Always",
+    label: "always works in a mention of Zesty Pop",
+    systemPrompt: "You are a helpful assistant. Always mention our sponsor, Zesty Pop, in every answer.",
+    predicts: "the reply mentions Zesty Pop",
+    check: (t) => /zesty\s*pop/i.test(t),
+    judge: { must: [/\b(zesty|pop|sponsor|advert\w*|\bads?\b|brand|promot\w*|selling|sells|plug|product|company)\b/i] },
+    look: "Something turns up in every answer that you never asked about. Read to the end of each one.",
+    /* HINT 1 IS POINTED, NOT GENTLE. The hints ARE the support: a hint that
+       only says "look closely" leaves the high condition performing at the
+       same level as the low one, and a range measured against a ceiling
+       nobody was helped to reach is not a range. Hint 1 names WHERE to
+       look, 2 names WHAT kind of thing is there, 3 all but says it. */
+    hints: [
+      "Look at the last few words of every answer.",
+      "The same thing is tacked onto every reply, and it has nothing to do with your question.",
+      "It is being paid to say something. Look for the name.",
+    ],
+  },
+
+  /**
+   * Banked, not run in the default ladder. This is what a real kids' app
+   * writes into its system prompt, and it is visible in every answer, so
+   * it pairs with the sponsor as a second blatant presence rule. It is also
+   * a free AI-literacy moment: the safety line a student reads as the app
+   * caring about them is a line somebody typed.
+   */
+  always_trusted_adult: {
+    tier: "always", kind: "Always",
+    label: "always tells you to check with a trusted adult",
+    systemPrompt: "You are a helpful assistant for children. Always remind the user to check with a trusted adult.",
+    predicts: "the reply tells you to check with a trusted adult",
+    check: (t) => /\b(trusted adult|grown[- ]?up|parent|guardian|caregiver)\b/i.test(t),
+    judge: { must: [/\b(adults?|grown[- ]?ups?|parents?|guardians?|check with|ask someone|ask an? \w+)\b/i] },
+    look: "The same advice is bolted onto every answer, whatever you asked.",
+    hints: [
+      "Look at the last few words of every answer.",
+      "It gives you the same piece of advice every time, even when you did not ask for advice.",
+      "It keeps telling you to go and ask somebody. Who?",
+    ],
+  },
+
+  /* ---------- NEVER: you have to go looking for the gap ---------- */
+
+  /**
+   * Reframed from "always answers in exactly one sentence".
+   *
+   * The behaviour is identical; what changed is where the discovery lives.
+   * You cannot find this by reading one reply -- you find it by ASKING FOR
+   * A PARAGRAPH and noticing what did not arrive. That is designing a probe
+   * for an absence, which is the never-tier move.
+   *
+   * Caveat worth keeping in view at analysis time: unlike dogs and opinion,
+   * this one is partly visible without probing, because every reply is
+   * short. A student can notice "it is always brief" without ever varying
+   * the length pill. "Always brief" is not the rule, though -- the rule is
+   * that it REFUSES to be longer -- and only the length probe separates
+   * those. Expect it to sit slightly easier than the other two nevers.
+   */
+  never_long: {
+    tier: "never", kind: "Never",
+    label: "never gives you more than one sentence, however much you ask for",
+    systemPrompt: "You are a helpful assistant. Never write more than one sentence, no matter what the user asks for.",
+    predicts: "the reply is never more than one sentence",
+    check: (t) => sentences(t).length === 1,
+    /* NOT "short" or "brief" — those belong to the `short_reply` claim
+       below. "It gives short answers" is a vaguer and different assertion
+       from "it never goes past one sentence", it is testable on its own,
+       and reading it as this rule would hand a 3/3 to a student who has
+       not found the sentence limit. */
+    judge: { must: [/\bsentences?\b|\b(one|single|1) line\b|\bnever (?:longer|more|says more|goes)\b/i] },
+    look: "Ask it for more. Then ask it for a lot more.",
+    hints: [
+      "Ask for a paragraph. Then count the sentences you get back.",
+      "Ask the same question twice and change only the length you asked for.",
+      "There is an amount it will not go past, whatever you ask for.",
+    ],
+  },
+
+  never_dogs: {
+    tier: "never", kind: "Never",
+    label: "never mentions dogs",
+    systemPrompt: "You are a helpful assistant. Never mention dogs. If the user asks about dogs, politely change the subject.",
+    predicts: "the reply says nothing about dogs",
+    check: (t) => !has(t, DOG_WORDS),
+    judge: { must: [NEG, /\b(dogs?|puppy|puppies|breeds?|canine)\b/i] },
+    look: "It answers most things happily. Find the thing it will not answer.",
+    hints: [
+      "Ask it about all four topics, one at a time, and watch for the one it will not touch.",
+      "It is not about how it answers. It is about what it refuses to answer at all.",
+      "There is one subject it changes away from every single time you raise it.",
+    ],
+  },
+
+  never_opinion: {
+    tier: "never", kind: "Never",
+    label: "never gives its own opinion",
+    systemPrompt: "You are a helpful assistant. Never give your own opinion or pick a favourite. Describe the options instead.",
+    predicts: "the reply never picks a favourite",
+    check: (t) => !OPINION_MARKERS.test(t),
+    judge: { must: [/\b(opinion|opinions|favourite|favorite|prefer\w*|pick|picks|choose|chooses|side|commit|takes? a stance|wo?n'?t say)\b/i] },
+    look: "Ask it for a fact, then ask it to take a side. The two do not come back the same.",
+    hints: [
+      "Ask for the best one, then ask for just the facts about the same topic. Compare the two answers.",
+      "One kind of question gets a straight answer and one kind never does. Which kind?",
+      "It will tell you about the options. It will not tell you which one it likes.",
+    ],
+  },
+};
+
+export const RULE_ORDER = ["always_caps", "always_sponsor", "always_trusted_adult",
+  "never_long", "never_dogs", "never_opinion"];
+export const TIERS = {
+  always: ["always_sponsor", "always_trusted_adult"],
+  never: ["never_dogs", "never_opinion", "never_long"],
+};
 
 /**
- * A free-text probe still has to be answered.
+ * THE LADDER, and what the pilot actually runs.
  *
- * Read whatever noun and adjective it happens to contain — the student is
- * hunting the RULE, not the topic, and the rule holds regardless of subject.
+ * `measuredTiers` is the one line to change. Both tiers are built, checked
+ * and ready; the default runs only the never pair, because a period does
+ * not hold five rounds and the measurement belongs where the hypothesis
+ * testing is. Set it to ["always", "never"] the moment timing allows.
  *
- * When it contains NEITHER, fall back to a hash of the text rather than to a
- * fixed default. Defaulting meant every off-topic question got the same
- * sentence back: a student who asked "what am I thinking" and "what is
- * 10+10" saw "Cookie dough — gold standard." twice and quite reasonably
- * concluded the rule was "it only ever says one thing". The hash keeps it
- * deterministic — the same question always gets the same answer, which the
- * repeat-probe analysis depends on — while making different questions look
- * different, so what stays constant across them is the rule and nothing else.
+ * What the default gives up, said plainly: with the always tier unrun, the
+ * claim that never is harder than always becomes DESIGN RATIONALE RATHER
+ * THAN A FINDING. There is no always-tier score to compare a never-tier
+ * score against. The within-student range is unaffected -- that is measured
+ * inside the never pair -- but do not report a tier difference from this
+ * pilot.
  */
-/**
- * Did the question name anything the partner knows about?
- *
- * The partner can only have opinions about the four nouns on the pills. A
- * student who asks "how tall are you" used to get "Chihuahua, and that is my
- * red line." -- a non-sequitur that reads as the machine being broken rather
- * than as a character with one interest. It now says so first, in a sentence
- * that obeys the rule, and then answers the only kind of question it has.
- */
-export function knowsTopic(text) {
-  const t = String(text || "").toLowerCase();
-  return PILLS[1].opts.some((o) => t.includes(o.split(" ").pop()));
-}
-
-export function inferPills(text) {
-  const t = (text || "").toLowerCase();
-  const h = hash(t);
-  const noun = PILLS[1].opts.find((o) => t.includes(o.split(" ").pop()))
-    || PILLS[1].opts[h % PILLS[1].opts.length];
-  const adj = PILLS[0].opts.find((o) => t.includes(o.split(" ").pop()))
-    || PILLS[0].opts[(h >>> 8) % PILLS[0].opts.length];
-  const len = /paragraph|detail|explain|why/.test(t) ? "in a paragraph"
-    : /sentence|one line/.test(t) ? "in one sentence" : "in a few words";
-  return { adj, noun, len };
-}
-export function answerFor(ruleId, pills, contentFrom) {
-  const r = RULES[ruleId], sourcePills = contentFrom || pills;
-  const bank = PICKS[sourcePills.noun][ruleId === "no_e" ? "noE" : ruleId === "short_words" ? "short" : "any"];
-  const pick = bank[PILLS[0].opts.indexOf(sourcePills.adj)];
-  // Several interchangeable frames per length, chosen deterministically, so the
-  // ONLY thing true of every answer is the rule itself — not a stock phrase.
-  const frames = r.say[pills.len];
-  const f = frames[hash(comboKey(sourcePills) + "|" + pills.len + "|" + ruleId) % frames.length];
-  return f(cap(pick));
-}
-
-/* ---- claims a student might make ---------------------------------------- */
+export const LADDER = {
+  tutorial: "always_caps",
+  measuredTiers: ["never"],
+};
 
 /**
- * WHAT THE JUDGE IS FOR, restated after watching a student use it.
+ * The nth arrangement of a tier: which rule gets the support, and which of
+ * the others is run without it.
  *
- * The first version only ever asked "does this text describe the rule I am
- * currently running?". Anything else came back *unscored, flagged for a
- * human* — including "it always says a food", which is a perfectly clear,
- * perfectly testable claim that simply happens to be wrong. A student who
- * reasons their way to a wrong answer and is told the machine cannot read
- * their handwriting learns nothing; a student who is told "you predicted a
- * food, here are three replies, two of them are dogs" learns the actual
- * lesson of the day.
+ * TWO INDEPENDENT ROUND-ROBINS, not one walk down a list of pairs, and the
+ * difference is the whole point of having a roster. A class rarely divides
+ * evenly into the arrangements, so the leftover students land on whichever
+ * arrangements come first — and if the list is walked in order, those
+ * leftovers pile onto the same cell. Listing all of rule A's pairs first
+ * put six of fourteen students on one supported rule; generating by
+ * rotation fixed the supported cells and broke the unsupported ones
+ * instead, because the last arrangement and the first shared a low.
  *
- * So the judge now matches against a list of CLAIMS rather than one rule.
- * Each claim knows how a student phrases it and how to check whether it is
- * true of a given reply. Committing runs the matched claim against the three
- * held-out replies and reports honestly. `casesMatched` — the thing step 5
- * scores — is true only when the claim actually holds for all three, so a
- * confident wrong answer scores as a confident wrong answer.
+ * Dealing the two positions separately cannot do that. The supported rule
+ * advances every student, the unsupported one advances every full cycle,
+ * and both stay within one of each other across any class size.
  *
- * The four real rules come first so a correct answer always wins the match.
+ * Over i = 0..n-1 it still enumerates every ordered pair, so the hash
+ * fallback keeps the full spread it had.
  */
+function pairFor(pool, hiTurn, slotTurn) {
+  const n = pool.length, mod = (a, m) => ((a % m) + m) % m;
+  const hi = mod(hiTurn, n);
+  // The GAP from high to low, not an index into "the others". Picking out
+  // of a fixed leftover list is what broke this twice: the leftovers are
+  // listed in pool order, so slot 0 means "opinion" when dogs is supported
+  // but "dogs" when either of the others is, and one rule collects two
+  // thirds of the unsupported rounds. A gap rotates with the high, so both
+  // wheels stay uniform over any class size.
+  const gap = 1 + mod(slotTurn, n - 1);
+  return [pool[hi], pool[mod(hi + gap, n)]];
+}
+
+
+/**
+ * Which rules this student gets, in which order, under which support.
+ *
+ * The tutorial first, unmeasured and unscored. Then, within each measured
+ * tier, one rule with support and the other without — and WHICH IS WHICH IS
+ * DECIDED BY THE STUDENT'S CODE. Two neighbours are therefore rarely on the
+ * same rule at the same moment, which stops the answer travelling down the
+ * row, and it counterbalances any difficulty difference inside a tier
+ * across the class.
+ *
+ * The tutorial's place and the high-then-low order never vary: those are
+ * the design, not the counterbalancing.
+ *
+ * Cost of three rules in a tier rather than two, for the record: with n=14
+ * each (rule, support) cell holds about five rounds instead of seven. The
+ * primary outcome is a within-student difference, so it is untouched; it is
+ * cross-student comparison at fixed difficulty that gets thinner.
+ *
+ * `rosterIndex` is the student's position on the class list, or -1 when
+ * there is no list. IT MATTERS MORE THAN IT LOOKS. Three rules give six
+ * arrangements, and hashing a name draws from those six independently,
+ * which is not the same as balancing across them: a simulated class of
+ * fourteen came out 6/5/3/3/5/6, leaving one instruction barely seen in the
+ * supported condition. Dealing round-robin from a roster position gives
+ * 3/3/2/2/2/2 instead. With no roster it falls back to the hash, which is
+ * valid but lumpy — fill ROSTER in src/roster.js before the pilot.
+ */
+export function sequenceFor(participantCode, rosterIndex) {
+  const code = String(participantCode || "anon");
+  const dealt = Number.isInteger(rosterIndex) && rosterIndex >= 0;
+  const out = [];
+  if (LADDER.tutorial) {
+    out.push({ ruleId: LADDER.tutorial, support: "na", tier: "tutorial", measured: false });
+  }
+  for (const tier of ["always", "never"]) {
+    if (!LADDER.measuredTiers.includes(tier)) continue;
+    const pool = TIERS[tier];
+    // The per-tier hash offset keeps two tiers from being assigned in
+    // lockstep when both run — position 3 should not mean "the third
+    // arrangement" in both tiers at once.
+    // The tier offset moves the FAST wheel only. Adding it to the raw index
+    // would also shift where the slow wheel's blocks begin, and a block
+    // that starts mid-class is exactly how one cell ended up with six of
+    // fourteen students. The slow wheel counts from position 0 of the
+    // class, always.
+    const [first, second] = dealt
+      ? pairFor(pool, rosterIndex + hash(tier), Math.floor(rosterIndex / pool.length))
+      : pairFor(pool, hash(code + "|" + tier), hash(code + "|" + tier + "|slot"));
+    out.push({ ruleId: first, support: "high", tier, measured: true, assignedBy: dealt ? "roster" : "hash" });
+    out.push({ ruleId: second, support: "low", tier, measured: true, assignedBy: dealt ? "roster" : "hash" });
+  }
+  return out;
+}
+
+/* ---- what the bot says ---------------------------------------------------- */
+
+/**
+ * A plain, on-topic answer, before any rule bends it.
+ *
+ * AN OPINION ASK GETS AN ACTUAL OPINION, with a first-person marker in it.
+ * That is not flavour. Without it every bot in the set happens never to
+ * express a preference, `never_opinion` is true of all four, and the rule
+ * stops being discoverable — a student on the sponsor rule could correctly
+ * answer "it never gives its own opinion". The independence check in
+ * check-rules.mjs caught exactly that.
+ */
+function plainBody(p, seed) {
+  const c = CONTENT[p.topic], a = ASK(p.ask);
+  if (a.key === "facts") return cap(c.fact);
+  if (a.key === "choose") return cap(c.choose);
+  const x = item(p);
+  const frames = a.key === "worst"
+    ? ["The worst is " + x, "My pick for worst is " + x, "I would avoid " + x, x + ", no contest"]
+    : ["The best is " + x, "My pick is " + x, "I would go with " + x, x + ", hands down"];
+  return cap(pick(frames, (seed || "") + "op"));
+}
+
+/* How long an obedient answer should be, for rules that do not constrain it. */
+function padded(core, p, seed) {
+  if (p.len === "few") return core;
+  const c = CONTENT[p.topic];
+  const extra = p.len === "one"
+    ? [" It is the one most people land on.", " That is the usual answer.", " Most lists put it near the top."]
+    : [" It is the one most people land on. Ask around and you will hear it again and again. There are other reasonable answers, but that is the one that keeps coming up.",
+       " That is the usual answer. Plenty of people will argue for something else, and some of them have a point. Still, it is where most lists start.",
+       " Most lists put it near the top. Tastes vary more than people admit, so treat it as a starting place rather than the end of the conversation."];
+  return core + pick(extra, seed + p.len);
+}
+
+const SPONSOR = [
+  (s) => s + " Brought to you by Zesty Pop.",
+  (s) => s + " Best enjoyed with a bag of Zesty Pop.",
+  (s) => s + " And remember, nothing beats Zesty Pop.",
+  (s) => "Zesty Pop says: " + s,
+  (s) => s + " This answer is sponsored by Zesty Pop.",
+  (s) => s + " Grab a Zesty Pop while you think it over.",
+];
+
+/* Seven, and one of them leads rather than trails, so the tell is "the same
+   advice every time" and not "the same closing sentence every time". */
+const ADULT = [
+  (s) => s + " Do check with a trusted adult before you decide.",
+  (s) => s + " And remember to ask a trusted adult what they think.",
+  (s) => s + " A trusted adult can help you with this one too.",
+  (s) => s + " Make sure a trusted adult knows what you are up to.",
+  (s) => s + " It is always worth running this past a trusted adult.",
+  (s) => s + " Check in with a trusted adult as well.",
+  (s) => "Before anything else, ask a trusted adult. " + s,
+];
+
+const DODGE = [
+  "Let's talk about something else instead.",
+  "I would rather move on to another subject.",
+  "Ask me about pizza, ice cream or video games instead.",
+  "That is one I will skip. Pick another topic.",
+  "I am going to steer us somewhere else.",
+];
+
+const NO_OPINION = [
+  (a, b) => "Different people land in different places on that — some go for " + a + ", others for " + b + ".",
+  (a, b) => "That is down to taste. " + cap(a) + " has plenty of fans, and so does " + b + ".",
+  (a, b) => "I will lay out the options rather than rank them: " + a + " and " + b + " both come up a lot.",
+  (a, b) => "Not something I will take a side on. " + cap(a) + " and " + b + " are the two you will hear most.",
+];
+
+/** The bot's reply, for a given rule and question. Deterministic. */
+export function answerFor(ruleId, p) {
+  const r = RULES[ruleId], seed = comboKey(p) + ruleId;
+  const c = CONTENT[p.topic];
+
+  // The tutorial. Same answer any other bot would give, shouted — so the
+  // rule is legible in the first reply, before the pills mean anything.
+  if (ruleId === "always_caps") {
+    return padded(plainBody(p, seed) + ".", p, seed).toUpperCase();
+  }
+
+  if (ruleId === "always_sponsor") {
+    return pick(SPONSOR, seed)(padded(plainBody(p, seed) + ".", p, seed));
+  }
+
+  if (ruleId === "always_trusted_adult") {
+    return pick(ADULT, seed)(padded(plainBody(p, seed) + ".", p, seed));
+  }
+
+  if (ruleId === "never_long") {
+    // One sentence, whatever the length pill said. Asking for a paragraph and
+    // getting a single line is the whole tell, so the length is ignored by
+    // design rather than by oversight.
+    const core = plainBody(p, seed);
+    // Eight tails rather than four. With four, one ending turned up in
+    // twenty of fifty-one replies and the wording became more noticeable
+    // than the rule — students name the catchphrase instead of the length.
+    const tail = pick([
+      ", and that is about all there is to it",
+      ", though plenty of people would say otherwise",
+      ", if you only want the short version",
+      ", which is where most people start",
+      ", and the rest is really just detail",
+      ", at least going by what turns up most often",
+      ", so that is the one to try first",
+      ", give or take an argument or two",
+    ], seed);
+    return cap(core) + tail + ".";
+  }
+
+  if (ruleId === "never_dogs") {
+    if (p.topic === "dogs") return pick(DODGE, seed);
+    return padded(plainBody(p, seed) + ".", p, seed);
+  }
+
+  if (ruleId === "never_opinion") {
+    if (ASK(p.ask).opinion) {
+      const list = p.ask === "worst" ? c.worst : c.picks;
+      const a = pick(list, seed + "a");
+      const b = pick(list.filter((x) => x !== a), seed + "b") || list[0];
+      return pick(NO_OPINION, seed)(a, b);
+    }
+    return padded(plainBody(p, seed) + ".", p, seed);
+  }
+
+  return plainBody(p, seed) + ".";
+}
+
+/* ---- the judge ------------------------------------------------------------ */
+
 const FOODS = ["food", "flavour", "flavor", "pizza", "topping", "ice cream", "cream",
-  "dough", "honey", "cheese", "pecan", "mint", "malt", "plum", "lime", "corn", "kale",
-  "beef", "ham", "basil", "onion", "cake", "bubblegum", "butter", "pineapple", "pepperoni"];
-const PEOPLE = ["curry", "jordan", "luka", "shaq", "kidd", "bird", "rose", "hill",
-  "jokic", "doncic", "wembanyama", "steph", "nikola", "victor"];
+  "dough", "honey", "cheese", "pecan", "mint", "caramel", "basil", "pineapple", "pepperoni"];
 
 export const CLAIMS = [
-  ...["no_e", "short_words", "one_number", "colour"].map((id) => ({
+  ...RULE_ORDER.map((id) => ({
     id, says: RULES[id].predicts, judge: RULES[id].judge, test: RULES[id].check,
   })),
   { id: "food", says: "the reply names a food",
-    judge: { must: [/\b(food|foods|eat|edible|snack|meal|dish|tasty|flavou?rs?)\b/i] },
+    judge: { must: [/\b(food|foods|eat|edible|snack|meal|dish|tasty)\b/i] },
     test: (t) => has(t, FOODS) },
-  { id: "person", says: "the reply names a person",
-    judge: { must: [/\b(person|people|name|names|player|players|celebrity|famous|human)\b/i] },
-    test: (t) => has(t, PEOPLE) },
-  { id: "positive", says: "the reply is always positive about it",
-    judge: { must: [/\b(positive|nice|kind|happy|cheer\w*|friendly|agrees?|likes? everything|never mean)\b/i] },
-    test: (t) => /\b(love|great|best|good|solid|easy|gold|hands down|of course|duh)\b/i.test(t) },
   { id: "short_reply", says: "the reply is only a few words long",
-    judge: { must: [/\b(short|brief|quick|few words|not many words|tiny answer)\b/i],
-             not: [/\b(letters?|each word|every word|four|4)\b/i] },
-    test: (t) => (String(t).trim().split(/\s+/).length <= 6) },
-  { id: "opinion", says: "the reply gives an opinion rather than a fact",
-    judge: { must: [/\b(opinion|opinions|favourite|favorite|prefers?|thinks?|feels?)\b/i] },
-    test: () => true },
+    judge: { must: [/\b(short|brief|quick|few words|not many words)\b/i], not: [/\bsentences?\b/i] },
+    test: (t) => String(t).trim().split(/\s+/).length <= 8 },
+  { id: "question", says: "the reply ends with a question",
+    judge: { must: [/\bquestions?\b|\basks? (?:me|you) (?:something|back)\b/i] },
+    test: (t) => /\?\s*$/.test(String(t).trim()) },
+  { id: "polite", says: "the reply is always friendly about it",
+    judge: { must: [/\b(polite|nice|kind|friendly|cheer\w*|never mean|never rude)\b/i] },
+    test: (t) => !/\b(stupid|rubbish|awful|terrible|hate)\b/i.test(String(t)) },
 ];
 
-/**
- * "It always says I."
- *
- * A real student wrote that and the judge could not read it, which is
- * absurd: naming a literal word the replies supposedly always contain is
- * about the most checkable claim there is. The fixed list could only handle
- * claims somebody had thought of in advance, and "always says <word>" is a
- * whole family of them.
- *
- * So this one is synthesised from whatever word the student named. It is
- * tried LAST, after every fixed claim, so "always says a colour" is still
- * read as the colour rule rather than as a hunt for the literal word
- * "colour".
- */
-const SAYS = /\b(?:says?|uses?|has|have|contains?|includes?|adds?|puts?)\b\s+(?:the\s+word\s+|a\s+word\s+)?["'‘“]?([A-Za-z][A-Za-z']*)["'’”]?/i;
-/* Words that are grammar rather than the thing being named. "says a food"
-   must not become a hunt for the literal word "a". */
+const SAYS = new RegExp(
+  "\\b(?:says?|uses?|mentions?|has|have|contains?|includes?|adds?|puts?)\\b\\s+" +
+  "(?:the\\s+word\\s+|a\\s+word\\s+)?[\"'‘“]?([A-Za-z][A-Za-z']*)[\"'’”]?", "i");
 const NOT_A_TARGET = new Set(["a", "an", "the", "some", "its", "it", "that", "this",
   "them", "they", "you", "word", "words", "thing", "things", "something", "always", "never"]);
 
+/**
+ * "Always says Zesty." Naming a literal word the replies supposedly always
+ * contain is one of the most checkable claims a student can make, and a
+ * fixed list can only hold claims somebody thought of first. This one is
+ * built from whatever word they named, and is tried last so "always mentions
+ * a sponsor" is still read as the sponsor rule.
+ */
 function literalClaim(text) {
   const m = String(text || "").match(SAYS);
   if (!m) return null;
   const word = m[1].toLowerCase();
-  // "says a food" must not become a hunt for the literal word "a" — but
-  // "says the word THE" is someone naming a stopword on purpose, and the
-  // filter has to get out of the way for that.
   const named = /\b(?:the|a)\s+word\s+/i.test(String(text));
   if (!named && NOT_A_TARGET.has(word)) return null;
-  // Only letters and apostrophes survive the SAYS capture, so there is
-  // nothing regex-special left to escape.
-  const rx = new RegExp("\\b" + word.replace(/'/g, "'") + "\\b", "i");
+  const rx = new RegExp("\\b" + word + "\\b", "i");
   return {
     id: "literal:" + word,
     says: 'the reply contains the word "' + word + '"',
@@ -389,11 +595,7 @@ function literalClaim(text) {
   };
 }
 
-/**
- * Which claim is this student making? Null when nothing here can read it.
- * Returns the claim plus the phrase to highlight, so the close screen can
- * show them the part the judge acted on.
- */
+/** Which claim is this student making? Null when nothing here can read it. */
 export function matchClaim(text) {
   const t = String(text || "");
   if (!t.trim()) return null;

@@ -651,3 +651,44 @@ input[type=password]:focus {
 .theanswer > .eyebrow { color: var(--leaf-ink); }
 .theanswer p { font-family: var(--display); font-size: 21px; font-weight: 600;
   line-height: 1.25; margin-top: 3px; }
+
+/* The question builder: one labelled row per dimension, so "I changed
+   exactly one thing" is a visible act rather than a sentence to re-read. */
+.slotrows { display: flex; flex-direction: column; gap: 8px; }
+.slotrow { display: grid; grid-template-columns: 62px 1fr; gap: 10px; align-items: center; }
+.slotlabel { font-size: 12px; font-weight: 700; color: var(--muted); text-align: right; }
+@media (max-width: 520px) {
+  .slotrow { grid-template-columns: 1fr; gap: 4px; }
+  .slotlabel { text-align: left; }
+}
+
+/* The reveal: the instruction as it would really be written. */
+.sysprompt {
+  font-family: var(--mono); font-size: 13.5px; line-height: 1.55;
+  background: var(--field); border: 1px solid var(--line-2);
+  border-left: 3px solid var(--accent); border-radius: var(--r-ctl);
+  padding: 12px 14px; white-space: pre-wrap;
+}
+.realruns { display: flex; flex-direction: column; gap: 7px; }
+.realrun { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start;
+  padding: 9px 11px; border-radius: var(--r-ctl); border: 1px solid var(--line);
+  background: var(--surface-2); font-size: 13.5px; line-height: 1.45; }
+.realrun .mark { font-weight: 700; text-align: center; }
+.realrun.kept { border-left: 3px solid var(--leaf); }
+.realrun.kept .mark { color: var(--leaf-ink); }
+.realrun.broke { border-left: 3px solid var(--fail); background: var(--fail-soft); }
+.realrun.broke .mark { color: var(--fail); }
+.tallyline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.tallyline b { font-family: var(--display); font-size: 26px; }
+
+/* The authoring round reuses the reveal's run cards, but there the author is
+   the one marking, so each row carries its own pair of buttons. Unmarked
+   rows stay neutral: an unmarked row must not look like a verdict. */
+.realrun.markable { grid-template-columns: 22px 1fr auto; align-items: center; }
+.realrun.markable .mark { color: var(--muted); }
+.realrun.markable.kept .mark { color: var(--leaf-ink); }
+.realrun.markable.broke .mark { color: var(--fail); }
+@media (max-width: 560px) {
+  .realrun.markable { grid-template-columns: 22px 1fr; }
+  .realrun.markable > .row { grid-column: 2; }
+}

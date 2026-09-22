@@ -34,7 +34,7 @@ tools, one database and one export, one URL on the whiteboard.
     Hub.tsx           tile grid, day gating
   /tools
     prompt-golf/
-    find-the-rule/
+    alwaysnever/
     two-machines/
 /scripts
   rescore.mjs         recompute every derived field from a raw event log
@@ -140,16 +140,16 @@ a formal split would mean two snowmen in one period.
 
 | Order | Tool | Time | Support |
 |---|---|---|---|
-| 1 | Find the Rule | 28 min | **high then low** |
+| 1 | AlwaysNever | 28 min | **high then low** |
 | 2 | Prompt Golf | 18 min | high (round 3) and low (round 4) |
 
-46 minutes of tool time. **Find the Rule's low-support phase is restored** —
+46 minutes of tool time. **AlwaysNever's low-support phase is restored** —
 it was cut purely for time under a schedule that no longer exists now that
 Word4Word has moved to its own day. Two rules of the same tier back to back,
 the palette and hypothesis field on and then off, difficulty held constant.
 
 Prompt Golf still carries the headline range measurement. Two tools reporting
-a range is better than one, and Find the Rule's is now honest: the two-stage
+a range is better than one, and AlwaysNever's is now honest: the two-stage
 commit records the hypothesis whether or not the always-visible field is
 there, and step 4 is defined against the student's own prior probes rather
 than slot algebra, so neither step is unreachable without the palette.
@@ -188,7 +188,7 @@ rate-limited per participant code.
 3. Prompt Golf — the most instrumented tool, the one carrying two constructs,
    and now the one carrying the range measurement. Building it first shakes
    out the events module and the scoring module together.
-4. Find the Rule.
+4. AlwaysNever.
 5. Word4Word.
 6. Retrofit `?pc=` handling into the three existing tools.
 
@@ -216,4 +216,4 @@ rate-limited per participant code.
 - ~~Is Word4Word whole-class only?~~ No. Thirty of its sixty minutes are
   hands-on and attributable; the projector cells stay class-level.
 - ~~Which tool carries the developmental-range measurement?~~ Prompt Golf
-  leads; Find the Rule now reports one too.
+  leads; AlwaysNever now reports one too.

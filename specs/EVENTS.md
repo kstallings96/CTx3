@@ -99,7 +99,7 @@ This is the primary outcome of the pilot. Not gain.
 
 | Construct | Primary signal | Tool |
 |---|---|---|
-| Hypothesis testing | step sequence; single-feature probe proportion | Find the Rule |
+| Hypothesis testing | step sequence; single-feature probe proportion | AlwaysNever |
 | Abstraction | step sequence; word count trajectory; `comparison_response` coding | Prompt Golf |
 | Debugging | `targetedEdit`, `msFromFailureToNextAttempt`, `consecutiveFailures` | Prompt Golf (clinic round) |
 | Decomposition | step sequence; reorder-vs-add across revisions | Word4Word (per student) |

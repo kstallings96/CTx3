@@ -41,6 +41,33 @@ export async function insertSession(row) {
   return false;
 }
 
+/**
+ * Is this participant code on the roster?
+ *
+ * Returns true, false, or NULL when the question could not be asked — no
+ * backend configured, or the network is down. Null means let them in. A
+ * classroom with no wifi still has to be able to run the study, and a student
+ * blocked at sign-in is a participant you cannot re-run.
+ *
+ * The roster table itself is unreadable from here by design; `check_roster` is
+ * a security-definer function that answers one yes/no question and hands back
+ * no rows, so a client can catch a typo without being able to list the class.
+ */
+export async function checkRoster(code) {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.rpc("check_roster", { code });
+    if (error) {
+      console.warn("[ctx3] roster check failed:", error.message);
+      return null;
+    }
+    return data === true;
+  } catch (err) {
+    console.warn("[ctx3] roster check unreachable:", err?.message || err);
+    return null;
+  }
+}
+
 /* Identifying fields belong on the sessions row and nowhere else. Nothing
    should ever put one in an event payload -- but a stray field in a future
    payload would be an IRB problem discovered months later in a data dump, so
@@ -91,6 +118,17 @@ export function eventRows(events) {
  */
 export async function insertEvents(events) {
   if (!supabase || events.length === 0) return false;
+  /* No session row yet means these rows would go up with a null session_id,
+     which the NOT NULL constraint rejects as a 400 -- and a rejected batch
+     is a batch the queue treats as sent. Returning false keeps them in
+     localStorage for the next flush instead.
+
+     This is not hypothetical. An exception during boot skips startSession
+     while leaving the flush timer running, and the events of every round
+     that followed went up null and were thrown away by the database. The
+     queue is the thing that makes a dropped device recoverable; it cannot
+     be the thing that quietly discards a participant. */
+  if (!sessionId) return false;
 
   const { error } = await supabase.from("events").insert(eventRows(events));
   if (!error) return true;
@@ -112,6 +150,9 @@ export async function insertEvents(events) {
 /** Fire-and-forget flush for page unload, where an await cannot finish. */
 export function beaconEvents(events) {
   if (!url || !anonKey || events.length === 0) return false;
+  // Same guard as insertEvents, for the same reason: a keepalive flush on
+  // pagehide with no session row is a 400 nobody is around to see.
+  if (!sessionId) return false;
   // `fetch` with keepalive, NOT sendBeacon.
   //
   // sendBeacon cannot set headers, so the key had to go in the query string,

@@ -260,7 +260,7 @@ variables and no second thing to keep awake.
 | URL | What the student gets |
 |---|---|
 | `https://<app>.vercel.app/` | The hub. Sign in, then pick from the three tiles. |
-| `https://<app>.vercel.app/find-the-rule` | Sign in, then straight into Find the Rule. No hub, no tiles, no way out. |
+| `https://<app>.vercel.app/alwaysnever` | Sign in, then straight into AlwaysNever. No hub, no tiles, no way out. |
 | `https://<app>.vercel.app/prompt-golf` | Same, for Prompt Golf. |
 | `https://<app>.vercel.app/word4word` | Same, for Word4Word. |
 
@@ -294,7 +294,7 @@ The passwords as shipped:
 
 | Tool | Password |
 |---|---|
-| Find the Rule | `roadrunners` |
+| AlwaysNever | `roadrunners` |
 | Prompt Golf | `holeinone` |
 | Word4Word | `gorowdy` |
 

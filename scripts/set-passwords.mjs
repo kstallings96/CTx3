@@ -18,7 +18,7 @@ import { sha256hex } from "../src/lib/sha256.js";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "..", "src", "passwords.js");
 const SALT = "ctx3";
-const TOOLS = { ftr: "Find the Rule", pg: "Prompt Golf", w4w: "Word4Word" };
+const TOOLS = { ftr: "AlwaysNever", pg: "Prompt Golf", w4w: "Word4Word" };
 
 const digest = (tool, word) => sha256hex(`${SALT}:${tool}:${word.trim().toLowerCase()}`);
 

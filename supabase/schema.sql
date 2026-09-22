@@ -136,9 +136,23 @@ drop index if exists sessions_dedup_code_idx;
 -- foreign key and been lost.
 
 -- CTx3: one seq per code per device.
+--
+-- SCOPED TO CTx3 ON PURPOSE, and it has to be. RowdyRoboVac now sends a
+-- participant code too, and it does NOT send a device_id. Without the
+-- instrument clause its rows would fall into this index as
+-- (rowdyrobo, ABC123, '', seq) — and because its seq counter restarts at 1 on
+-- a device that has never played, the same student on a second machine would
+-- collide with their own first machine's seq 1 and every event after it would
+-- be rejected as a duplicate and silently lost. RowdyRoboVac dedups on the
+-- session uuid instead, which is unique per run; see the index below.
+--
+-- The older, unscoped version of this index is dropped first, because
+-- `create index if not exists` will not change the predicate of an index that
+-- already exists.
+drop index if exists events_dedup_code_idx;
 create unique index if not exists events_dedup_code_idx on events
   (instrument, participant_code, coalesce(device_id, ''), seq)
-  where participant_code is not null;
+  where participant_code is not null and instrument = 'ctx3';
 
 -- RowdyRoboVac: one seq per session uuid.
 create unique index if not exists events_dedup_session_idx on events
@@ -187,6 +201,111 @@ begin
     raise notice 'RLS on, INSERT-only policy applied: %', r.relname;
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- The participant roster.
+--
+-- Codes look like ABC123: three letters, three digits, printed on a card and
+-- handed to a student. The same code identifies that student in VibeBuilder,
+-- in CTx3 and in RowdyRoboVac, which is what makes the week join on one key.
+--
+-- WHY CODES, WHEN src/roster.js ARGUED AGAINST THEM
+--
+-- That file's case was: no card to lose, no code to mistype into an orphan
+-- participant nobody can account for, and it matches RowdyRoboVac. Two of
+-- those changed. Students now carry a card for VibeBuilder regardless, so the
+-- card cost is paid either way; and the roster below is pre-seeded, so a
+-- mistyped code is REJECTED at sign-in rather than becoming an orphan. What
+-- the switch buys is the collision that file called unlikely-rather-than-
+-- impossible: two students with the same first name and last initial are one
+-- student to a name-derived pseudonym, and are two students to a code.
+--
+-- Names still go on the session row, exactly as before. The code is an
+-- additional key, not a replacement for sign-in.
+--
+-- SEEDING. Codes are generated once, by VibeBuilder's generator:
+--
+--   node scripts/make-roster.js 30      (in the vibebuilder repo)
+--
+-- and the roster.sql it writes is run in BOTH Supabase projects — this one
+-- and VibeBuilder's — so the same student has the same code in all three
+-- tools. Generate once. Generating twice gives two different rosters and
+-- silently breaks the join this whole file exists for.
+-- ---------------------------------------------------------------------
+create table if not exists students (
+  username   text primary key,          -- ABC123
+  role       text not null default 'student',   -- 'student' | 'instructor'
+  cohort     text,                      -- optional: which camp/session
+  created_at timestamptz not null default now()
+);
+
+alter table students add column if not exists role text not null default 'student';
+
+-- The instructor key. KSS17 opens every tool in the week, and is a different
+-- shape from a student code (three letters, two digits) so it can never
+-- collide with a generated card. Its rows are real rows — exclude them in
+-- analysis rather than assuming they are not there:
+--
+--   where participant_code <> 'KSS17'
+insert into students (username, role) values ('KSS17', 'instructor')
+on conflict (username) do update set role = 'instructor';
+
+-- Same posture as every other table here: RLS on, no policies for anon, so
+-- the roster cannot be read or enumerated from a browser. Validation happens
+-- through the function below, which answers one yes/no question and hands
+-- back no rows.
+alter table students enable row level security;
+revoke all on students from anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- Code validation, as a function rather than a read policy.
+--
+-- A client needs to answer "is this code real?" without being able to list
+-- the roster. security definer runs the lookup as the function's owner, so
+-- anon gets the boolean and never touches the table. This is the same
+-- deviation the leaderboard view already makes, for the same reason: a
+-- postgres-owned object is how something gets read back without exposing
+-- what it reads from.
+--
+-- It is a guard against typos, not access control. Someone determined could
+-- guess at the code space — and a guessed code buys them nothing they did not
+-- already have, because the anon key can insert into sessions and events
+-- regardless. Do not describe this to the IRB as authentication.
+-- ---------------------------------------------------------------------
+create or replace function check_roster(code text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from students
+    where username = upper(regexp_replace(coalesce(code, ''), '[^A-Za-z0-9]', '', 'g'))
+  );
+$$;
+
+revoke all on function check_roster(text) from public;
+grant execute on function check_roster(text) to anon;
+
+-- ---------------------------------------------------------------------
+-- DELIBERATELY NO FOREIGN KEY from sessions.participant_code to students.
+--
+-- It is the obvious next thought and it is a trap. A foreign key makes an
+-- unseeded or misspelled code a HARD INSERT FAILURE, which means a student
+-- whose code never made it into this table loses their entire session — the
+-- one failure this study cannot absorb, because you cannot re-run a
+-- participant. The client checks the roster and warns; if the check cannot be
+-- reached, sign-in proceeds anyway, because a classroom with no network still
+-- has to be able to run the study.
+--
+-- The cost is that a bad code can reach the data. Find them in analysis
+-- rather than blocking on them at write time:
+--
+--   select distinct participant_code from sessions
+--   where participant_code is not null
+--     and participant_code not in (select username from students);
+-- ---------------------------------------------------------------------
 
 -- Confirm RLS is actually on. Every row must show rowsecurity = true.
 --

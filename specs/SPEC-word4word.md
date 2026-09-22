@@ -144,7 +144,7 @@ knows what the period is about. It produces no events, which is fine.
 something must go, take time from phase 4.
 
 > **If you cut phase 6, Word4Word contributes no per-student data at all** and
-> the developmental-range measure rests on Find the Rule and Prompt Golf
+> the developmental-range measure rests on AlwaysNever and Prompt Golf
 > alone. That may be the right call for a 60-minute period — but it is a
 > decision to make deliberately, not one to discover afterwards.
 
