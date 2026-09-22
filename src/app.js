@@ -207,6 +207,168 @@ function paintMode() {
 
 
 
+/* ============================ the briefing ============================
+ *
+ * WHAT GOES IN A BRIEFING, AND WHAT DOES NOT.
+ *
+ * In it: the few things a student has to know or the task goes wrong --
+ * what they are trying to do, the one rule that is not guessable from the
+ * screen, and any trap (the notes BIT cannot see, locking before testing).
+ * Out of it: everything else. A briefing that explains the study, the
+ * scoring or the reasoning is a briefing nobody finishes, and a briefing
+ * nobody finishes protects nothing.
+ *
+ * WHY IT BLOCKS. These students are 13, several read below grade level,
+ * and the room is loud. Instruction copy sitting in a paragraph above the
+ * task is scenery -- it gets scrolled past, and then a student fails a task
+ * they would have understood. In the data that is indistinguishable from a
+ * student who could not do it, so the copy is part of the measurement.
+ *
+ * WHAT IT COSTS, SAID HONESTLY. A forced dialog is an interruption, and
+ * interruptions get clicked through. `brief_ack` records how long it was
+ * open, so "they were told" can be checked rather than assumed -- a wall of
+ * 0.4-second acknowledgements means this stopped working and the copy needs
+ * to get shorter, not the dialog more insistent.
+ *
+ * WRITING RULE: grade 6 or below. One idea per line. Second person,
+ * present tense, no clauses hanging off dashes. `node scripts/readability.mjs`
+ * at the repo root scores it.
+ */
+const BRIEF_SEEN = "ctx3.briefed.v1";
+const briefSeen = () => { try { return JSON.parse(localStorage.getItem(BRIEF_SEEN) || "[]"); } catch (e) { return []; } };
+const markBriefed = (id) => { try { const s = new Set(briefSeen()); s.add(id); localStorage.setItem(BRIEF_SEEN, JSON.stringify([...s])); } catch (e) {} };
+
+/**
+ * Show a briefing and wait for the student to press the button.
+ *
+ * `once` briefings are skipped on a reload so a student who refreshes is
+ * not re-lectured; the header's help button reopens any of them on demand,
+ * because "I forgot what I'm doing" is the most common thing that actually
+ * happens and a student should never have to ask an adult for it.
+ */
+function brief(b, { force = false } = {}) {
+  return new Promise((resolve) => {
+    const dlg = $("brief");
+    if (!dlg || !dlg.showModal) return resolve();
+    if (b.once && !force && briefSeen().includes(b.id)) return resolve();
+
+    dlg.innerHTML = `
+      <div class="briefbody">
+        ${b.eyebrow ? `<span class="eyebrow">${esc(b.eyebrow)}</span>` : ""}
+        <h2 id="brieftitle">${esc(b.title)}</h2>
+        ${b.lines.map((l) => `<p>${l}</p>`).join("")}
+        ${b.list ? `<ol class="briefsteps">${b.list.map((x) => `<li>${x}</li>`).join("")}</ol>` : ""}
+        ${b.warn ? `<div class="briefwarn"><span>!</span><div>${b.warn}</div></div>` : ""}
+        <button class="btn big" id="briefok" autofocus>${esc(b.button || "Got it")}</button>
+      </div>`;
+
+    const openedAt = Date.now();
+    emit("brief_shown", { briefId: b.id, title: b.title, reopened: force });
+    dlg.showModal();
+
+    // Escape would let a student dismiss it without reading, which is the
+    // one thing this element exists to prevent. The button is the only exit.
+    const block = (e) => e.preventDefault();
+    dlg.addEventListener("cancel", block);
+
+    $("briefok").onclick = () => {
+      const msOpen = Date.now() - openedAt;
+      emit("brief_ack", { briefId: b.id, msOpen, reopened: force });
+      markBriefed(b.id);
+      dlg.removeEventListener("cancel", block);
+      dlg.close();
+      resolve();
+    };
+  });
+}
+
+/**
+ * Every briefing in the app, in one place so the reading level can be
+ * checked in one place.
+ *
+ * Each one is under 60 words. That is not a style preference: it is about
+ * as much as a 13-year-old reads before deciding a box is in their way.
+ */
+const BRIEFS = {
+  /* ---- AlwaysNever ---- */
+  an_intro: {
+    id: "an_intro", once: true, eyebrow: "AlwaysNever",
+    title: "BIT is keeping a secret",
+    lines: [
+      "Someone gave BIT a <b>secret rule</b>. BIT has to follow it every time it answers.",
+      "Your job is to figure out the rule. BIT will not tell you.",
+    ],
+    list: [
+      "Build a question. Send it.",
+      "Read what BIT says back.",
+      "Look for something BIT <b>always</b> does, or <b>never</b> does.",
+    ],
+    button: "Let's go",
+  },
+  an_practice: {
+    id: "an_practice", once: true, eyebrow: "Practice",
+    title: "This one is practice",
+    lines: [
+      "This round is easy on purpose. Nothing here counts.",
+      "It is here so you learn the buttons first. Send any question and look at what comes back.",
+    ],
+    button: "Start practice",
+  },
+  an_real: {
+    id: "an_real", once: true, eyebrow: "Round 2",
+    title: "Now it counts",
+    lines: [
+      "Practice is over. The next rules are harder to spot.",
+      "You get <b>12 questions</b>. That is on purpose. Think about what to ask before you send it.",
+    ],
+    warn: "Some rules are about what BIT <b>will not</b> say. You may have to ask about something to find out it is missing.",
+    button: "I'm ready",
+  },
+  an_commit: {
+    id: "an_commit", once: true, eyebrow: "Your answer",
+    title: "Write it down, then test it",
+    lines: [
+      "Say what BIT's secret rule is, in your own words.",
+      "You lock your answer <b>first</b>. Then you test it on 3 new questions.",
+    ],
+    warn: "This box is not a chat. BIT cannot see what you type here.",
+    button: "Got it",
+  },
+  an_author: {
+    id: "an_author", once: true, eyebrow: "Bonus round",
+    title: "Your turn to make the rule",
+    lines: [
+      "Now you write a secret rule. A <b>real AI</b> gets it, not BIT.",
+      "Then you hand the laptop to your partner and they try to figure out your rule.",
+    ],
+    warn: "Pick a rule someone could actually spot. \"Always talk about pizza\" works. \"Be nice\" does not.",
+    button: "Got it",
+  },
+
+  /* ---- Prompt Golf ---- */
+  pg_intro: {
+    id: "pg_intro", once: true, eyebrow: "Prompt Golf",
+    title: "Say it in fewer words",
+    lines: [
+      "You tell the AI what you want. It tries to do it.",
+      "Hit the target using <b>as few words as you can</b>. Fewer words wins.",
+    ],
+    warn: "Cutting a word that matters makes you miss. That is part of the game.",
+    button: "Let's go",
+  },
+
+  /* ---- Word4Word ---- */
+  w4w_intro: {
+    id: "w4w_intro", once: true, eyebrow: "Word4Word",
+    title: "The machine does exactly what you say",
+    lines: [
+      "You write steps. The machine follows them <b>word for word</b>.",
+      "It does not guess what you meant. If you leave something out, it stays out.",
+    ],
+    button: "Let's go",
+  },
+};
+
 /* The sequence is per student -- which rule of a tier comes with support and
    which without is decided by their code, so neighbours are rarely on the
    same one. Built at sign-in, once the code exists. */
@@ -367,7 +529,7 @@ function renderFTR() {
          honesty note is not a disclaimer: BIT obeys every time and real
          models do not, and the reveal at the end of the round is built on
          the student already knowing that difference is coming. -->
-    <p class="lede">BIT has been given a <b>secret instruction</b> it was told to follow — the kind of hidden instruction every real AI is given before it ever talks to you. It will not tell you what its instruction says. You work that out from what it says back.</p>
+    <p class="lede">BIT is following a <b>secret rule</b>. Ask it questions and work out what the rule is.</p>
     ${FTR.probes.length ? "" : `<div class="how"><div><b>1</b>Build a question and send it</div><div><b>2</b>Spot what it always or never does</div><div><b>3</b>Write the instruction down</div><div><b>4</b>Test it on 3 new questions</div></div>
       <p class="hint">Fair warning: BIT is a <b>practice</b> bot. It follows its instruction every single time, which real AIs do not — you will see exactly how often a real one does at the end of the round.</p>`}
     <!-- The tutorial says so on the screen. A practice round a student
@@ -547,6 +709,7 @@ function renderFTR() {
     ${ftrReveal(r)}`;
   }
   $("stage").innerHTML = head + composer + chat + hypo + toCommitLow + commit + close;
+  paintHelp();
   const c = $("chat"); if (c) c.scrollTop = c.scrollHeight;
   wireFTR();
 }
@@ -701,6 +864,7 @@ function authStart() {
     note: "authoring round: free text, live model, self-marked. Not scored." });
   FTR.phase = "author";
   renderFTR();
+  brief(BRIEFS.an_author);
 }
 
 async function authSend(question) {
@@ -738,7 +902,7 @@ function renderAuth() {
       <div><span class="eyebrow">Tool 1 · bonus round</span><h1 style="font-size:24px;margin-top:2px">Now you write one</h1></div>
       <span class="chip">not scored — just play</span>
     </div>
-    <p class="lede">You have spent four rounds working out someone else's hidden instruction. Now you write one, a <b>real AI</b> gets it, and your partner has to work out what you wrote.</p>
+    <p class="lede">You have been finding other people's rules. Now you make one. A <b>real AI</b> follows it, and your partner has to work it out.</p>
     <div class="how"><div><b>1</b>Write your secret instruction</div><div><b>2</b>Hand the laptop to your partner</div><div><b>3</b>They ask up to ${AUTH_MAX_TURNS} questions</div><div><b>4</b>They guess — then you mark it</div></div>
     ${live ? "" : `<div class="banner"><span>!</span><div><b>No live model on this device right now.</b> This round needs one — everywhere else in AlwaysNever is a stand-in on purpose, but the whole point here is that a <i>real</i> AI gets your instruction. Do it on paper instead: write your instruction down, hide it, and be the bot yourself while your partner asks.</div></div>`}
   </section>`;
@@ -765,7 +929,7 @@ function renderAuth() {
     body = `
     <section class="card pad" style="display:flex;flex-direction:column;gap:14px;text-align:center">
       <h2 style="font-size:28px;margin:0">Hand the laptop over</h2>
-      <p class="lede" style="text-align:center">Your instruction is hidden. Your partner asks the questions from here — don't tell them anything, and don't let them see you nodding.</p>
+      <p class="lede" style="text-align:center">Your rule is hidden now. Your partner asks the questions. Do not give them hints.</p>
       <div class="row" style="justify-content:center">
         <button class="btn" id="authgo">My partner has it — start →</button>
         <button class="btn ghost sm" id="authpeek">${AUTH.peek ? "hide it again" : "let me check mine first"}</button>
@@ -902,7 +1066,11 @@ function wireFTR() {
   document.querySelectorAll("[data-next-leg]").forEach((b) => b.onclick = () => {
     const i = +b.dataset.nextLeg, leg = FTR_SEQUENCE[i];
     if (!leg) return;
+    const wasPractice = ftrTutorial();
     FTR.leg = i; ftrStart(leg.ruleId, leg.support);
+    // Only when practice ends. Between two measured rounds the student
+    // already knows the drill and another dialog is just a door to shut.
+    if (wasPractice) brief(BRIEFS.an_real);
   });
   document.querySelectorAll(".slot").forEach((sl) => sl.querySelectorAll("button").forEach((b) => b.onclick = () => { FTR.pills[sl.dataset.slot] = b.dataset.opt; renderFTR(); }));
   const sp = $("sendprobe");
@@ -911,7 +1079,7 @@ function wireFTR() {
     const v = $("hypofield").value.trim(); if (!v || v === FTR.hypo) return;
     FTR.hypo = v; emit("hypothesis_noted", { text: v, afterProbeIndex: FTR.probes.length - 1, revisionIndex: FTR.hypoRev++ });
     $("hyposaved").textContent = "saved · revision " + FTR.hypoRev; };
-  const tc = $("tocommit"); if (tc) tc.onclick = () => { if (sh) sh.click(); FTR.phase = "commit"; renderFTR(); };
+  const tc = $("tocommit"); if (tc) tc.onclick = () => { if (sh) sh.click(); FTR.phase = "commit"; renderFTR(); brief(BRIEFS.an_commit); };
   const gh = $("gethint"); if (gh) gh.onclick = () => { if (FTR.hints >= 3) return; FTR.hints++;
     emit("support_used", { kind: "hint", taskId: "ftr-" + FTR.ruleId, hintIndex: FTR.hints, afterProbeIndex: FTR.probes.length - 1 }); renderFTR(); };
   const rr = $("revealrule"); if (rr) rr.onclick = () => { FTR.revealed = true;
@@ -1416,8 +1584,8 @@ function renderW4W() {
       <h1 style="font-size:24px;margin-top:2px">Word4Word</h1></div>
       <span class="eyebrow">${W4W.mode === "solo" ? "your own build" : "projector · whole class"}</span></div>
     <p class="lede">${W4W.mode === "solo"
-      ? "Write the steps that build <b>your</b> monster — the one on your page. The machine does <b>word for word</b> what you wrote, one line at a time: no more, and nothing you left out."
-      : "One instruction, four ways. The machine does <b>word for word</b> what the line says; the model fills in whatever you left out."}</p>
+      ? "Write the steps to build <b>your</b> monster. The machine does <b>exactly</b> what each line says. It will not add anything you left out."
+      : "One instruction, four machines. The exact machine does only what the line says. The AI fills in the rest by guessing."}</p>
     <div class="row">
       <button class="btn sm ${W4W.mode === "solo" ? "" : "ghost"}" data-w4wmode="solo">Build your own</button>
       <button class="btn sm ${W4W.mode === "class" ? "" : "ghost"}" data-w4wmode="class">The four cells</button>
@@ -1859,10 +2027,15 @@ function go(screen, opts) {
     emit("sequence_assigned", { order: FTR_SEQUENCE.map((x) => x.ruleId + ":" + x.support),
       assignedBy: (FTR_SEQUENCE.find((x) => x.assignedBy) || {}).assignedBy || "none" });
     FTR.leg = 0; ftrStart(FTR_SEQUENCE[0].ruleId, FTR_SEQUENCE[0].support);
+    // What the tool is, then what this particular round is. Two short
+    // dialogs beat one long one: the second is the only one a student sees
+    // again when the practice round ends.
+    brief(BRIEFS.an_intro).then(() => brief(ftrTutorial() ? BRIEFS.an_practice : BRIEFS.an_real));
   }
   else if (screen === "pg") { emit("session_start", { tool: "prompt-golf", day: S.day, deviceId: S.deviceId });
     phaseStart("pg-high", "high", ["priorPromptsVisible", "wordCountLive", "targetChecklist"]);
-    emit("task_start", { taskId: "pg-c1", round: 0 }); renderPG(); }
+    emit("task_start", { taskId: "pg-c1", round: 0 }); renderPG();
+    brief(BRIEFS.pg_intro); }
   // Whole-class: these rows are not attributed to a student, by design.
   else if (screen === "w4w") {
     S.support = "na";
@@ -1870,10 +2043,12 @@ function go(screen, opts) {
     // Hands-on by default and attributed; the projector cells drop the code.
     phaseStart("w4w-solo", "na", ["targetShown", "stepByStep"]);
     emit("task_start", { taskId: "w4w-solo", round: 1 });
-    renderW4W(); }
+    renderW4W();
+    brief(BRIEFS.w4w_intro); }
   // Keep the address bar honest: the URL of a tool is the same URL a
   // facilitator would hand out for it. Not on a pinned device, where there is
   // nothing else for Back to reach.
+  paintHelp();
   if (!S.pinned && !(opts && opts.fromPop) && canRoute()) {
     const t = TOOLS.find((x) => x.id === screen);
     const want = (t ? "/" + t.path : "/") + location.search;
@@ -1888,6 +2063,33 @@ window.addEventListener("popstate", () => {
 });
 $("daypick").onchange = (e) => { S.day = +e.target.value; save(); if (S.screen === "hub") renderHub(); };
 $("hubbtn").onclick = () => go("hub");
+
+/**
+ * Which briefing answers "what do I do" right now.
+ *
+ * It follows the student rather than the tool: mid-AlwaysNever the useful
+ * answer is different on the commit screen than it is while probing, and a
+ * student who reopens help and gets the wrong screen's instructions has
+ * been told nothing twice.
+ */
+function briefForNow() {
+  if (S.screen === "ftr") {
+    if (FTR.phase === "author") return BRIEFS.an_author;
+    if (FTR.phase === "commit") return BRIEFS.an_commit;
+    return ftrTutorial() ? BRIEFS.an_practice : BRIEFS.an_real;
+  }
+  if (S.screen === "pg") return BRIEFS.pg_intro;
+  if (S.screen === "w4w") return BRIEFS.w4w_intro;
+  return null;
+}
+function paintHelp() {
+  const b = $("helpbtn"); if (!b) return;
+  b.hidden = !briefForNow();
+}
+$("helpbtn").onclick = () => {
+  const b = briefForNow();
+  if (b) brief(b, { force: true });
+};
 $("resetcode").onclick = () => go("code");
 /**
  * The facilitator panel.

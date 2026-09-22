@@ -692,3 +692,63 @@ input[type=password]:focus {
   .realrun.markable { grid-template-columns: 22px 1fr; }
   .realrun.markable > .row { grid-column: 2; }
 }
+
+/* ============================ the briefing ============================
+   Bigger than the rest of the app on purpose. This is the one thing a
+   student has to read, it is read once, in a loud room, so it gets the
+   type size and the contrast. The button is thumb-sized because half of
+   these are touchscreens. */
+.brief::backdrop { background: rgba(18, 26, 22, 0.66); backdrop-filter: blur(2px); }
+.brief {
+  border: none; padding: 0; background: transparent;
+  max-width: 540px; width: calc(100vw - 32px);
+  color: var(--ink);
+}
+.briefbody {
+  background: var(--surface); border: 1.5px solid var(--line-2);
+  border-radius: var(--r-card); padding: 26px 26px 22px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  display: flex; flex-direction: column; gap: 13px;
+}
+.briefbody h2 {
+  font-family: var(--display); font-size: 27px; line-height: 1.15; margin: 0;
+}
+.briefbody p { font-size: 17.5px; line-height: 1.5; margin: 0; }
+.briefsteps {
+  margin: 2px 0 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 9px; counter-reset: b;
+}
+.briefsteps li {
+  counter-increment: b; position: relative; padding-left: 38px;
+  font-size: 17px; line-height: 1.45;
+}
+.briefsteps li::before {
+  content: counter(b); position: absolute; left: 0; top: -1px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--leaf-soft); color: var(--leaf-ink);
+  font-family: var(--display); font-weight: 700; font-size: 15px;
+  display: grid; place-items: center;
+}
+/* The trap, not the summary. Amber rather than red: this is "watch out",
+   not "you did something wrong". */
+.briefwarn {
+  display: grid; grid-template-columns: 24px 1fr; gap: 11px; align-items: start;
+  background: var(--amber-soft, rgba(214, 158, 46, 0.14));
+  border: 1px solid var(--amber, #B7791F); border-radius: var(--r-ctl);
+  padding: 11px 13px; font-size: 16px; line-height: 1.45;
+}
+.briefwarn > span {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--amber, #B7791F); color: #fff;
+  font-weight: 800; display: grid; place-items: center; font-size: 15px;
+}
+.btn.big {
+  align-self: flex-start; margin-top: 4px;
+  font-size: 18px; padding: 13px 26px; min-height: 48px;
+}
+.tbtn.help { font-weight: 700; }
+@media (max-width: 480px) {
+  .briefbody { padding: 20px 18px 18px; }
+  .briefbody h2 { font-size: 23px; }
+  .btn.big { align-self: stretch; text-align: center; }
+}

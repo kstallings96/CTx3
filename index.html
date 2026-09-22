@@ -21,9 +21,27 @@
     <select id="daypick"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select>
   </div>
   <span class="pc" id="pcchip">—</span>
+  <!-- "What am I doing?" is the most common thing a student actually needs,
+       and needing an adult for it costs them the rest of the round. This
+       reopens the briefing for whatever they are in the middle of. -->
+  <button class="tbtn help" id="helpbtn" hidden>? What do I do</button>
   <button class="tbtn" id="resetcode">Next student</button>
   <button class="tbtn" id="hubbtn">Hub</button>
 </header>
+
+<!--
+  The briefing.
+
+  Anything a student MUST know to do the task correctly goes here, not into
+  a paragraph above the task. A paragraph above the task is scenery: it is
+  read past, and then a student fails something they understood, which in
+  the data is indistinguishable from a student who could not do it.
+
+  A native <dialog> rather than a div, because showModal() gives focus
+  trapping, an inert background and screen-reader semantics for free.
+  Escape is cancelled in app.js -- the one button is the only way out.
+-->
+<dialog class="brief" id="brief" aria-labelledby="brieftitle"></dialog>
 
 <div class="shell">
   <main class="stage" id="stage"></main>
