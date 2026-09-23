@@ -521,7 +521,7 @@ function renderFTR() {
   const head = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
     <div class="spread">
-      <div><span class="eyebrow">Tool 1 · reverse-engineering an AI</span><h1 style="font-size:24px;margin-top:2px">AlwaysNever</h1></div>
+      <h1 style="font-size:24px">AlwaysNever</h1>
       <div class="steps">${steps.map((s) => `<span class="${FTR.phase === s ? "now" : steps.indexOf(s) < steps.indexOf(FTR.phase) ? "done" : ""}">${s}</span>`).join("")}</div>
     </div>
     <!-- The fiction is the real thing. Every AI product you use has a
@@ -865,7 +865,7 @@ function renderAuth() {
   const head = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
     <div class="spread">
-      <div><span class="eyebrow">Tool 1 · bonus round</span><h1 style="font-size:24px;margin-top:2px">Now you write one</h1></div>
+      <div><span class="eyebrow">Bonus round</span><h1 style="font-size:24px;margin-top:2px">Now you write one</h1></div>
       <span class="chip">not scored — just play</span>
     </div>
     <p class="lede">You have been finding other people's rules. Now you make one. A <b>real AI</b> follows it, and your partner has to work it out.</p>
@@ -1232,10 +1232,14 @@ function pgHighestStep() {
 }
 function renderPG() {
   const order = ["clinic", "t1", "t2", "comparison", "t3", "t4", "close"];
-  const nice = { clinic: "clinic", t1: "round 1", t2: "round 2", comparison: "comparison", t3: "round 3 \u00b7 high", t4: "round 4 \u00b7 low", close: "close" };
+  /* "round 3 \u00b7 high" and "round 4 \u00b7 low" named the support condition on the
+     student's screen. That is the one label in the study a student must not
+     read: it tells them which round they are expected to do worse on. The
+     condition is still in every event; it is just no longer on the wall. */
+  const nice = { clinic: "fix it", t1: "round 1", t2: "round 2", comparison: "compare", t3: "round 3", t4: "round 4", close: "done" };
   const head = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-    <div class="spread"><div><span class="eyebrow">Tool 2 · abstraction + debugging</span><h1 style="font-size:24px;margin-top:2px">Prompt Golf</h1></div>
+    <div class="spread"><div><h1 style="font-size:24px">Prompt Golf</h1></div>
       <div class="steps">${order.map((s) => `<span class="${PG.phase === s ? "now" : order.indexOf(s) < order.indexOf(PG.phase) ? "done" : ""}">${nice[s]}</span>`).join("")}</div></div>
     <p class="lede">Hit the target using as few words as you can. Fewer words wins.</p>
     <div class="how"><div><b>1</b>Write a prompt</div><div><b>2</b>The model answers</div><div><b>3</b>A checker ticks off the target</div><div><b>4</b>Try again, shorter</div></div>
@@ -1687,9 +1691,7 @@ function renderW4W() {
 
   const head = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-    <div class="spread"><div><span class="eyebrow">Day 3 · decomposition + how an AI reads you</span>
-      <h1 style="font-size:24px;margin-top:2px">MonsterMaker</h1></div>
-      <span class="eyebrow">${W4W.mode === "solo" ? "your own build" : "projector · whole class"}</span></div>
+    <h1 style="font-size:24px">MonsterMaker</h1>
     <p class="lede">${W4W.mode === "solo"
       ? "Write the steps to build <b>your</b> monster. The <b>Literal</b> engine does exactly what each line says. It will not add anything you left out."
       : W4W.stage === "literal"
@@ -1725,15 +1727,17 @@ function renderW4W() {
       <div class="chatwho"><b>Literal engine</b><span>${W4W.playing ? "building\u2026" : "does exactly what you wrote"}</span></div>
     </div>`;
 
+  /* What to build, in the words a student would use for it. This used to
+     say "the monster on the document camera" and "the drawing on the wall
+     is the answer key and the room is the judge" -- true, and written for
+     whoever was running the room rather than for the person reading it. */
   const goal = `
     <div class="goal">
       <span class="eyebrow">what you are building</span>
       <p><b>${W4W.mode === "solo"
-        ? "Whatever you drew. Write the steps that would build YOUR monster."
-        : "The monster on the document camera. Write the steps that would reproduce it."}</b></p>
-      <p class="hint">${W4W.mode === "solo"
-        ? "Nothing is marked. The machine does what you wrote — hold it up against your page."
-        : "Nothing is marked here either. The drawing on the wall is the answer key and the room is the judge."}</p>
+        ? "The monster you drew. Write the steps that would build it."
+        : "The monster everyone is looking at. Write the steps that would build it."}</b></p>
+      <p class="hint">Nothing here is marked. Hold what it builds up against the drawing.</p>
     </div>`;
 
   let body = "";
@@ -1812,14 +1816,14 @@ function renderW4W() {
           <div class="sysprompt">${esc(w4wText())}</div></div>
         <div class="cmpgrid">
           ${col("literal", "Literal", a, a.shapes === 1
-            ? "Same words, same monster, every single time. If it is not the monster on the wall, the instruction is what is wrong."
+            ? "Same words, same monster, every single time. So if it is not the monster you wanted, the steps are what to change."
             : "Different monsters from the same words \u2014 which means a line is being read more than one way.")}
           ${col("ai", "AI", b, (W4W.results.ai && W4W.results.ai.runs.some((r) => r.inferred && r.inferred.length))
             ? "It added parts nobody wrote. That is why it looks smarter, and why you cannot tell which parts were yours."
             : "It varied in the parts you did not pin down.")}
         </div>
         <div class="banner leafy"><span>?</span><div><b>Both engines got the same words. Why did they do different things with them?</b></div></div>
-        <div><span class="eyebrow">what we noticed \u00b7 the class writes this</span>
+        <div><span class="eyebrow">what we noticed</span>
           <textarea id="w4wnotes" rows="3" placeholder="We noticed\u2026">${esc(W4W.notes)}</textarea></div>
         <div class="row"><button class="btn ghost" id="w4wrestart">Start again with a new instruction</button></div>
       </section>`;
@@ -1943,14 +1947,12 @@ function renderHub() {
     return `<button class="tile${live ? "" : " off"}" data-tool="${t.id}" ${live ? "" : "disabled"}>
       ${t.tag ? `<span class="tag">${t.tag}</span>` : ""}<h3>${t.name}</h3><p>${t.blurb}</p>
       ${!t.built ? `<span class="ext">…/${t.id}?pc=${S.code}</span>` : ""}
-      <span class="con">day ${t.day} · ${t.con}</span></button>`; }).join("")}</div>
+      <span class="con">day ${t.day}</span></button>`; }).join("")}</div>
   <section class="card pad" style="display:flex;flex-direction:column;gap:8px">
     <span class="eyebrow">Today's idea</span>
     <p class="lede">${S.day === 2
-      ? "Day 2 is the day a rule holds <b>every single time</b>. AlwaysNever's bot never slips, on purpose — that is the control the rest of the week is measured against."
-      : liveOn()
-        ? "Day 3 is the day students find out that an AI is not a lookup table. Same instruction, different answer, every run."
-        : "No live model in this view, so every tool runs on a deterministic stand-in and says so. The activities all work; what is missing is the variation, which on Day 3 is the point."}</p>
+      ? "A rule that holds <b>every single time</b>. BIT never slips — not once."
+      : "The same words, a different answer every time you ask."}</p>
   </section>`;
   document.querySelectorAll("[data-tool]").forEach((b) => b.onclick = () => go(b.dataset.tool));
 }
@@ -2242,6 +2244,13 @@ function toggleRail(on) {
   document.querySelector(".shell").style.maxWidth = show ? "1340px" : "860px";
   // The footer explains the build to a reader of the repo, not to a student.
   const f = $("footer"); if (f) f.hidden = !show;
+  /* The model pill and the day selector go with it. "offline stand-in" and
+     "day 3" are a facilitator checking the rig; to a thirteen-year-old they
+     are two things on screen that raise a question they cannot answer and
+     that have nothing to do with the task. Both stay one `?facilitator`
+     away for whoever does need them. */
+  const pill = $("modepill"); if (pill) pill.hidden = !show;
+  const day = document.querySelector(".daysel"); if (day) day.hidden = !show;
   if (show) renderRail();
 }
 $("brand").onclick = () => {
