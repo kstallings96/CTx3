@@ -59,7 +59,7 @@ Record the facts, not just the label.
 | Manifest | same | same |
 | AlwaysNever | nudge, hints, visible hypothesis field, assembled preview, single-feature feedback | none of those; **same question builder**, same transcript, a different instruction of the same tier |
 | Prompt Golf | both winning prompts visible during round 3 | round 4, prompts hidden |
-| Interpreter | no split: the projector work is the scaffold, then students work alone. `supportCondition: na` throughout, rows told apart by phaseId |  |
+| MonsterMaker | no split: the projector work is the scaffold, then students work alone. `supportCondition: na` throughout, rows told apart by phaseId |  |
 
 **AlwaysNever took four attempts to get this right**, and three of them were
 not manipulations at all. The palette at Levels 1–2 with free text at Level 3
@@ -127,7 +127,7 @@ is not floored by the interface rather than by the student.
 4. Does so consistently — majority of placements are most-constrained-first.
 5. States the fewest-first heuristic when asked, in the low-support phase.
 
-### Interpreter
+### MonsterMaker
 
 Per student on the hands-on phases; the projector cells carry no participant
 code and contribute no steps.

@@ -180,7 +180,7 @@ const WHY = {
   no_endpoint: "<b>The model route did not answer.</b> In the published demo there is no server at all, which is expected.",
   no_sample: "<b>This view cannot ask Claude.</b>",
 };
-const TAPE_NOTE = " The Interpreter plays five <b>pre-recorded real runs</b> instead, labelled on every card.";
+const TAPE_NOTE = " The MonsterMaker plays five <b>pre-recorded real runs</b> instead, labelled on every card.";
 
 function paintMode() {
   const pill = $("modepill"), txt = $("modetext"), note = $("modenote");
@@ -357,9 +357,9 @@ const BRIEFS = {
     button: "Let's go",
   },
 
-  /* ---- Interpreter ---- */
+  /* ---- MonsterMaker ---- */
   w4w_intro: {
-    id: "w4w_intro", once: true, eyebrow: "Interpreter",
+    id: "w4w_intro", once: true, eyebrow: "MonsterMaker",
     title: "Same words. Two engines.",
     lines: [
       "You write the steps once. Then you pick an <b>engine</b> to run them.",
@@ -1376,7 +1376,7 @@ function wirePG() {
   wireBackHub();
 }
 
-/* ============================ tool 3 · Interpreter ============================ */
+/* ============================ tool 3 · MonsterMaker ============================ */
 /* Build it by writing pseudocode. Named parts, numbered lines, and a
    scene that renders one line at a time so the room watches a plan break at
    the exact step it breaks.
@@ -1559,37 +1559,100 @@ async function w4wRunFive() {
 }
 
 /* ---- render -------------------------------------------------------------- */
+/** How many steps are in the box, for the label under it. */
+const stepLines = (t) => String(t || "").split("\n").filter((l) => l.trim());
+const stepCountLabel = () => {
+  const n = stepLines(w4wText()).length;
+  return n ? plural(n, "step") : "write some steps";
+};
+
+/**
+ * The right-hand box of the pipeline.
+ *
+ * Split out of renderW4W so it can be repainted on its own: rewriting
+ * the whole screen on every keystroke would move the caret out from
+ * under the person typing, which is the fastest way to make a live
+ * control feel broken.
+ */
+function pipeOutput() {
+  const text = w4wText();
+  if (!text) return `<p class="hint">Nothing yet. Write a step on the left.</p>`;
+
+  if (W4W.executor === "literal") {
+    // Synchronous and deterministic, so this can run on every keystroke.
+    const r = w4wRun(text);
+    const chk = w4wCheck(r.scene);
+    return `
+      ${sceneSVG(r.scene)}
+      <div class="pipelog">${r.log.map((x) => `
+        <div class="${x.ok ? "ok" : "no"}"><span>${x.ok ? "\u2713" : "\u2717"}</span><span>${esc(x.msg || x.line)}</span></div>`).join("")}</div>
+      <p class="hint">${chk.placed.length ? "Drew " + chk.placed.length + ": " + esc(chk.placed.join(", ")) : "Drew nothing."}
+        ${r.firstDead !== null ? " Line " + (r.firstDead + 1) + " is where it stopped making sense." : ""}</p>`;
+  }
+
+  // The AI cannot repaint as you type: it has to be asked, and the answer
+  // is different every time. Saying so here is the contrast, not an
+  // apology for it.
+  const last = [...W4W.runs].reverse().find((x) => x.out);
+  if (!last) return `
+    <p class="hint">The AI has to be <b>asked</b>. It does not answer as you type, and it will not give the same answer twice.</p>
+    <p class="hint" style="margin-top:6px">Predict below, then run it.</p>`;
+  return `
+    ${sceneSVG(last.scene)}
+    ${last.inferred.length ? `<div class="reading">filled in ${last.inferred.length}: ${esc(last.inferred.join("; "))}</div>` : ""}
+    <p class="hint">Last run of ${W4W.runs.filter((x) => x.out).length}. Run it again and this will change.</p>`;
+}
 function renderW4W() {
-  /* ONE PROCESS, WITH THE MIDDLE BOX SWAPPABLE.
+  /* ONE PROCESS, AND YOU CAN PUT YOUR HANDS IN IT.
    *
-   * The screen reads input -> processing -> output, and the only control
-   * that matters changes the processing. That is the whole concept: same
-   * words in, different thing out, and the only difference is the engine.
-   * It also makes input/processing/output concrete, which is what 8.1(A)
-   * is asking for. */
+   * input -> processing -> output, with both of the first two boxes
+   * live. Change the words, watch the output change. Change the engine,
+   * watch it change differently. A diagram of a pipeline teaches that a
+   * pipeline exists; a pipeline you can reach into teaches what the
+   * middle box actually does, which is the only thing today is about.
+   *
+   * THE TWO ENGINES BEHAVE DIFFERENTLY *AS CONTROLS*, and that is the
+   * lesson rather than a limitation. Literal is deterministic and
+   * synchronous, so its output repaints on every keystroke -- ask it the
+   * same thing and it answers identically, instantly, forever. The AI has
+   * to be asked, over a network, and comes back different each time. A
+   * student feels that difference in their hands before anyone names it.
+   */
   const engineName = W4W.executor === "literal" ? "Literal" : "AI";
   const pipeline = `
-    <div class="pipe">
-      <div class="pipebox"><span class="eyebrow">your instruction</span><b>the steps you wrote</b></div>
+    <div class="pipe live">
+      <div class="pipebox input">
+        <span class="eyebrow">your instruction</span>
+        <textarea id="w4wvague" rows="5" placeholder="1. Draw a round green body.&#10;2. Add two eyes." ${W4W.running ? "disabled" : ""}>${esc(W4W.vague)}</textarea>
+        <span class="hint" id="pipesteps">${stepCountLabel()}</span>
+      </div>
       <span class="pipearrow" aria-hidden="true">&rarr;</span>
-      <div class="pipebox engine"><span class="eyebrow">engine</span>
+      <div class="pipebox engine">
+        <span class="eyebrow">engine</span>
         <select id="enginepick" ${W4W.running ? "disabled" : ""}>
           <option value="literal" ${W4W.executor === "literal" ? "selected" : ""}>Literal</option>
           <option value="ai" ${W4W.executor === "ai" ? "selected" : ""}>AI</option>
-        </select></div>
+        </select>
+        <span class="hint">${W4W.executor === "literal"
+          ? "Does exactly what each line says. Nothing else."
+          : "Fills in whatever you left out, by guessing."}</span>
+      </div>
       <span class="pipearrow" aria-hidden="true">&rarr;</span>
-      <div class="pipebox"><span class="eyebrow">output</span><b>what it builds</b></div>
+      <div class="pipebox output">
+        <span class="eyebrow">output</span>
+        <div id="pipeout">${pipeOutput()}</div>
+      </div>
     </div>`;
 
   const head = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
     <div class="spread"><div><span class="eyebrow">Day 3 · decomposition + how an AI reads you</span>
-      <h1 style="font-size:24px;margin-top:2px">Interpreter</h1></div>
+      <h1 style="font-size:24px;margin-top:2px">MonsterMaker</h1></div>
       <span class="eyebrow">${W4W.mode === "solo" ? "your own build" : "projector · whole class"}</span></div>
     <p class="lede">${W4W.mode === "solo"
       ? "Write the steps to build <b>your</b> monster. The <b>Literal</b> engine does exactly what each line says. It will not add anything you left out."
       : "Same instruction. Swap the engine. Run it again. The only thing that changed is the box in the middle."}</p>
-    ${pipeline}
+    ${W4W.mode === "class" ? pipeline : ""}
     <div class="row">
       <button class="btn sm ${W4W.mode === "solo" ? "" : "ghost"}" data-w4wmode="solo">Build your own</button>
       <button class="btn sm ${W4W.mode === "class" ? "" : "ghost"}" data-w4wmode="class">Run the engines</button>
@@ -1683,49 +1746,21 @@ function renderW4W() {
   } else {
     const done = W4W.runs.filter((r) => r.out);
     const uniq = new Set(done.map((r) => r.out.trim()));
-    const rec = RECORDINGS[LADDER.tutorial];
-    const kept = rec ? followedCount(LADDER.tutorial) : 0;
-
-    /* THE OPENER, INHERITED FROM DAY 2.
+    /* PREDICT BEFORE YOU RUN.
      *
-     * Yesterday's bot followed its rule in every single answer. Here is a
-     * real AI given that same line. This half used to close AlwaysNever,
-     * where it pre-empted today; here it is the thing today is about. */
-    const opener = !rec ? "" : `
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-      <div><span class="eyebrow">yesterday, and today</span>
-        <h2 style="font-size:21px">BIT followed its rule every single time. A real AI does not.</h2>
-        <p class="hint" style="margin-top:6px">Same hidden instruction, handed to a real AI ${rec.runs.length} times:</p></div>
-      <div class="sysprompt">${esc(RULES[LADDER.tutorial].systemPrompt)}</div>
-      <p class="hint">${RECORDINGS.captured
-        ? `Recorded from <span class="kbd">${esc(RECORDINGS.model || "a real AI")}</span> on ${esc(RECORDINGS.capturedAt || "")}.`
-        : `<b>Example runs.</b> Written to show what usually happens, not captured from a live AI — treat them as an illustration until someone records real ones.`}</p>
-      <div class="realruns">${rec.runs.map((x, i) => `
-        <div class="realrun ${x.followed ? "kept" : "broke"}">
-          <span class="mark">${x.followed ? "✓" : "✗"}</span>
-          <span>${esc(x.text)}</span>
-        </div>`).join("")}</div>
-      <div class="tallyline">
-        <b style="color:${kept === rec.runs.length ? "var(--leaf-ink)" : "var(--fail)"}">${kept} of ${rec.runs.length}</b>
-        <span>followed the instruction.</span>
-        <p class="hint" style="max-width:40ch;margin-left:auto">The instruction said <b>always</b>. The AI did it <b>usually</b>. Nobody told it to slip.</p>
-      </div>
-    </section>`;
-
-    body = opener + `
+     * Ten seconds a run, and it turns a demonstration into a test.
+     * Prediction-then-check IS verification -- the construct the week
+     * would otherwise have deferred to spring -- and it makes the
+     * conclusion the student's rather than a diagram's. The Run button
+     * stays disabled until something is written, which is the only way
+     * to be sure the prediction preceded the result.
+     *
+     * (This comment used to live inside the template literal below, which
+     * meant the whole paragraph rendered on screen as body text.) */
+    body = `
     <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
       ${goal}
-      <div><span class="eyebrow">your instruction · the class writes this</span>
-        <textarea id="w4wvague" rows="4" placeholder="Numbered steps, one per line…" ${W4W.running ? "disabled" : ""}>${esc(W4W.vague)}</textarea></div>
       ${W4W.blockedInput ? `<div class="banner"><span>!</span><div>${esc(W4W.blockedInput)}</div></div>` : ""}
-      /* PREDICT BEFORE YOU RUN.
-       *
-       * Ten seconds a run, and it converts a demonstration into a test.
-       * Prediction-then-check IS verification -- the construct the week
-       * would otherwise have deferred to spring -- and it makes the
-       * conclusion the student's rather than a diagram's. The Run button
-       * stays disabled until something is written, which is the only way
-       * to be sure the prediction preceded the result. */
       <div class="predict">
         <span class="eyebrow">before you run it — what will the ${engineName} engine do?</span>
         <textarea id="w4wpredict" rows="2" placeholder="I think it will…" ${W4W.running ? "disabled" : ""}>${esc(W4W.prediction)}</textarea>
@@ -1795,7 +1830,15 @@ function wireW4W() {
   const stop = $("w4wstop"); if (stop) stop.onclick = () => { clearTimeout(W4W.timer); W4W.playing = false; renderW4W(); };
   const sp = $("w4wspeed"); if (sp) sp.onchange = (e) => W4W.speed = +e.target.value;
 
-  const v = $("w4wvague"); if (v) v.oninput = () => { W4W.vague = v.value; const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText() || !W4W.prediction.trim(); };
+  const v = $("w4wvague"); if (v) v.oninput = () => {
+    W4W.vague = v.value;
+    const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText() || !W4W.prediction.trim();
+    // Repaint the output box alone. renderW4W() here would rebuild the
+    // textarea and drop the caret to the end on every keystroke.
+    const out = $("pipeout"); if (out) out.innerHTML = pipeOutput();
+    const n = $("pipesteps");
+    if (n) n.textContent = stepCountLabel();
+  };
   // The engine picker IS the lesson, so it is a real control rather than a
   // pair of tabs: changing it clears the runs, because runs from the old
   // engine sitting under a new label is the one thing that would teach the
@@ -1825,7 +1868,7 @@ function wireW4W() {
 /**
  * DAYS 2 AND 3 ARE SWAPPED, and the swap fixes a contradiction.
  *
- * Under the old order the Interpreter day taught that an AI answers
+ * Under the old order the MonsterMaker day taught that an AI answers
  * differently every time, and the next day handed students a bot that
  * answered identically every time. A student who had been paying
  * attention was right to be confused.
@@ -1835,7 +1878,7 @@ function wireW4W() {
  *
  *   Day 1  randomness you put in on purpose      (RowdyRoboVac)
  *   Day 2  a rule that holds every single time   (AlwaysNever)
- *   Day 3  an AI that has a rule and only usually follows it (Interpreter)
+ *   Day 3  an AI that has a rule and only usually follows it (MonsterMaker)
  *   Day 4  you write the instructions and check the output   (VibeBuilder)
  *
  * TEKS follows the tools: 8.1(C) to Day 2, 8.1(A) to Day 3.
@@ -1843,7 +1886,7 @@ function wireW4W() {
 const TOOLS = [
   { id: "ftr", path: "alwaysnever", name: "AlwaysNever", day: 2, con: "reverse-engineering an AI", built: true,
     blurb: "An AI is following a secret rule. Ask it questions and work out what the rule is." },
-  { id: "w4w", path: "interpreter", name: "Interpreter", day: 3, con: "decomposition · pseudocode", built: true,
+  { id: "w4w", path: "monstermaker", name: "MonsterMaker", day: 3, con: "decomposition · pseudocode", built: true,
     blurb: "Write the steps. Run them through the Literal engine, then the AI engine. Same words, two very different results." },
   { id: "pg", path: "prompt-golf", name: "Prompt Golf", day: 3, con: "abstraction · debugging", built: true,
     blurb: "Hit the target in as few words as possible. Opens by fixing someone else's broken prompt." },
@@ -1984,8 +2027,8 @@ function renderCode() {
  *
  * The hub at / still runs all three, which is what a one-device-per-student
  * classroom wants. But a station set up for one activity should not offer the
- * other two: /interpreter signs the student in and drops them straight into
- * the Interpreter, with no hub, no tiles and no way back out of it.
+ * other two: /monstermaker signs the student in and drops them straight into
+ * the MonsterMaker, with no hub, no tiles and no way back out of it.
  *
  * Pinning is read from the path. `?tool=` is accepted as well because the
  * artifact build and any file:// copy have no server to rewrite paths, and a
@@ -2051,7 +2094,7 @@ function go(screen, opts) {
   const leavingTool = S.screen !== "hub" && S.screen !== "code" && S.screen !== "gate";
   if (leavingTool && screen !== S.screen) emit("session_end", { reason: "navigated_away" });
   S.screen = screen;
-  S.tool = { hub: "hub", code: "hub", gate: "hub", ftr: "alwaysnever", pg: "prompt-golf", w4w: "interpreter" }[screen] || "hub";
+  S.tool = { hub: "hub", code: "hub", gate: "hub", ftr: "alwaysnever", pg: "prompt-golf", w4w: "monstermaker" }[screen] || "hub";
   window.scrollTo({ top: 0, behavior: "instant" });
   if (screen === "hub") renderHub();
   else if (screen === "code") renderCode();
@@ -2079,7 +2122,7 @@ function go(screen, opts) {
   // Whole-class: these rows are not attributed to a student, by design.
   else if (screen === "w4w") {
     S.support = "na";
-    emit("session_start", { tool: "interpreter", day: S.day, deviceId: S.deviceId });
+    emit("session_start", { tool: "monstermaker", day: S.day, deviceId: S.deviceId });
     // Hands-on by default and attributed; the projector cells drop the code.
     phaseStart("w4w-solo", "na", ["targetShown", "stepByStep"]);
     emit("task_start", { taskId: "w4w-solo", round: 1 });
@@ -2185,7 +2228,7 @@ function start(snap) {
   S.pinned = pinnedTool();
   if (qs.has("facilitator")) toggleRail(true);
   // A pinned URL carries its own day, so ?day= becomes optional on it.
-  // "The facilitator opened /interpreter but forgot ?day=2" is a study-day
+  // "The facilitator opened /monstermaker but forgot ?day=2" is a study-day
   // failure that costs you the whole period's data, and it is cheaper to
   // design out than to remember. An explicit ?day= still overrides.
   if (S.pinned && !(qd >= 1 && qd <= 4)) S.day = TOOLS.find((t) => t.id === S.pinned).day;

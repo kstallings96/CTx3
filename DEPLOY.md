@@ -4,7 +4,7 @@ Same Supabase + Vercel treatment as Manifest, with one addition: a serverless
 function holding the model key.
 
 The app runs fine with nothing configured — every network call becomes a no-op,
-events stay in `localStorage`, and the model half of Interpreter plays
+events stay in `localStorage`, and the model half of MonsterMaker plays
 pre-recorded runs labelled as recordings. These steps add the backend.
 
 **I can't create accounts or log in on your behalf, so steps 1, 2, 5 and 6 are
@@ -167,7 +167,7 @@ Note the `/api/complete` route does **not** run under `npm run dev` — use
 
 ## 5. The model key
 
-Interpreter calls a real model for its right-hand column. The key cannot ship
+MonsterMaker calls a real model for its right-hand column. The key cannot ship
 in the bundle, so it goes in a Vercel environment variable with **no `VITE_`
 prefix** — anything `VITE_`-prefixed is inlined into the client and would be
 public.
@@ -186,7 +186,7 @@ The `VITE_` ones are build-time, so **redeploy after adding them**.
 ### Which model
 
 `anthropic/claude-haiku-4.5` is the default in `api/complete.js`, and it is
-worth the small premium. Interpreter asks for a tight format and a tight
+worth the small premium. MonsterMaker asks for a tight format and a tight
 vocabulary, and the cheapest models follow both unreliably — a run the safety
 guard has to withhold teaches nothing.
 
@@ -234,7 +234,7 @@ stand-in*. The three you will meet:
 - **The published demo** — there is no server at all, by design. It plays
   pre-recorded real runs.
 
-In every case Interpreter still runs: five genuine recorded runs, labelled as
+In every case MonsterMaker still runs: five genuine recorded runs, labelled as
 recordings on every card.
 
 ## 6. Deploy
@@ -262,11 +262,11 @@ variables and no second thing to keep awake.
 | `https://<app>.vercel.app/` | The hub. Sign in, then pick from the three tiles. |
 | `https://<app>.vercel.app/alwaysnever` | Sign in, then straight into AlwaysNever. No hub, no tiles, no way out. |
 | `https://<app>.vercel.app/prompt-golf` | Same, for Prompt Golf. |
-| `https://<app>.vercel.app/interpreter` | Same, for Interpreter. |
+| `https://<app>.vercel.app/monstermaker` | Same, for MonsterMaker. |
 
 Three things a pinned URL does that the hub does not:
 
-1. **It sets its own day.** `/interpreter` is day 2, the other two are day 3.
+1. **It sets its own day.** `/monstermaker` is day 2, the other two are day 3.
    "The facilitator opened the right URL but forgot `?day=2`" costs you a
    period's data and is cheaper to design out than to remember. An explicit
    `?day=` still overrides, if you ever need to.
@@ -296,7 +296,7 @@ The passwords as shipped:
 |---|---|
 | AlwaysNever | `roadrunners` |
 | Prompt Golf | `holeinone` |
-| Interpreter | `gorowdy` |
+| MonsterMaker | `gorowdy` |
 
 These are in the repo's history, so anyone who can read the repo can read
 them. That is the same speed-bump caveat as below, not a new problem — but if
@@ -331,8 +331,8 @@ genuinely for is making the facilitator the one who decides when the room
 starts, and keeping a class off Thursday's tool on Tuesday. **Do not describe
 it to the IRB as access control.**
 
-The same goes for the paths: a student who types `/interpreter` reaches
-Interpreter's password prompt, not Interpreter. The password is the gate; the URL
+The same goes for the paths: a student who types `/monstermaker` reaches
+MonsterMaker's password prompt, not MonsterMaker. The password is the gate; the URL
 just decides which one they are asked for.
 
 ## Study-day checklist
@@ -343,13 +343,13 @@ just decides which one they are asked for.
 - **Next student** in the topbar, or `?reset` on any URL, clears the device
   for the next student: their name, their unlocked activities, and anything
   they had queued but unsent
-- Open Interpreter on the projector machine **before** the period and run one
+- Open MonsterMaker on the projector machine **before** the period and run one
   cell, to confirm the model responds and to wake Supabase
 - Free Supabase projects pause after about a week idle and take a minute or two
   to wake. Wake it the morning of, and **test the wake path at least once** —
   otherwise the first student hits a dead endpoint
 - Check the top-right pill says **live model**. If it says *offline stand-in*,
-  the key is missing or wrong and Interpreter will play recordings
+  the key is missing or wrong and MonsterMaker will play recordings
 
 ## The shareable demo
 
@@ -371,7 +371,7 @@ Two ways to bring them back:
 
 - **Five taps on the CTx3 wordmark**, top left. Five more closes it.
 - **`?facilitator`** on any URL, e.g.
-  `https://<app>.vercel.app/interpreter?facilitator`, to have it open from
+  `https://<app>.vercel.app/monstermaker?facilitator`, to have it open from
   the start on a projector machine.
 
 Nothing is removed — the JSON export is still the last resort when a device

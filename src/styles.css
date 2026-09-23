@@ -753,7 +753,7 @@ input[type=password]:focus {
   .btn.big { align-self: stretch; text-align: center; }
 }
 
-/* ── the Interpreter pipeline ──────────────────────────────────────────────
+/* ── the MonsterMaker pipeline ──────────────────────────────────────────────
    input -> processing -> output, with the middle box the only control that
    matters. The concept IS the layout: same words in, swap one box, different
    thing out. */
@@ -795,4 +795,40 @@ input[type=password]:focus {
   background: var(--surface); border: 1px solid var(--line-2);
   border-radius: var(--r-ctl); padding: 9px 11px; resize: vertical;
   font-size: 15px; width: 100%;
+}
+
+/* ── the live pipeline ─────────────────────────────────────────────────────
+   The diagram version was a thin strip of labels. This one is the working
+   surface: both left boxes are controls, the right box is the result, and
+   the whole thing is tall enough that a change on the left is visibly a
+   change on the right rather than a flicker in a caption. */
+.pipe.live { grid-template-columns: 1fr auto minmax(150px, 0.7fr) auto 1.2fr; align-items: stretch; }
+.pipe.live .pipebox { gap: 7px; padding: 12px 13px; min-height: 190px; }
+.pipe.live .pipebox.input textarea {
+  flex: 1; width: 100%; resize: vertical; min-height: 110px;
+  background: var(--surface); border: 1.5px solid var(--accent);
+  border-radius: var(--r-ctl); padding: 9px 11px;
+  font-family: var(--mono); font-size: 13px; line-height: 1.5;
+}
+/* The output is the machine talking, so it is leaf, matching BIT's replies
+   everywhere else in the suite. */
+.pipe.live .pipebox.output {
+  background: var(--leaf-soft);
+  border-color: color-mix(in srgb, var(--leaf) 45%, transparent);
+  overflow: auto;
+}
+.pipe.live .pipebox.output svg { width: 100%; height: auto; max-height: 150px; }
+.pipelog { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.pipelog > div {
+  display: grid; grid-template-columns: 14px 1fr; gap: 6px;
+  font-size: 12px; line-height: 1.4;
+}
+.pipelog .ok > span:first-child { color: var(--leaf-ink); }
+.pipelog .no > span:first-child { color: var(--fail); }
+.pipelog .no { color: var(--fail); }
+
+@media (max-width: 820px) {
+  .pipe.live { grid-template-columns: 1fr; }
+  .pipe.live .pipebox { min-height: 0; }
+  .pipe.live .pipearrow { transform: rotate(90deg); justify-self: center; }
 }
