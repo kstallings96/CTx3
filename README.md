@@ -5,7 +5,7 @@ participant code.
 
 | Tool | Construct | Shape |
 |---|---|---|
-| **Word4Word** | decomposition, pseudocode (TEKS 8.1(A)) | Day 2 · hands-on + projector |
+| **Interpreter** | decomposition, pseudocode (TEKS 8.1(A)) | Day 2 · hands-on + projector |
 | **AlwaysNever** | hypothesis testing | Day 3 · high **and** low support |
 | **Prompt Golf** | abstraction, debugging | Day 3 · high **and** low support |
 

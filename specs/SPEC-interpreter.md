@@ -1,4 +1,4 @@
-# SPEC — Word4Word
+# SPEC — Interpreter
 
 Read ARCHITECTURE.md, EVENTS.md and DEVELOPMENTAL-RANGE.md first.
 
@@ -143,7 +143,7 @@ knows what the period is about. It produces no events, which is fine.
 **Phase 7 is the payoff and the setup for Prompt Golf** — do not cut it. If
 something must go, take time from phase 4.
 
-> **If you cut phase 6, Word4Word contributes no per-student data at all** and
+> **If you cut phase 6, Interpreter contributes no per-student data at all** and
 > the developmental-range measure rests on AlwaysNever and Prompt Golf
 > alone. That may be the right call for a 60-minute period — but it is a
 > decision to make deliberately, not one to discover afterwards.
@@ -256,7 +256,7 @@ School wifi will drop. Assume it.
 ## DECIDE
 
 - Phase 6 versus time: see the warning above. Keep it, or accept that
-  Word4Word is a whole-class demonstration with no individual measure.
+  Interpreter is a whole-class demonstration with no individual measure.
 - Phase 3: does the facilitator pick the monster, or does the class vote? A
   vote costs two minutes and buys investment.
 - Does the class's v1 from phase 4 carry into phase 5 as the vague

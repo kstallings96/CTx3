@@ -102,8 +102,8 @@ This is the primary outcome of the pilot. Not gain.
 | Hypothesis testing | step sequence; single-feature probe proportion | AlwaysNever |
 | Abstraction | step sequence; word count trajectory; `comparison_response` coding | Prompt Golf |
 | Debugging | `targetedEdit`, `msFromFailureToNextAttempt`, `consecutiveFailures` | Prompt Golf (clinic round) |
-| Decomposition | step sequence; reorder-vs-add across revisions | Word4Word (per student) |
-| Stochastic reasoning | distinct outputs across five identical runs | Word4Word (class-level) |
+| Decomposition | step sequence; reorder-vs-add across revisions | Interpreter (per student) |
+| Stochastic reasoning | distinct outputs across five identical runs | Interpreter (class-level) |
 | Constraint reasoning | step sequence; `liveOptionsAtCommit` | Manifest, Mosaic |
 | Stochastic reasoning | random block adoption | RowdyRobo Vac |
 | **Developmental range** | **`highestStep` high minus low, per tool** | **all hands-on tools** |

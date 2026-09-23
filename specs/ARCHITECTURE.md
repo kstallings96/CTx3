@@ -112,9 +112,9 @@ orphan participant.
 No names. No initials. No grade. The roster mapping codes to students lives
 outside this system, on paper, held by the research team.
 
-## Day 2 — Word4Word, a full period
+## Day 2 — Interpreter, a full period
 
-Word4Word is a 60-minute period of its own, not a warm-up. It is the only
+Interpreter is a 60-minute period of its own, not a warm-up. It is the only
 place in the week that claims **Texas TEKS 8.1(A)** — decompose real-world
 problems into structured parts using pseudocode — which is why the task has a
 right answer, the failures have locations, and the instruction is numbered
@@ -145,7 +145,7 @@ a formal split would mean two snowmen in one period.
 
 46 minutes of tool time. **AlwaysNever's low-support phase is restored** —
 it was cut purely for time under a schedule that no longer exists now that
-Word4Word has moved to its own day. Two rules of the same tier back to back,
+Interpreter has moved to its own day. Two rules of the same tier back to back,
 the palette and hypothesis field on and then off, difficulty held constant.
 
 Prompt Golf still carries the headline range measurement. Two tools reporting
@@ -166,7 +166,7 @@ School wifi will drop mid-session. Assume it.
   the network.
 
 Tools that call a model keep a pre-recorded fallback bank and label it as a
-recording on screen. Word4Word's literal half is deterministic and needs no
+recording on screen. Interpreter's literal half is deterministic and needs no
 network at all.
 
 ## Stack
@@ -189,7 +189,7 @@ rate-limited per participant code.
    and now the one carrying the range measurement. Building it first shakes
    out the events module and the scoring module together.
 4. AlwaysNever.
-5. Word4Word.
+5. Interpreter.
 6. Retrofit `?pc=` handling into the three existing tools.
 
 ## DECIDE
@@ -198,7 +198,7 @@ rate-limited per participant code.
   day a clean entry? A visible streak may motivate; it may also make an absent
   student feel behind.
 - Day setting: build-time constant or facilitator query param?
-- Word4Word's projector cells are class-level while its hands-on phases are
+- Interpreter's projector cells are class-level while its hands-on phases are
   not. The tool switches between them with a control on screen. Should that
   control be facilitator-only (a query param) so a student cannot wander into
   the projector cells mid-period? Current lean: yes, once the period is
@@ -210,10 +210,10 @@ rate-limited per participant code.
   Both, and neither. Literal Genie alone duplicated RowdyRobo Vac's
   closed-vocabulary deterministic command language, measuring the same thing
   twice a week apart. It is merged with the five-run variance display into
-  **Word4Word** (SPEC-word4word.md), where the literal executor is a control
+  **Interpreter** (SPEC-interpreter.md), where the literal executor is a control
   condition rather than an activity: determinism becomes the comparison, not
   the content.
-- ~~Is Word4Word whole-class only?~~ No. Thirty of its sixty minutes are
+- ~~Is Interpreter whole-class only?~~ No. Thirty of its sixty minutes are
   hands-on and attributable; the projector cells stay class-level.
 - ~~Which tool carries the developmental-range measurement?~~ Prompt Golf
   leads; AlwaysNever now reports one too.

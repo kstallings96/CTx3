@@ -2,7 +2,7 @@ import { log, flushNow, bufferedCount, exportJSON, clearBuffer, startSession, ha
 import { askModel, modelAvailable, modelReason, modelName } from "./lib/model.js";
 import { GRADE, rosterIndex, normalizeCode, isInstructor } from "./roster.js";
 import { hash } from "./lib/hash.js";
-import { RULES, RULE_ORDER, TIERS, PILLS, PILL_LABEL, HELD_OUT,
+import { RULES, RULE_ORDER, TIERS, LADDER, PILLS, PILL_LABEL, HELD_OUT,
          askText, comboKey, cap, matchClaim, answerFor, sequenceFor } from "./rules.js";
 import { RECORDINGS, followedCount } from "./recordings.js";
 import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision,
@@ -12,7 +12,7 @@ import { sha256hex } from "./lib/sha256.js";
 
 /* ============================ shared ============================ */
 const LS = "d3station.v2";
-const S = { code: "", first: "", initial: "", pinned: null, unlocked: [], gateFor: null, gateTries: 0, day: 3, screen: "hub", tool: "hub", events: [], seq: 0,
+const S = { code: "", first: "", initial: "", pinned: null, unlocked: [], gateFor: null, gateTries: 0, day: 2, screen: "hub", tool: "hub", events: [], seq: 0,
   support: "na", phaseId: null, phaseScaffolds: [],
   forceOffline: false, brandTaps: 0, lastAttempt: null, deviceId: deviceId() };
 const nowISO = () => new Date().toISOString();
@@ -180,7 +180,7 @@ const WHY = {
   no_endpoint: "<b>The model route did not answer.</b> In the published demo there is no server at all, which is expected.",
   no_sample: "<b>This view cannot ask Claude.</b>",
 };
-const TAPE_NOTE = " Word4Word plays five <b>pre-recorded real runs</b> instead, labelled on every card.";
+const TAPE_NOTE = " The Interpreter plays five <b>pre-recorded real runs</b> instead, labelled on every card.";
 
 function paintMode() {
   const pill = $("modepill"), txt = $("modetext"), note = $("modenote");
@@ -357,14 +357,15 @@ const BRIEFS = {
     button: "Let's go",
   },
 
-  /* ---- Word4Word ---- */
+  /* ---- Interpreter ---- */
   w4w_intro: {
-    id: "w4w_intro", once: true, eyebrow: "Word4Word",
-    title: "The machine does exactly what you say",
+    id: "w4w_intro", once: true, eyebrow: "Interpreter",
+    title: "Same words. Two engines.",
     lines: [
-      "You write steps. The machine follows them <b>word for word</b>.",
-      "It does not guess what you meant. If you leave something out, it stays out.",
+      "You write the steps once. Then you pick an <b>engine</b> to run them.",
+      "<b>Literal</b> does exactly what you wrote. <b>AI</b> guesses at the parts you left out.",
     ],
+    warn: "Before each run, write down what you think will happen. Then run it and see if you were right.",
     button: "Let's go",
   },
 };
@@ -745,66 +746,31 @@ function auditScaffolds() {
 }
 
 /**
- * The reveal.
+ * The reveal: what the instruction looks like written down.
  *
- * Two things a student cannot get from the practice bot alone.
+ * IT USED TO DO TWO JOBS AND NOW DOES ONE. The other half showed the same
+ * instruction handed to a real AI five times with a tally -- the rule
+ * said ALWAYS, the AI did it USUALLY. That half has moved to Day 3, where
+ * it belongs: AlwaysNever is now Day 2, the day a rule holds EVERY time,
+ * and ending it with an AI breaking its instruction would pre-empt the
+ * entire subject of the next day. It is no loss to move -- five runs of
+ * one instruction is structurally the demonstration Day 3 already makes,
+ * so it removes a duplication and hands Day 3 a ready-made opener.
  *
- * FIRST, what an instruction actually looks like. The rule they have been
- * hunting is shown as a system prompt, in the form somebody really would
- * have typed it. That is the vocabulary they need for Day 4, where their
- * own intake form becomes a model's system prompt.
- *
- * SECOND, that a real AI does not obey it every time. The practice bot kept
- * the instruction in all twelve answers; the same line given to a real
- * model is kept four times in five. The rule said ALWAYS. The AI did it
- * USUALLY. Nothing in the measured part of the activity can teach that,
- * because the measured part has to be deterministic to be comparable.
- *
- * The runs are labelled honestly. Until `npm run record` has captured real
- * ones, they are described as examples rather than recordings -- teaching
- * "AI is unreliable" with invented evidence would be the same failure the
- * lesson is about.
+ * What stays is the vocabulary. The rule the student has been hunting,
+ * shown as the system prompt somebody really would have typed, is what
+ * Day 4 needs when their own intake form becomes one.
  */
 function ftrReveal(r) {
-  const rec = RECORDINGS[FTR.ruleId];
   if (!r.systemPrompt) return "";
-  /* The tutorial gets the vocabulary and not the five runs. Seeing the
-     instruction written out as a system prompt is the cheap half and it
-     sets up every round after it; the tally is the expensive half, in
-     minutes and in attention, and it lands harder when the rule took real
-     work to find. */
-  if (RULES[FTR.ruleId] && RULES[FTR.ruleId].tutorial) return `
-    <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
-      <div><span class="eyebrow">what that instruction looks like written down</span>
-        <p class="hint" style="margin:4px 0 8px">This is a <b>system prompt</b>: the hidden line somebody writes to tell an AI how to behave. Every AI app you use has one. The next ones will be harder to spot than this.</p>
-        <div class="sysprompt">${esc(r.systemPrompt)}</div></div>
-    </section>`;
-  if (!rec) return "";
-  const kept = followedCount(FTR.ruleId), total = rec.runs.length;
-  const real = RECORDINGS.captured;
   return `
-    <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
-      <div><span class="eyebrow">what that instruction looks like written down</span>
-        <p class="hint" style="margin:4px 0 8px">This is a <b>system prompt</b>: the hidden line a company writes to tell an AI how to behave. Every AI app you use has one.</p>
+    <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
+      <div><span class="eyebrow">what that rule looks like written down</span>
+        <p class="hint" style="margin:4px 0 8px">This is a <b>system prompt</b>. It is the hidden line someone writes to tell an AI how to act. Every AI app you use has one.</p>
         <div class="sysprompt">${esc(r.systemPrompt)}</div></div>
-      <hr class="hr">
-      <div><span class="eyebrow">the same instruction, given to a real AI ${total} times</span>
-        <p class="hint" style="margin-top:4px">${real
-          ? `Recorded from <span class="kbd">${esc(RECORDINGS.model || "a real model")}</span> on ${esc(RECORDINGS.capturedAt || "")}. Same question every time.`
-          : `<b>Example runs.</b> These are written to show what usually happens, not captured from a live model — so treat them as an illustration until someone records real ones.`}</p>
-        <p class="hint" style="margin-top:6px"><b>Asked each time:</b> ${esc(rec.question)}</p></div>
-      <div class="realruns">${rec.runs.map((x, i) => `
-        <div class="realrun ${x.followed ? "kept" : "broke"}">
-          <span class="mark">${x.followed ? "✓" : "✗"}</span>
-          <span>${esc(x.text)}</span>
-        </div>`).join("")}</div>
-      <div class="tallyline">
-        <b style="color:${kept === total ? "var(--leaf-ink)" : "var(--fail)"}">${kept} of ${total}</b>
-        <span>followed the instruction.</span>
-        <p class="hint" style="max-width:40ch;margin-left:auto">${kept === total
-          ? "This time it kept it every time. Run it again tomorrow and it might not — that is the difference between a rule and a request."
-          : "The instruction said <b>always</b>. The AI did it <b>usually</b>. BIT kept it in every single answer; a real one does not, and nobody told it to slip."}</p>
-      </div>
+      ${RULES[FTR.ruleId] && RULES[FTR.ruleId].tutorial
+        ? `<p class="hint">The next ones will be harder to spot than this.</p>`
+        : `<p class="hint">BIT followed that line in <b>every single answer</b>. Tomorrow you meet an AI that gets the same kind of line and does not.</p>`}
     </section>`;
 }
 
@@ -814,7 +780,7 @@ function ftrReveal(r) {
  *
  * This is the other half of the same skill and the cheaper half to skip. A
  * student who can reverse-engineer a system prompt has learned to read a
- * machine; a student who has written one and watched a real model half-obey
+ * machine; a student who has written one and watched a real AI half-obey
  * it has learned what the thing on the other end actually is. It is also the
  * direct set-up for Day 4, where their intake form becomes a system prompt.
  *
@@ -1329,7 +1295,7 @@ function renderPG() {
           : l.pass ? "✓ Every line of the target is ticked. Now try it in fewer words." : "✗ Look at the red lines above."}</p></div>` : ""}
       ${best ? `<div class="row"><button class="btn ghost" id="pgnext">${PG.phase === "t2" ? "Compare my two prompts →" : PG.phase === "t4" ? "Finish →" : "Next round →"}</button>
         <span class="hint">Or keep going — fewer words?</span></div>` : ""}
-      ${liveOn() ? `<p class="hint">A real model is answering, so the same prompt will not always land the same way. That is not a bug in your prompt — it is the thing today is about.</p>` : ""}
+      ${liveOn() ? `<p class="hint">A real AI is answering, so the same prompt will not always land the same way. That is not a bug in your prompt — it is the thing today is about.</p>` : ""}
     </section>`;
   }
 
@@ -1410,7 +1376,7 @@ function wirePG() {
   wireBackHub();
 }
 
-/* ============================ tool 3 · Word4Word ============================ */
+/* ============================ tool 3 · Interpreter ============================ */
 /* Build it by writing pseudocode. Named parts, numbered lines, and a
    scene that renders one line at a time so the room watches a plan break at
    the exact step it breaks.
@@ -1432,6 +1398,11 @@ function wirePG() {
 const W4W = {
   mode: "solo",                 // solo = hands-on, class = the projector 2x2
   executor: "literal", which: "vague",
+  // Predict, run, compare, write down what you noticed. The prediction
+  // has to be captured BEFORE the run or it is a memory of a prediction,
+  // which is the thing this is trying not to be. Ten seconds a run, and
+  // it makes the conclusion the student's instead of the diagram's.
+  prediction: "", journal: [],
   vague: "", precise: "",
   draft: "",                    // the student's own pseudocode, their own monster
   runs: [], running: false, ctl: null, speed: 700, N: 5,
@@ -1439,6 +1410,9 @@ const W4W = {
   scene: freshScene(), stepLog: [], playing: false, timer: null, cursor: -1,
 };
 const w4wText = () => (W4W.which === "vague" ? W4W.vague : W4W.precise).trim();
+/* Kept for the log only. The 2x2 is no longer an explainer on screen --
+   it gets built on the board at the end out of what students report --
+   but the data still has to make it reconstructable afterwards. */
 const w4wQuadrant = () => W4W.executor + "-" + W4W.which;
 const isNumbered = (t) => String(t || "").split("\n").filter((l) => l.trim()).every((l) => /^\s*\d+[.)]/.test(l));
 
@@ -1513,7 +1487,7 @@ async function w4wRunFive() {
   // an instruction is prose, not build steps — so this is the word list only.
   // The literal machine is unaffected: it can draw whatever it is given,
   // because it only ever draws parts it knows.
-  if (W4W.executor === "model") {
+  if (W4W.executor === "ai") {
     const safeIn = checkSafe(text, { structural: false });
     if (!safeIn.ok) {
       W4W.blockedInput = SAFE_MESSAGE[safeIn.reason] || "that instruction was held back";
@@ -1573,25 +1547,55 @@ async function w4wRunFive() {
   const distinctScenes = new Set(done.map((r) => r.chk.placed.join(","))).size;
   W4W.log.push({ text: text.replace(/\n/g, " / "), quadrant, runs: done.length, distinct: uniq.size,
     distinctScenes, held: W4W.runs.filter((r) => r.held).length, outcome: "" });
+  // One journal row per run of five, carrying the prediction that was
+  // written before it. Predict-then-check is only a comparison if the two
+  // halves are stored together.
+  W4W.journal.push({ engine: W4W.executor, prediction: W4W.prediction.trim(),
+    runs: done.length, distinct: uniq.size, note: "" });
+  emit("prediction_checked", { participantCode: null, engine: W4W.executor,
+    prediction: W4W.prediction.trim(), runs: done.length, distinctAnswers: uniq.size });
+  W4W.prediction = "";
   W4W.running = false; renderW4W();
 }
 
 /* ---- render -------------------------------------------------------------- */
 function renderW4W() {
+  /* ONE PROCESS, WITH THE MIDDLE BOX SWAPPABLE.
+   *
+   * The screen reads input -> processing -> output, and the only control
+   * that matters changes the processing. That is the whole concept: same
+   * words in, different thing out, and the only difference is the engine.
+   * It also makes input/processing/output concrete, which is what 8.1(A)
+   * is asking for. */
+  const engineName = W4W.executor === "literal" ? "Literal" : "AI";
+  const pipeline = `
+    <div class="pipe">
+      <div class="pipebox"><span class="eyebrow">your instruction</span><b>the steps you wrote</b></div>
+      <span class="pipearrow" aria-hidden="true">&rarr;</span>
+      <div class="pipebox engine"><span class="eyebrow">engine</span>
+        <select id="enginepick" ${W4W.running ? "disabled" : ""}>
+          <option value="literal" ${W4W.executor === "literal" ? "selected" : ""}>Literal</option>
+          <option value="ai" ${W4W.executor === "ai" ? "selected" : ""}>AI</option>
+        </select></div>
+      <span class="pipearrow" aria-hidden="true">&rarr;</span>
+      <div class="pipebox"><span class="eyebrow">output</span><b>what it builds</b></div>
+    </div>`;
+
   const head = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-    <div class="spread"><div><span class="eyebrow">Tool 3 · decomposition + stochastic reasoning</span>
-      <h1 style="font-size:24px;margin-top:2px">Word4Word</h1></div>
+    <div class="spread"><div><span class="eyebrow">Day 3 · decomposition + how an AI reads you</span>
+      <h1 style="font-size:24px;margin-top:2px">Interpreter</h1></div>
       <span class="eyebrow">${W4W.mode === "solo" ? "your own build" : "projector · whole class"}</span></div>
     <p class="lede">${W4W.mode === "solo"
-      ? "Write the steps to build <b>your</b> monster. The machine does <b>exactly</b> what each line says. It will not add anything you left out."
-      : "One instruction, four machines. The exact machine does only what the line says. The AI fills in the rest by guessing."}</p>
+      ? "Write the steps to build <b>your</b> monster. The <b>Literal</b> engine does exactly what each line says. It will not add anything you left out."
+      : "Same instruction. Swap the engine. Run it again. The only thing that changed is the box in the middle."}</p>
+    ${pipeline}
     <div class="row">
       <button class="btn sm ${W4W.mode === "solo" ? "" : "ghost"}" data-w4wmode="solo">Build your own</button>
-      <button class="btn sm ${W4W.mode === "class" ? "" : "ghost"}" data-w4wmode="class">The four cells</button>
+      <button class="btn sm ${W4W.mode === "class" ? "" : "ghost"}" data-w4wmode="class">Run the engines</button>
       <span class="hint">${W4W.mode === "solo"
         ? "Your work here is saved under your name."
-        : "Projector only. These runs are logged for the class, not for any one student."}</span>
+        : "Projector. These runs are logged for the class, not for any one student."}</span>
     </div>
   </section>`;
 
@@ -1614,7 +1618,7 @@ function renderW4W() {
   const machineHead = `
     <div class="chathead">
       ${w4wBit(W4W.playing ? "thinking" : W4W.stepLog.length ? "pleased" : "idle")}
-      <div class="chatwho"><b>Word4Word</b><span>${W4W.playing ? "building\u2026" : "does exactly what you wrote"}</span></div>
+      <div class="chatwho"><b>Literal engine</b><span>${W4W.playing ? "building\u2026" : "does exactly what you wrote"}</span></div>
     </div>`;
 
   const goal = `
@@ -1677,49 +1681,61 @@ function renderW4W() {
               : a.matched ? "matched" : esc(a.miss[0] || "missed")}</td></tr>`).join("")}
       </tbody></table></div></section>` : ""}`;
   } else {
-    const cell = (ex, wh) => {
-      const row = [...W4W.log].reverse().find((l) => l.quadrant === ex + "-" + wh);
-      const on = W4W.executor === ex && W4W.which === wh;
-      return `<button class="qcell${on ? " on" : ""}${row ? " ran" : ""}" data-w4wex="${ex}" data-w4wwh="${wh}">
-        <span class="qv">${row ? (row.distinct === 1 ? "the same answer" : row.distinct + " different answers") : "not run yet"}</span>
-        <span class="qs">${row ? row.distinctScenes + " different monsters" : "·"}</span></button>`;
-    };
     const done = W4W.runs.filter((r) => r.out);
     const uniq = new Set(done.map((r) => r.out.trim()));
-    body = `
+    const rec = RECORDINGS[LADDER.tutorial];
+    const kept = rec ? followedCount(LADDER.tutorial) : 0;
+
+    /* THE OPENER, INHERITED FROM DAY 2.
+     *
+     * Yesterday's bot followed its rule in every single answer. Here is a
+     * real AI given that same line. This half used to close AlwaysNever,
+     * where it pre-empted today; here it is the thing today is about. */
+    const opener = !rec ? "" : `
+    <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
+      <div><span class="eyebrow">yesterday, and today</span>
+        <h2 style="font-size:21px">BIT followed its rule every single time. A real AI does not.</h2>
+        <p class="hint" style="margin-top:6px">Same hidden instruction, handed to a real AI ${rec.runs.length} times:</p></div>
+      <div class="sysprompt">${esc(RULES[LADDER.tutorial].systemPrompt)}</div>
+      <p class="hint">${RECORDINGS.captured
+        ? `Recorded from <span class="kbd">${esc(RECORDINGS.model || "a real AI")}</span> on ${esc(RECORDINGS.capturedAt || "")}.`
+        : `<b>Example runs.</b> Written to show what usually happens, not captured from a live AI — treat them as an illustration until someone records real ones.`}</p>
+      <div class="realruns">${rec.runs.map((x, i) => `
+        <div class="realrun ${x.followed ? "kept" : "broke"}">
+          <span class="mark">${x.followed ? "✓" : "✗"}</span>
+          <span>${esc(x.text)}</span>
+        </div>`).join("")}</div>
+      <div class="tallyline">
+        <b style="color:${kept === rec.runs.length ? "var(--leaf-ink)" : "var(--fail)"}">${kept} of ${rec.runs.length}</b>
+        <span>followed the instruction.</span>
+        <p class="hint" style="max-width:40ch;margin-left:auto">The instruction said <b>always</b>. The AI did it <b>usually</b>. Nobody told it to slip.</p>
+      </div>
+    </section>`;
+
+    body = opener + `
     <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
       ${goal}
-      <div class="qgrid">
-        <div></div><div class="qhead">Vague instruction</div><div class="qhead">Precise instruction</div>
-        <div class="qside">Word4Word</div>${cell("literal", "vague")}${cell("literal", "precise")}
-        <div class="qside">Real model</div>${cell("model", "vague")}${cell("model", "precise")}
-      </div>
-    </section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
-      <div class="row"><span class="eyebrow">machine</span>
-        ${["literal", "model"].map((e) => `<button class="btn sm ${W4W.executor === e ? "" : "ghost"}" data-w4wex2="${e}">${e === "literal" ? "Word4Word" : "Real model"}</button>`).join("")}
-        <span class="hint">${W4W.executor === "literal"
-          ? "Does exactly what the line says — colour, number, what goes on what. Same words in, same monster out, five times."
-          : liveOn() ? "A real model, caching off, so a repeat really is a repeat." : "No live model here, so this plays five <b>pre-recorded</b> real runs, labelled on each card."}</span>
-      </div>
-      <div class="tmins">
-        <div class="${W4W.which === "vague" ? "sel" : ""}">
-          <div class="spread"><span class="eyebrow">the vague one · the class writes this</span>
-            <button class="btn ghost sm" data-w4wwh2="vague">${W4W.which === "vague" ? "selected" : "use this"}</button></div>
-          <textarea id="w4wvague" rows="3" ${W4W.running ? "disabled" : ""}>${esc(W4W.vague)}</textarea>
-        </div>
-        <div class="${W4W.which === "precise" ? "sel" : ""}">
-          <div class="spread"><span class="eyebrow">the precise one · the class fixes it</span>
-            <div class="row" style="gap:6px"><button class="btn ghost sm" data-w4wwh2="precise">${W4W.which === "precise" ? "selected" : "use this"}</button>
-            </div></div>
-          <textarea id="w4wprecise" rows="3" placeholder="Numbered steps, one per line…" ${W4W.running ? "disabled" : ""}>${esc(W4W.precise)}</textarea>
-        </div>
-      </div>
+      <div><span class="eyebrow">your instruction · the class writes this</span>
+        <textarea id="w4wvague" rows="4" placeholder="Numbered steps, one per line…" ${W4W.running ? "disabled" : ""}>${esc(W4W.vague)}</textarea></div>
       ${W4W.blockedInput ? `<div class="banner"><span>!</span><div>${esc(W4W.blockedInput)}</div></div>` : ""}
+      /* PREDICT BEFORE YOU RUN.
+       *
+       * Ten seconds a run, and it converts a demonstration into a test.
+       * Prediction-then-check IS verification -- the construct the week
+       * would otherwise have deferred to spring -- and it makes the
+       * conclusion the student's rather than a diagram's. The Run button
+       * stays disabled until something is written, which is the only way
+       * to be sure the prediction preceded the result. */
+      <div class="predict">
+        <span class="eyebrow">before you run it — what will the ${engineName} engine do?</span>
+        <textarea id="w4wpredict" rows="2" placeholder="I think it will…" ${W4W.running ? "disabled" : ""}>${esc(W4W.prediction)}</textarea>
+      </div>
       <div class="row">
-        <button class="btn" id="w4wfive" ${W4W.running || !w4wText() ? "disabled" : ""}>${W4W.running ? "Running…" : "Run this " + W4W.N + " times"}</button>
+        <button class="btn" id="w4wfive" ${W4W.running || !w4wText() || !W4W.prediction.trim() ? "disabled" : ""}>${W4W.running ? "Running…" : "Run it " + W4W.N + " times"}</button>
         <button class="btn ghost sm" id="w4wstopfive" ${W4W.running ? "" : "disabled"}>Stop</button>
-        <span class="hint">running <b>${esc(w4wQuadrant().replace("-", " · "))}</b></span>
+        <span class="hint">${!W4W.prediction.trim()
+          ? "Write your prediction first. That is what makes this a test and not a demo."
+          : "Engine: <b>" + engineName + "</b>. Swap it at the top and run the same words again."}</span>
       </div>
       ${W4W.runs.length ? `<div class="runs">${W4W.runs.map((r, i) => {
         if (r.held) return `<div class="run held"><div class="n"><span>run ${i + 1}</span><span>held back</span></div>
@@ -1746,16 +1762,19 @@ function renderW4W() {
             : "Nothing left to fill in, so it varies only in the parts that do not matter."}</p></div>
       </div>` : ""}
     </section>
-    ${W4W.log.length ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px">
-      <span class="eyebrow">Facilitator log</span>
+    ${W4W.journal.length ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px">
+      <span class="eyebrow">what we found</span>
+      <p class="hint">One row per run. Fill in the last column together — that is the part the class writes, not the app.</p>
       <div class="scroller"><table class="ftable">
-        <thead><tr><th>Instruction (verbatim)</th><th>Quadrant</th><th>Different monsters</th><th>Different answers</th><th>Like the drawing? (you judge)</th></tr></thead>
-        <tbody>${W4W.log.map((l, i) => `<tr><td style="font-family:var(--mono);font-size:11.5px">${esc(l.text)}</td>
-          <td style="font-family:var(--mono);font-size:11px">${esc(l.quadrant)}</td>
-          <td style="font-family:var(--mono)">${l.distinctScenes} / ${l.runs}</td>
-          <td style="font-family:var(--mono)">${l.distinct}</td>
-          <td><select data-w4wout="${i}">${["—", "like the drawing", "partly", "not like the drawing"].map((o) => `<option ${o === (l.outcome || "—") ? "selected" : ""}>${o}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div>
-      <p class="hint">The quadrant column is what makes decomposition and variance readable from one table afterwards. <b>Built it</b> is the checker; <b>Outcome</b> is yours.</p>
+        <thead><tr><th>#</th><th>Engine</th><th>You predicted</th><th>Different answers</th><th>What we noticed</th></tr></thead>
+        <tbody>${W4W.journal.map((j, i) => `<tr>
+          <td style="font-family:var(--mono)">${i + 1}</td>
+          <td><b>${j.engine === "literal" ? "Literal" : "AI"}</b></td>
+          <td style="font-size:12.5px">${esc(j.prediction)}</td>
+          <td style="font-family:var(--mono)">${j.distinct} of ${j.runs}</td>
+          <td><input data-jnote="${i}" value="${esc(j.note || "")}" placeholder="we noticed…" style="width:100%"></td>
+        </tr>`).join("")}</tbody></table></div>
+      <div class="banner leafy"><span>?</span><div><b>Both engines got the same words. Why did they do different things with them?</b></div></div>
     </section>` : ""}`;
   }
 
@@ -1776,28 +1795,26 @@ function wireW4W() {
   const stop = $("w4wstop"); if (stop) stop.onclick = () => { clearTimeout(W4W.timer); W4W.playing = false; renderW4W(); };
   const sp = $("w4wspeed"); if (sp) sp.onchange = (e) => W4W.speed = +e.target.value;
 
-  const v = $("w4wvague"); if (v) v.oninput = () => { W4W.vague = v.value; const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText(); };
-  const pr = $("w4wprecise"); if (pr) pr.oninput = () => {
-    W4W.precise = pr.value;
-    document.querySelectorAll('[data-w4wwh2="precise"]').forEach((b) => b.disabled = false);
-    const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText(); };
-  document.querySelectorAll("[data-w4wex2]").forEach((b) => b.onclick = () => {
-    if (W4W.running || W4W.executor === b.dataset.w4wex2) return;
-    emit("quadrant_switched", { participantCode: null, from: w4wQuadrant(), to: b.dataset.w4wex2 + "-" + W4W.which });
-    W4W.executor = b.dataset.w4wex2; W4W.runs = []; renderW4W(); });
-  document.querySelectorAll("[data-w4wwh2]").forEach((b) => b.onclick = () => {
-    if (W4W.running || W4W.which === b.dataset.w4wwh2) return;
-    emit("quadrant_switched", { participantCode: null, from: w4wQuadrant(), to: W4W.executor + "-" + b.dataset.w4wwh2 });
-    W4W.which = b.dataset.w4wwh2; W4W.runs = []; renderW4W(); });
-  document.querySelectorAll("[data-w4wex]").forEach((b) => b.onclick = () => {
-    if (W4W.running) return;
-    W4W.executor = b.dataset.w4wex; W4W.which = b.dataset.w4wwh; W4W.runs = []; renderW4W();
-    if (W4W.which === "precise" && !W4W.precise.trim()) { const fl = $("w4wprecise"); if (fl) fl.focus(); } });
+  const v = $("w4wvague"); if (v) v.oninput = () => { W4W.vague = v.value; const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText() || !W4W.prediction.trim(); };
+  // The engine picker IS the lesson, so it is a real control rather than a
+  // pair of tabs: changing it clears the runs, because runs from the old
+  // engine sitting under a new label is the one thing that would teach the
+  // opposite of the point.
+  const eng = $("enginepick"); if (eng) eng.onchange = () => {
+    if (W4W.running || W4W.executor === eng.value) return;
+    emit("engine_switched", { participantCode: null, from: W4W.executor, to: eng.value });
+    W4W.executor = eng.value; W4W.runs = []; renderW4W(); };
+  const pd = $("w4wpredict"); if (pd) pd.oninput = () => {
+    W4W.prediction = pd.value;
+    const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText() || !W4W.prediction.trim(); };
+  document.querySelectorAll("[data-jnote]").forEach((inp) => inp.onchange = () => {
+    const j = W4W.journal[+inp.dataset.jnote]; if (!j) return;
+    j.note = inp.value;
+    emit("class_observation", { participantCode: null, engine: j.engine,
+      prediction: j.prediction, distinct: j.distinct, note: inp.value }); });
   const five = $("w4wfive"); if (five) five.onclick = w4wRunFive;
-  const stop5 = $("w4wstopfive"); if (stop5) stop5.onclick = () => { W4W.running = false; if (W4W.ctl) W4W.ctl.abort(); renderW4W(); };
-  document.querySelectorAll("[data-w4wout]").forEach((s2) => s2.onchange = () => {
-    W4W.log[+s2.dataset.w4wout].outcome = s2.value === "—" ? "" : s2.value;
-    emit("facilitator_judgement", { participantCode: null, quadrant: W4W.log[+s2.dataset.w4wout].quadrant, outcome: s2.value }); });
+  const stop5 = $("w4wstopfive"); if (stop5) stop5.onclick = () => {
+    W4W.running = false; if (W4W.ctl) W4W.ctl.abort(); renderW4W(); };
   wireBackHub();
 }
 
@@ -1805,10 +1822,31 @@ function wireW4W() {
 /* `path` is the tool's own URL segment. Each tool is reachable at
    /<path> as well as from the hub, so a facilitator can hand out one URL per
    station and a student on that URL never sees the other two. */
+/**
+ * DAYS 2 AND 3 ARE SWAPPED, and the swap fixes a contradiction.
+ *
+ * Under the old order the Interpreter day taught that an AI answers
+ * differently every time, and the next day handed students a bot that
+ * answered identically every time. A student who had been paying
+ * attention was right to be confused.
+ *
+ * Deterministic first is also the better ladder, and it gives the week
+ * four clean beats:
+ *
+ *   Day 1  randomness you put in on purpose      (RowdyRoboVac)
+ *   Day 2  a rule that holds every single time   (AlwaysNever)
+ *   Day 3  an AI that has a rule and only usually follows it (Interpreter)
+ *   Day 4  you write the instructions and check the output   (VibeBuilder)
+ *
+ * TEKS follows the tools: 8.1(C) to Day 2, 8.1(A) to Day 3.
+ */
 const TOOLS = [
-  { id: "ftr", path: "alwaysnever", name: "AlwaysNever", day: 3, con: "reverse-engineering an AI", built: true, blurb: "An AI is following a secret instruction. Ask it things, work out what the instruction says, then see a real AI try to follow the same line." },
-  { id: "pg", path: "prompt-golf", name: "Prompt Golf", day: 3, con: "abstraction · debugging", built: true, blurb: "Hit the target in as few words as possible. Opens by fixing someone else's broken prompt." },
-  { id: "w4w", path: "word4word", name: "Word4Word", day: 2, con: "decomposition · pseudocode", built: true, tag: "day 2", blurb: "Draw your own monster, then write the steps that build it. The machine does word for word what you wrote — no more, and nothing you left out." },
+  { id: "ftr", path: "alwaysnever", name: "AlwaysNever", day: 2, con: "reverse-engineering an AI", built: true,
+    blurb: "An AI is following a secret rule. Ask it questions and work out what the rule is." },
+  { id: "w4w", path: "interpreter", name: "Interpreter", day: 3, con: "decomposition · pseudocode", built: true,
+    blurb: "Write the steps. Run them through the Literal engine, then the AI engine. Same words, two very different results." },
+  { id: "pg", path: "prompt-golf", name: "Prompt Golf", day: 3, con: "abstraction · debugging", built: true,
+    blurb: "Hit the target in as few words as possible. Opens by fixing someone else's broken prompt." },
 ];
 function renderHub() {
   $("stage").innerHTML = `
@@ -1824,9 +1862,11 @@ function renderHub() {
       <span class="con">day ${t.day} · ${t.con}</span></button>`; }).join("")}</div>
   <section class="card pad" style="display:flex;flex-direction:column;gap:8px">
     <span class="eyebrow">Today's idea</span>
-    <p class="lede">Day 3 is the day students find out that a language model is not a lookup table. ${liveOn()
-      ? "A real model answers in <b>Prompt Golf</b> and in half of <b>Word4Word</b>, with answer caching switched off, so a repeat really is a repeat. <b>AlwaysNever</b>'s practice bot and the literal half of <b>Word4Word</b> are deterministic on purpose — one so every student meets the same puzzle, the other so the class has a control to measure variance against."
-      : "No live model is available in this view, so every tool is running on a deterministic stand-in and says so. The activities all work; what is missing is the variation, which on Day 3 is the point."}</p>
+    <p class="lede">${S.day === 2
+      ? "Day 2 is the day a rule holds <b>every single time</b>. AlwaysNever's bot never slips, on purpose — that is the control the rest of the week is measured against."
+      : liveOn()
+        ? "Day 3 is the day students find out that an AI is not a lookup table. Same instruction, different answer, every run."
+        : "No live model in this view, so every tool runs on a deterministic stand-in and says so. The activities all work; what is missing is the variation, which on Day 3 is the point."}</p>
   </section>`;
   document.querySelectorAll("[data-tool]").forEach((b) => b.onclick = () => go(b.dataset.tool));
 }
@@ -1944,8 +1984,8 @@ function renderCode() {
  *
  * The hub at / still runs all three, which is what a one-device-per-student
  * classroom wants. But a station set up for one activity should not offer the
- * other two: /word4word signs the student in and drops them straight into
- * Word4Word, with no hub, no tiles and no way back out of it.
+ * other two: /interpreter signs the student in and drops them straight into
+ * the Interpreter, with no hub, no tiles and no way back out of it.
  *
  * Pinning is read from the path. `?tool=` is accepted as well because the
  * artifact build and any file:// copy have no server to rewrite paths, and a
@@ -2011,7 +2051,7 @@ function go(screen, opts) {
   const leavingTool = S.screen !== "hub" && S.screen !== "code" && S.screen !== "gate";
   if (leavingTool && screen !== S.screen) emit("session_end", { reason: "navigated_away" });
   S.screen = screen;
-  S.tool = { hub: "hub", code: "hub", gate: "hub", ftr: "alwaysnever", pg: "prompt-golf", w4w: "word4word" }[screen] || "hub";
+  S.tool = { hub: "hub", code: "hub", gate: "hub", ftr: "alwaysnever", pg: "prompt-golf", w4w: "interpreter" }[screen] || "hub";
   window.scrollTo({ top: 0, behavior: "instant" });
   if (screen === "hub") renderHub();
   else if (screen === "code") renderCode();
@@ -2039,7 +2079,7 @@ function go(screen, opts) {
   // Whole-class: these rows are not attributed to a student, by design.
   else if (screen === "w4w") {
     S.support = "na";
-    emit("session_start", { tool: "word4word", day: S.day, deviceId: S.deviceId });
+    emit("session_start", { tool: "interpreter", day: S.day, deviceId: S.deviceId });
     // Hands-on by default and attributed; the projector cells drop the code.
     phaseStart("w4w-solo", "na", ["targetShown", "stepByStep"]);
     emit("task_start", { taskId: "w4w-solo", round: 1 });
@@ -2145,7 +2185,7 @@ function start(snap) {
   S.pinned = pinnedTool();
   if (qs.has("facilitator")) toggleRail(true);
   // A pinned URL carries its own day, so ?day= becomes optional on it.
-  // "The facilitator opened /word4word but forgot ?day=2" is a study-day
+  // "The facilitator opened /interpreter but forgot ?day=2" is a study-day
   // failure that costs you the whole period's data, and it is cheaper to
   // design out than to remember. An explicit ?day= still overrides.
   if (S.pinned && !(qd >= 1 && qd <= 4)) S.day = TOOLS.find((t) => t.id === S.pinned).day;

@@ -162,18 +162,28 @@ const OPINION_MARKERS = new RegExp([
 
 const sentences = (t) => String(t).split(/[.!?]+/).map((x) => x.trim()).filter(Boolean);
 
+/* Pictographs and emoji presentation selectors. Deliberately narrow: it has
+   to be true of what the bot writes AND of what a real model writes, since
+   `npm run record` marks real runs with this same test. */
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{1F900}-\u{1F9FF}]/u;
+
+/* An opening compliment. Anchored to the start, because a nice word buried
+   in the middle of an answer is not what the instruction asked for. */
+const COMPLIMENT_RE = /^(?:great|good|nice|love|what a|excellent|lovely|fantastic|brilliant|smart|clever|fair|ooh|oh,? (?:good|nice))\b/i;
+
+/* Basic colour names only. A 13-year-old checking this by eye is looking
+   for red, blue, green -- not chartreuse, and not "salted caramel". */
+const COLOUR_RE = /\b(red|orange|yellow|green|blue|purple|pink|brown|black|white|grey|gray|gold|silver)\b/i;
+
 export const RULES = {
-  /* ---------- ROUND 0: the tutorial. Unmeasured, and obvious ----------
+  /* ---------- TUTORIAL: visible in the first reply ----------
    *
-   * ALL CAPS is visible in the FIRST reply, before the student has worked
-   * out what the pills do. That is the whole job: it teaches the loop --
-   * probe, lock, test, close -- with near-guaranteed success, and it
-   * absorbs the confusion of learning the interface so the measured rounds
-   * do not have to. A first round spent working out where the buttons are
-   * is a first round that measures the interface.
+   * Near-guaranteed success, and unmeasured. The job is to teach the loop
+   * -- probe, lock, test, close -- and absorb the confusion of learning
+   * the interface so the measured rounds do not have to. A first measured
+   * round spent working out where the buttons are measures the interface.
    *
-   * It is also, structurally, an ALWAYS rule. Its obviousness is the
-   * on-ramp to the tier the measured rounds do not have time for.
+   * Both are structurally ALWAYS rules. Their obviousness is the on-ramp.
    */
   always_caps: {
     tier: "tutorial", kind: "Always", tutorial: true,
@@ -190,7 +200,26 @@ export const RULES = {
     ],
   },
 
-  /* ---------- ALWAYS: the evidence is in every answer ---------- */
+  always_emoji: {
+    tier: "tutorial", kind: "Always", tutorial: true,
+    label: "always puts an emoji in the answer",
+    systemPrompt: "You are a helpful assistant. Always include an emoji in every answer.",
+    predicts: "the reply has an emoji in it",
+    check: (t) => EMOJI_RE.test(String(t)),
+    judge: { must: [/\b(emoji|emojis|emoticon\w*|smiley|smileys|face|faces|picture|pictures|icon|icons)\b/i] },
+    look: "You will not have to hunt for this one. Send anything.",
+    hints: [
+      "Look at what is in the answer that is not a word.",
+      "It adds the same kind of thing to every single answer.",
+      "Every answer has a little picture in it.",
+    ],
+  },
+
+  /* ---------- ALWAYS: the evidence is in every answer ----------
+   *
+   * Presence rules. Two or three replies is enough, because whatever it is
+   * turns up in all of them and the student only has to notice.
+   */
   always_sponsor: {
     tier: "always", kind: "Always",
     label: "always works in a mention of Zesty Pop",
@@ -199,11 +228,6 @@ export const RULES = {
     check: (t) => /zesty\s*pop/i.test(t),
     judge: { must: [/\b(zesty|pop|sponsor|advert\w*|\bads?\b|brand|promot\w*|selling|sells|plug|product|company)\b/i] },
     look: "Something turns up in every answer that you never asked about. Read to the end of each one.",
-    /* HINT 1 IS POINTED, NOT GENTLE. The hints ARE the support: a hint that
-       only says "look closely" leaves the high condition performing at the
-       same level as the low one, and a range measured against a ceiling
-       nobody was helped to reach is not a range. Hint 1 names WHERE to
-       look, 2 names WHAT kind of thing is there, 3 all but says it. */
     hints: [
       "Look at the last few words of every answer.",
       "The same thing is tacked onto every reply, and it has nothing to do with your question.",
@@ -211,13 +235,6 @@ export const RULES = {
     ],
   },
 
-  /**
-   * Banked, not run in the default ladder. This is what a real kids' app
-   * writes into its system prompt, and it is visible in every answer, so
-   * it pairs with the sponsor as a second blatant presence rule. It is also
-   * a free AI-literacy moment: the safety line a student reads as the app
-   * caring about them is a line somebody typed.
-   */
   always_trusted_adult: {
     tier: "always", kind: "Always",
     label: "always tells you to check with a trusted adult",
@@ -233,43 +250,80 @@ export const RULES = {
     ],
   },
 
-  /* ---------- NEVER: you have to go looking for the gap ---------- */
-
-  /**
-   * Reframed from "always answers in exactly one sentence".
-   *
-   * The behaviour is identical; what changed is where the discovery lives.
-   * You cannot find this by reading one reply -- you find it by ASKING FOR
-   * A PARAGRAPH and noticing what did not arrive. That is designing a probe
-   * for an absence, which is the never-tier move.
-   *
-   * Caveat worth keeping in view at analysis time: unlike dogs and opinion,
-   * this one is partly visible without probing, because every reply is
-   * short. A student can notice "it is always brief" without ever varying
-   * the length pill. "Always brief" is not the rule, though -- the rule is
-   * that it REFUSES to be longer -- and only the length probe separates
-   * those. Expect it to sit slightly easier than the other two nevers.
-   */
-  never_long: {
-    tier: "never", kind: "Never",
-    label: "never gives you more than one sentence, however much you ask for",
-    systemPrompt: "You are a helpful assistant. Never write more than one sentence, no matter what the user asks for.",
-    predicts: "the reply is never more than one sentence",
-    check: (t) => sentences(t).length === 1,
-    /* NOT "short" or "brief" — those belong to the `short_reply` claim
-       below. "It gives short answers" is a vaguer and different assertion
-       from "it never goes past one sentence", it is testable on its own,
-       and reading it as this rule would hand a 3/3 to a student who has
-       not found the sentence limit. */
-    judge: { must: [/\bsentences?\b|\b(one|single|1) line\b|\bnever (?:longer|more|says more|goes)\b/i] },
-    look: "Ask it for more. Then ask it for a lot more.",
+  /** Real chatbot behaviour, and the reason every app you use ends its
+   *  turn with a question: a conversation that keeps asking is one you
+   *  keep having. */
+  always_question: {
+    tier: "always", kind: "Always",
+    label: "always ends by asking you a question",
+    systemPrompt: "You are a helpful assistant. Always end your reply by asking the user a question.",
+    predicts: "the reply ends with a question",
+    check: (t) => /\?\s*$/.test(String(t).trim()),
+    judge: { must: [/\b(questions?|asks? (?:me|you|back)|asking)\b/i] },
+    look: "Look at how every answer finishes, not what it says.",
     hints: [
-      "Ask for a paragraph. Then count the sentences you get back.",
-      "Ask the same question twice and change only the length you asked for.",
-      "There is an amount it will not go past, whatever you ask for.",
+      "Look at the very last thing in every answer.",
+      "It never lets the conversation stop. How?",
+      "Every answer ends the same way, and it puts the next move on you.",
     ],
   },
 
+  /** Sycophancy, which is real, shipped and almost never taught. A model
+   *  tuned to be agreeable praises the question before it answers it, and
+   *  a student who can name that has something genuinely useful. */
+  always_compliment: {
+    tier: "always", kind: "Always",
+    label: "always compliments you before it answers",
+    systemPrompt: "You are a helpful assistant. Always begin by complimenting the user on their question.",
+    predicts: "the reply opens with a compliment",
+    check: (t) => COMPLIMENT_RE.test(String(t).trim()),
+    judge: { must: [/\b(compliment\w*|nice|kind|flatter\w*|praise\w*|suck\w* up|sucks up|sweet|polite|friendly|buttering|butters)\b/i] },
+    look: "Read the opening words of every answer, before it gets to your question.",
+    hints: [
+      "Look at the first few words of every answer, before the real answer starts.",
+      "It says something about YOU, or about your question, every single time.",
+      "It is being nice to you before it tells you anything.",
+    ],
+  },
+
+  /** Harder than the rest of the tier on purpose: one reply looks
+   *  unremarkable, and it only becomes a pattern across several. */
+  always_number: {
+    tier: "always", kind: "Always",
+    label: "always puts exactly one number in the answer",
+    systemPrompt: "You are a helpful assistant. Always include exactly one number in every answer.",
+    predicts: "the reply has exactly one number in it",
+    check: (t) => (String(t).match(/\d+/g) || []).length === 1,
+    judge: { must: [/\b(numbers?|digits?|figures?|counts?|amount|quantity|numeral\w*)\b/i] },
+    look: "One answer will not show you this. Line up three and compare them.",
+    hints: [
+      "Count something in each answer, and compare the counts.",
+      "Every answer has exactly the same amount of one thing in it.",
+      "There is a digit in every answer. How many?",
+    ],
+  },
+
+  always_color: {
+    tier: "always", kind: "Always",
+    label: "always mentions a colour",
+    systemPrompt: "You are a helpful assistant. Always mention a colour in every answer.",
+    predicts: "the reply mentions a colour",
+    check: (t) => COLOUR_RE.test(String(t)),
+    judge: { must: [/\b(colou?rs?|colou?red|rainbow|shade|shades)\b/i] },
+    look: "Ask about things that have nothing to do with each other and read all the answers.",
+    hints: [
+      "One kind of word turns up in every answer, even when it makes no sense there.",
+      "Ask about something that has no look to it at all. It still turns up.",
+      "Red, blue, green. Look for words like those.",
+    ],
+  },
+
+  /* ---------- NEVER: you have to go looking for the gap ----------
+   *
+   * Absence rules. Each one is findable by choosing ONE specific pill,
+   * which is the point: you cannot stumble on it, you have to decide to
+   * test for the thing that is not there.
+   */
   never_dogs: {
     tier: "never", kind: "Never",
     label: "never mentions dogs",
@@ -285,27 +339,96 @@ export const RULES = {
     ],
   },
 
-  never_opinion: {
+  /**
+   * Replaces "never gives its own opinion", which was cut for a specific
+   * reason worth keeping written down: that rule was not an absence, it
+   * was a SUBSTITUTION. The bot described the options instead of picking
+   * one, so a student had to notice that something had been swapped for
+   * something else rather than simply left out. That is a harder move than
+   * anything else on the list and it sat in the tier by accident.
+   *
+   * A missing WORD is a clean absence. You ask for the best one, the bot
+   * answers the question, and the word you used never comes back. It is
+   * checkable by eye, and it is real: brands are routinely told not to
+   * claim superlatives.
+   *
+   * Do not ship this beside a no-opinion rule. They overlap, and a student
+   * on one could correctly describe the other.
+   */
+  never_best: {
     tier: "never", kind: "Never",
-    label: "never gives its own opinion",
-    systemPrompt: "You are a helpful assistant. Never give your own opinion or pick a favourite. Describe the options instead.",
-    predicts: "the reply never picks a favourite",
-    check: (t) => !OPINION_MARKERS.test(t),
-    judge: { must: [/\b(opinion|opinions|favourite|favorite|prefer\w*|pick|picks|choose|chooses|side|commit|takes? a stance|wo?n'?t say)\b/i] },
-    look: "Ask it for a fact, then ask it to take a side. The two do not come back the same.",
+    label: 'never uses the word "best"',
+    systemPrompt: 'You are a helpful assistant. Never use the word "best" in any answer.',
+    predicts: 'the reply never uses the word "best"',
+    check: (t) => !/\bbest\b/i.test(String(t)),
+    judge: { must: [NEG, /\bbest\b/i] },
+    look: "Ask it for the best one. Read the answer back and look for the word you used.",
     hints: [
-      "Ask for the best one, then ask for just the facts about the same topic. Compare the two answers.",
-      "One kind of question gets a straight answer and one kind never does. Which kind?",
-      "It will tell you about the options. It will not tell you which one it likes.",
+      "Ask for the best one. Then read its answer and look for the word 'best'.",
+      "It answers the question. It just will not say one particular word back to you.",
+      "There is a word you keep using that it never uses.",
+    ],
+  },
+
+  /**
+   * Reframed from "always answers in exactly one sentence".
+   *
+   * The behaviour is identical; what changed is where the discovery lives.
+   * You cannot find this by reading one reply -- you find it by ASKING FOR
+   * A PARAGRAPH and noticing what did not arrive. It was never a presence
+   * rule, and it was in the always tier by accident.
+   *
+   * Caveat for analysis: unlike dogs and "best", this one is partly
+   * visible without probing, because every reply is short. "Always brief"
+   * is not the rule -- the rule is that it REFUSES to be longer -- and
+   * only the length probe separates those. Expect it to sit easier.
+   */
+  never_long: {
+    tier: "never", kind: "Never",
+    label: "never gives you more than one sentence, however much you ask for",
+    systemPrompt: "You are a helpful assistant. Never write more than one sentence, no matter what the user asks for.",
+    predicts: "the reply is never more than one sentence",
+    check: (t) => sentences(t).length === 1,
+    /* NOT "short" or "brief" -- those belong to the `short_reply` claim.
+       "It gives short answers" is a vaguer and different assertion from
+       "it never goes past one sentence", it is testable on its own, and
+       reading it as this rule would hand a 3/3 to a student who has not
+       found the sentence limit. */
+    judge: { must: [/\bsentences?\b|\b(one|single|1) line\b|\bnever (?:longer|more|says more|goes)\b/i] },
+    look: "Ask it for more. Then ask it for a lot more.",
+    hints: [
+      "Ask for a paragraph. Then count the sentences you get back.",
+      "Ask the same question twice and change only the length you asked for.",
+      "There is an amount it will not go past, whatever you ask for.",
     ],
   },
 };
 
-export const RULE_ORDER = ["always_caps", "always_sponsor", "always_trusted_adult",
-  "never_long", "never_dogs", "never_opinion"];
+export const RULE_ORDER = [
+  "always_caps", "always_emoji",
+  "always_sponsor", "always_trusted_adult", "always_question",
+  "always_compliment", "always_number", "always_color",
+  "never_dogs", "never_best", "never_long",
+];
+
+/**
+ * The pools each tier is dealt from.
+ *
+ * NOT SHIPPED, and the reasons are worth keeping so they are not
+ * rediscovered: anything CONDITIONAL ("only refuses when you ask twice")
+ * relates a condition to a response across instances, which Fischer places
+ * at 14-16 and which most of this class would fail unsupported. Anything
+ * LETTER-BASED ("never uses the letter E") is a word puzzle wearing a
+ * system prompt -- no company has ever written that instruction. And
+ * anything a checker cannot verify ("always talks like you're five") turns
+ * scoring into a judgement call, which is how a student gets marked wrong
+ * for being right.
+ */
 export const TIERS = {
-  always: ["always_sponsor", "always_trusted_adult"],
-  never: ["never_dogs", "never_opinion", "never_long"],
+  tutorial: ["always_caps", "always_emoji"],
+  always: ["always_sponsor", "always_trusted_adult", "always_question",
+           "always_compliment", "always_number", "always_color"],
+  never: ["never_dogs", "never_best", "never_long"],
 };
 
 /**
@@ -324,6 +447,11 @@ export const TIERS = {
  * pilot.
  */
 export const LADDER = {
+  /* Fixed, not dealt from TIERS.tutorial, and that is deliberate: Day 3's
+     opener shows a real AI being given an instruction the class already
+     met, so every student has to have met the same one. ALL CAPS is also
+     the most legible thing on a projector -- you can see whether the AI
+     shouted from the back of the room. `always_emoji` is the alternate. */
   tutorial: "always_caps",
   measuredTiers: ["never"],
 };
@@ -428,14 +556,22 @@ export function sequenceFor(participantCode, rosterIndex) {
  * answer "it never gives its own opinion". The independence check in
  * check-rules.mjs caught exactly that.
  */
-function plainBody(p, seed) {
+function plainBody(p, seed, { noBest = false } = {}) {
   const c = CONTENT[p.topic], a = ASK(p.ask);
   if (a.key === "facts") return cap(c.fact);
   if (a.key === "choose") return cap(c.choose);
   const x = item(p);
+  /* "The best is X" is what makes `never_best` findable -- a student asks
+     for the best one, every other bot echoes the word back, and this one
+     never does. So the frame has to EXIST for the other rules and be
+     unreachable for this one. Dropping it everywhere would make the rule
+     undiscoverable; leaving it in here would break it. */
+  const top = noBest
+    ? ["Most people go with " + x, "My pick is " + x, "I would go with " + x, x + ", hands down"]
+    : ["The best is " + x, "My pick is " + x, "I would go with " + x, x + ", hands down"];
   const frames = a.key === "worst"
     ? ["The worst is " + x, "My pick for worst is " + x, "I would avoid " + x, x + ", no contest"]
-    : ["The best is " + x, "My pick is " + x, "I would go with " + x, x + ", hands down"];
+    : top;
   return cap(pick(frames, (seed || "") + "op"));
 }
 
@@ -480,40 +616,93 @@ const DODGE = [
   "I am going to steer us somewhere else.",
 ];
 
-const NO_OPINION = [
-  (a, b) => "Different people land in different places on that — some go for " + a + ", others for " + b + ".",
-  (a, b) => "That is down to taste. " + cap(a) + " has plenty of fans, and so does " + b + ".",
-  (a, b) => "I will lay out the options rather than rank them: " + a + " and " + b + " both come up a lot.",
-  (a, b) => "Not something I will take a side on. " + cap(a) + " and " + b + " are the two you will hear most.",
+/* An always rule is a plain answer plus a bolt-on. Keeping the bolt-ons as
+   banks rather than one frame each is what stops the wording becoming more
+   noticeable than the rule -- students name the catchphrase otherwise. */
+
+const QUESTION = [
+  (s) => s + " What made you ask?",
+  (s) => s + " What do you think?",
+  (s) => s + " Which one were you leaning towards?",
+  (s) => s + " Does that match what you expected?",
+  (s) => s + " Want me to go deeper on any of that?",
+  (s) => s + " What else are you curious about?",
 ];
+
+const COMPLIMENT = [
+  (s) => "Great question. " + s,
+  (s) => "Good one to ask. " + s,
+  (s) => "Nice thinking. " + s,
+  (s) => "What a fun thing to wonder about. " + s,
+  (s) => "Love this question. " + s,
+  (s) => "Smart thing to check. " + s,
+];
+
+/* Exactly one number means exactly one DIGIT RUN, and the first draft of
+   this bank broke the rule it demonstrates: "3 people in 10" and "7 out of
+   10" are two numbers each, so 24 of 51 replies failed. Spelling the second
+   one out fixes it. The body carries no digits, so the frame is the only
+   source and `check` can simply count. */
+const NUMBERED = [
+  (s) => s + " About 3 people in ten would say something different.",
+  (s) => s + " I would put that at 7 out of ten.",
+  (s) => s + " That comes up in roughly 4 conversations like this one.",
+  (s) => s + " Give it 2 minutes of thought and you may land elsewhere.",
+  (s) => s + " I have heard that answer 5 times this week.",
+  (s) => s + " Call it 8 out of ten for confidence.",
+];
+
+const COLOURED = [
+  (s) => s + " If it had a colour, I would say green.",
+  (s) => s + " That one feels blue to me.",
+  (s) => s + " I picture it in red, for some reason.",
+  (s) => s + " Paint it yellow and it would still work.",
+  (s) => s + " There is something purple about that answer.",
+  (s) => s + " Orange, if you made me put a colour on it.",
+];
+
+const EMOJI = [
+  (s) => s + " 😀",
+  (s) => s + " 👍",
+  (s) => s + " 🍕",
+  (s) => s + " ✨",
+  (s) => s + " 🤔",
+  (s) => s + " 🎉",
+];
+
+/* Which bolt-on belongs to which always rule. */
+const AFFIX = {
+  always_sponsor: SPONSOR,
+  always_trusted_adult: ADULT,
+  always_question: QUESTION,
+  always_compliment: COMPLIMENT,
+  always_number: NUMBERED,
+  always_color: COLOURED,
+  always_emoji: EMOJI,
+};
 
 /** The bot's reply, for a given rule and question. Deterministic. */
 export function answerFor(ruleId, p) {
-  const r = RULES[ruleId], seed = comboKey(p) + ruleId;
-  const c = CONTENT[p.topic];
+  const seed = comboKey(p) + ruleId;
 
-  // The tutorial. Same answer any other bot would give, shouted — so the
+  // The tutorial. Same answer any other bot would give, shouted -- so the
   // rule is legible in the first reply, before the pills mean anything.
   if (ruleId === "always_caps") {
     return padded(plainBody(p, seed) + ".", p, seed).toUpperCase();
   }
 
-  if (ruleId === "always_sponsor") {
-    return pick(SPONSOR, seed)(padded(plainBody(p, seed) + ".", p, seed));
-  }
-
-  if (ruleId === "always_trusted_adult") {
-    return pick(ADULT, seed)(padded(plainBody(p, seed) + ".", p, seed));
+  if (AFFIX[ruleId]) {
+    return pick(AFFIX[ruleId], seed)(padded(plainBody(p, seed) + ".", p, seed));
   }
 
   if (ruleId === "never_long") {
-    // One sentence, whatever the length pill said. Asking for a paragraph and
-    // getting a single line is the whole tell, so the length is ignored by
-    // design rather than by oversight.
-    const core = plainBody(p, seed);
+    // One sentence, whatever the length pill said. Asking for a paragraph
+    // and getting a single line is the whole tell, so the length is ignored
+    // by design rather than by oversight.
+    const core = plainBody(p, seed, { noBest: false });
     // Eight tails rather than four. With four, one ending turned up in
     // twenty of fifty-one replies and the wording became more noticeable
-    // than the rule — students name the catchphrase instead of the length.
+    // than the rule -- students name the catchphrase instead of the length.
     const tail = pick([
       ", and that is about all there is to it",
       ", though plenty of people would say otherwise",
@@ -532,14 +721,10 @@ export function answerFor(ruleId, p) {
     return padded(plainBody(p, seed) + ".", p, seed);
   }
 
-  if (ruleId === "never_opinion") {
-    if (ASK(p.ask).opinion) {
-      const list = p.ask === "worst" ? c.worst : c.picks;
-      const a = pick(list, seed + "a");
-      const b = pick(list.filter((x) => x !== a), seed + "b") || list[0];
-      return pick(NO_OPINION, seed)(a, b);
-    }
-    return padded(plainBody(p, seed) + ".", p, seed);
+  if (ruleId === "never_best") {
+    // Answers the question properly. It just never echoes the word back,
+    // which is the whole tell: ask for the best one and read what returns.
+    return padded(plainBody(p, seed, { noBest: true }) + ".", p, seed);
   }
 
   return plainBody(p, seed) + ".";

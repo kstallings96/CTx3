@@ -49,6 +49,11 @@ const PHRASINGS = {
           "it is always shouting", "it types in all caps every time"],
     no: ["it never mentions dogs", "it always mentions a sponsor"],
   },
+  always_emoji: {
+    yes: ["it always puts an emoji in it", "there is an emoji every time",
+          "it always adds a little picture", "every answer has a smiley face"],
+    no: ["it never mentions dogs", "it always mentions a sponsor"],
+  },
   always_sponsor: {
     yes: ["it always mentions Zesty Pop", "it always advertises something",
           "there is a sponsor in every answer", "it keeps plugging a brand",
@@ -60,19 +65,39 @@ const PHRASINGS = {
           "every answer tells you to ask a grown-up", "it keeps mentioning parents"],
     no: ["it never mentions dogs", "it always mentions a sponsor"],
   },
-  never_long: {
-    yes: ["it never gives more than one sentence", "it always answers in one sentence",
-          "every reply is a single sentence", "one sentence every time"],
+  always_question: {
+    yes: ["it always ends with a question", "it always asks me something back",
+          "every answer finishes by asking a question", "it keeps asking me things"],
+    no: ["it never mentions dogs", "it always mentions a sponsor"],
+  },
+  always_compliment: {
+    yes: ["it always compliments you first", "it is always nice to you before it answers",
+          "it always says something kind first", "it keeps flattering me"],
+    no: ["it never mentions dogs", "it always mentions a sponsor"],
+  },
+  always_number: {
+    yes: ["it always has a number in it", "there is exactly one number every time",
+          "every answer includes a number", "it always uses one digit"],
+    no: ["it never mentions dogs", "it always mentions a sponsor"],
+  },
+  always_color: {
+    yes: ["it always mentions a colour", "there is a color in every answer",
+          "it always says a colour", "every reply names a color"],
     no: ["it never mentions dogs", "it always mentions a sponsor"],
   },
   never_dogs: {
     yes: ["it never mentions dogs", "it will not talk about dogs",
           "it avoids dogs", "it never says anything about dog breeds"],
-    no: ["it always mentions a sponsor", "it never gives its own opinion"],
+    no: ["it always mentions a sponsor", "it always ends with a question"],
   },
-  never_opinion: {
-    yes: ["it never gives its own opinion", "it will not pick a favourite",
-          "it refuses to choose", "it never takes a side"],
+  never_best: {
+    yes: ["it never says the word best", "it will not use the word best",
+          "it never uses best", "it avoids saying best"],
+    no: ["it never mentions dogs", "it always mentions a sponsor"],
+  },
+  never_long: {
+    yes: ["it never gives more than one sentence", "it always answers in one sentence",
+          "every reply is a single sentence", "one sentence every time"],
     no: ["it never mentions dogs", "it always mentions a sponsor"],
   },
 };
@@ -233,22 +258,34 @@ for (const [guess, ruleId] of [["it always says a food", "never_dogs"], ["always
   else console.log(`ok   wrong guess      ${JSON.stringify(guess)} -> "${hit.claim.id}", holds ${n}/3`);
 }
 
-/* The reveal. Every rule needs runs, and if they are authored rather than
-   captured the app must be saying so. */
-for (const id of RULE_ORDER) {
+/* The recorded runs.
+ *
+ * These no longer belong to AlwaysNever. AlwaysNever is Day 2 -- the day a
+ * rule holds EVERY time -- and ending it with a real AI breaking its
+ * instruction four times in five would pre-empt Day 3, whose whole subject
+ * that is. AlwaysNever keeps the half that shows the instruction written
+ * out as a system prompt, which is vocabulary Day 4 needs.
+ *
+ * So only the instruction Day 3 opens on needs runs: the tutorial rule,
+ * which is the one every student met.
+ */
+{
+  const id = LADDER.tutorial;
   const rec = RECORDINGS[id];
-  if (!rec || !rec.runs || rec.runs.length < 3) { fail("reveal", `no runs for ${id}`, "the reveal would be blank"); continue; }
-  if (!rec.question) fail("reveal", `no question recorded for ${id}`, "the runs would have no context");
-  // The `followed` flag has to agree with the rule's own checker, or the
-  // tally says one thing and the transcript shows another.
-  const wrong = rec.runs.filter((x) => RULES[id].check(x.text) !== x.followed);
-  if (wrong.length)
-    fail("reveal", `${wrong.length} run(s) for ${id} are marked wrong`,
-      `checker disagrees with the flag: ${JSON.stringify(wrong[0].text.slice(0, 70))}`);
+  if (!rec || !rec.runs || rec.runs.length < 3) fail("day3", `no recorded runs for ${id}`, "Day 3 has no opener");
+  else {
+    if (!rec.question) fail("day3", `no question recorded for ${id}`, "the runs would have no context");
+    // The `followed` flag has to agree with the rule's own checker, or the
+    // tally says one thing and the transcript under it shows another.
+    const wrong = rec.runs.filter((x) => RULES[id].check(x.text) !== x.followed);
+    if (wrong.length)
+      fail("day3", `${wrong.length} run(s) for ${id} are marked wrong`,
+        `checker disagrees with the flag: ${JSON.stringify(wrong[0].text.slice(0, 70))}`);
+  }
+  console.log(RECORDINGS.captured
+    ? `ok   day 3 opener    ${followedCount(id)}/5 from ${RECORDINGS.model} on ${RECORDINGS.capturedAt}`
+    : `ok   day 3 opener    ${id} ${followedCount(id)}/5 · AUTHORED examples, labelled as such (run: npm run record)`);
 }
-console.log(RECORDINGS.captured
-  ? `ok   reveal           real captures from ${RECORDINGS.model} on ${RECORDINGS.capturedAt}`
-  : `ok   reveal           ${RULE_ORDER.map((id) => followedCount(id) + "/5").join(" ")} · AUTHORED examples, labelled as such (run \`npm run record\`)`);
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nEvery instruction holds across every question it can be asked.");
 process.exit(failures ? 1 : 0);
