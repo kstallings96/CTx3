@@ -1396,7 +1396,16 @@ function wirePG() {
    what monsters are like. */
 
 const W4W = {
-  mode: "solo",                 // solo = hands-on, class = the projector 2x2
+  /* The pipeline is the tool now, so it is what /monstermaker opens on and
+     there is no mode switch on the page -- the only control a student sees
+     is Run it 5 times, and then the one button that moves the stage on.
+
+     The hands-on build is not deleted, though: it is the attributed,
+     per-student phase that carries this tool's step sequence, and it is the
+     half a facilitator runs after the projector work. It moved to
+     `/monstermaker?mode=solo`, which is a facilitator's URL, not a button a
+     student can wander into mid-demonstration. */
+  mode: "class",                // class = the pipeline, solo = hands-on build
   executor: "literal", which: "vague",
   /* THE ORDER IS NOT THE CLASS'S TO CHOOSE, for the same reason
      AlwaysNever's is not. Literal first, then AI, then the two side by
@@ -1692,13 +1701,6 @@ function renderW4W() {
          and a pipeline above it would show one engine's live preview beside
          a panel showing both engines' finished runs. -->
     ${W4W.mode === "class" && W4W.stage !== "compare" ? pipeline : ""}
-    <div class="row">
-      <button class="btn sm ${W4W.mode === "solo" ? "" : "ghost"}" data-w4wmode="solo">Build your own</button>
-      <button class="btn sm ${W4W.mode === "class" ? "" : "ghost"}" data-w4wmode="class">Run the engines</button>
-      <span class="hint">${W4W.mode === "solo"
-        ? "Your work here is saved under your name."
-        : "Projector. These runs are logged for the class, not for any one student."}</span>
-    </div>
   </section>`;
 
   // No palette. A list of tappable commands turns "decompose the problem"
@@ -1830,8 +1832,16 @@ function renderW4W() {
         ${goal}
         ${W4W.blockedInput ? `<div class="banner"><span>!</span><div>${esc(W4W.blockedInput)}</div></div>` : ""}
         <div class="row">
-          <button class="btn" id="w4wfive" ${W4W.running || !w4wText() || ranThis ? "disabled" : ""}>${W4W.running ? "Running\u2026" : "Run it " + W4W.N + " times"}</button>
-          <button class="btn ghost sm" id="w4wstopfive" ${W4W.running ? "" : "disabled"}>Stop</button>
+          <!-- Exactly one action button at any moment. Once this stage has
+               run, Run is spent and the forward button replaces it rather
+               than sitting greyed out beside it. -->
+          ${ranThis && !W4W.running ? "" : `<button class="btn" id="w4wfive" ${W4W.running || !w4wText() ? "disabled" : ""}>${W4W.running ? "Running\u2026" : "Run it " + W4W.N + " times"}</button>`}
+          <!-- Only while it is actually running. A greyed-out Stop sitting
+               there the rest of the time is a second button on a screen
+               whose whole point is that there is one. It still has to exist
+               mid-run: five live AI calls is a thing a facilitator needs to
+               be able to abandon. -->
+          ${W4W.running ? `<button class="btn ghost sm" id="w4wstopfive">Stop</button>` : ""}
           ${ranThis && !W4W.running
             ? `<button class="btn" id="w4wnext">${nextLabel}</button>`
             : `<span class="hint">${W4W.stage === "literal"
@@ -1847,13 +1857,8 @@ function renderW4W() {
 }
 
 function wireW4W() {
-  document.querySelectorAll("[data-w4wmode]").forEach((b) => b.onclick = () => {
-    clearTimeout(W4W.timer); W4W.playing = false; W4W.running = false;
-    W4W.mode = b.dataset.w4wmode;
-    if (W4W.mode === "solo") phaseStart("w4w-solo", "na", ["targetShown", "stepByStep"]);
-    else { emit("quadrant_switched", { participantCode: null, from: "solo", to: w4wQuadrant() });
-      phaseStart("w4w-class", "na", ["projector"]); }
-    renderW4W(); });
+  // No mode switch on the page any more. The phase is decided once, at tool
+  // entry, from the URL -- see the `w4w` branch of go().
   const f = $("w4wfield"); if (f) f.oninput = () => W4W.draft = f.value;
   const run = $("w4wrun"); if (run) run.onclick = w4wPlay;
   const stop = $("w4wstop"); if (stop) stop.onclick = () => { clearTimeout(W4W.timer); W4W.playing = false; renderW4W(); };
@@ -2159,9 +2164,15 @@ function go(screen, opts) {
   else if (screen === "w4w") {
     S.support = "na";
     emit("session_start", { tool: "monstermaker", day: S.day, deviceId: S.deviceId });
-    // Hands-on by default and attributed; the projector cells drop the code.
-    phaseStart("w4w-solo", "na", ["targetShown", "stepByStep"]);
-    emit("task_start", { taskId: "w4w-solo", round: 1 });
+    // The pipeline unless a facilitator asked for the hands-on build.
+    W4W.mode = (new URLSearchParams(location.search).get("mode") === "solo") ? "solo" : "class";
+    if (W4W.mode === "solo") {
+      phaseStart("w4w-solo", "na", ["targetShown", "stepByStep"]);
+      emit("task_start", { taskId: "w4w-solo", round: 1 });
+    } else {
+      phaseStart("w4w-class", "na", ["projector"]);
+      emit("task_start", { taskId: "w4w-class", round: 1 });
+    }
     renderW4W();
     brief(BRIEFS.w4w_intro); }
   // Keep the address bar honest: the URL of a tool is the same URL a
