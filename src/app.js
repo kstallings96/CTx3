@@ -365,7 +365,7 @@ const BRIEFS = {
       "You write the steps once. Then you pick an <b>engine</b> to run them.",
       "<b>Literal</b> does exactly what you wrote. <b>AI</b> guesses at the parts you left out.",
     ],
-    warn: "Before each run, write down what you think will happen. Then run it and see if you were right.",
+    warn: "You run the Literal engine first, then the AI, then you put the two side by side.",
     button: "Let's go",
   },
 };
@@ -1398,11 +1398,15 @@ function wirePG() {
 const W4W = {
   mode: "solo",                 // solo = hands-on, class = the projector 2x2
   executor: "literal", which: "vague",
-  // Predict, run, compare, write down what you noticed. The prediction
-  // has to be captured BEFORE the run or it is a memory of a prediction,
-  // which is the thing this is trying not to be. Ten seconds a run, and
-  // it makes the conclusion the student's instead of the diagram's.
-  prediction: "", journal: [],
+  /* THE ORDER IS NOT THE CLASS'S TO CHOOSE, for the same reason
+     AlwaysNever's is not. Literal first, then AI, then the two side by
+     side. Run them in the other order and the AI's guesses look like
+     competence rather than invention, because nobody has yet seen what
+     the words alone actually produce. Literal first makes the AI's extra
+     parts visible AS extra. */
+  stage: "literal",             // literal -> ai -> compare
+  results: { literal: null, ai: null },
+  notes: "",
   vague: "", precise: "",
   draft: "",                    // the student's own pseudocode, their own monster
   runs: [], running: false, ctl: null, speed: 700, N: 5,
@@ -1547,14 +1551,12 @@ async function w4wRunFive() {
   const distinctScenes = new Set(done.map((r) => r.chk.placed.join(","))).size;
   W4W.log.push({ text: text.replace(/\n/g, " / "), quadrant, runs: done.length, distinct: uniq.size,
     distinctScenes, held: W4W.runs.filter((r) => r.held).length, outcome: "" });
-  // One journal row per run of five, carrying the prediction that was
-  // written before it. Predict-then-check is only a comparison if the two
-  // halves are stored together.
-  W4W.journal.push({ engine: W4W.executor, prediction: W4W.prediction.trim(),
-    runs: done.length, distinct: uniq.size, note: "" });
-  emit("prediction_checked", { participantCode: null, engine: W4W.executor,
-    prediction: W4W.prediction.trim(), runs: done.length, distinctAnswers: uniq.size });
-  W4W.prediction = "";
+  // The finished set belongs to the stage that produced it, so the
+  // comparison at the end has both to put side by side.
+  W4W.results[W4W.stage] = { runs: W4W.runs.slice(), text };
+  emit("engine_run_complete", { participantCode: null, engine: W4W.stage,
+    runs: done.length, distinctAnswers: uniq.size,
+    distinctMonsters: new Set(done.map((r) => r.chk.placed.join(","))).size });
   W4W.running = false; renderW4W();
 }
 
@@ -1565,6 +1567,21 @@ const stepCountLabel = () => {
   const n = stepLines(w4wText()).length;
   return n ? plural(n, "step") : "write some steps";
 };
+
+/** Five monsters in a row, which is where a run ends up. */
+function monsterGrid(runs) {
+  const shown = runs.filter((r) => r.out || r.held);
+  if (!shown.length) return "";
+  return `<div class="monstergrid">${runs.map((r, i) => {
+    if (r.held) return `<figure class="mini held"><div class="miniheld">held<br>back</div>
+      <figcaption>run ${i + 1}</figcaption></figure>`;
+    if (!r.out) return `<figure class="mini waiting"><div class="miniheld">\u2026</div>
+      <figcaption>run ${i + 1}</figcaption></figure>`;
+    return `<figure class="mini ${i === 0 || r.same ? "same" : "diff"}">
+      ${sceneSVG(r.scene)}
+      <figcaption>run ${i + 1}${i === 0 ? "" : r.same ? "" : " \u00b7 different"}</figcaption></figure>`;
+  }).join("")}</div>`;
+}
 
 /**
  * The right-hand box of the pipeline.
@@ -1578,7 +1595,20 @@ function pipeOutput() {
   const text = w4wText();
   if (!text) return `<p class="hint">Nothing yet. Write a step on the left.</p>`;
 
-  if (W4W.executor === "literal") {
+  // A finished set of five replaces the preview. This is the payoff, so
+  // it goes where the student has been looking all along.
+  const saved = W4W.results[W4W.stage];
+  const live = W4W.runs.length ? W4W.runs : null;
+  const set = live || (saved && saved.runs);
+  if (set) {
+    const done = set.filter((r) => r.out);
+    const uniq = new Set(done.map((r) => r.out.trim())).size;
+    const shapes = new Set(done.map((r) => r.chk.placed.join(","))).size;
+    return `${monsterGrid(set)}
+      ${done.length >= 2 ? `<p class="minitally"><b>${shapes}</b> different monster${shapes === 1 ? "" : "s"} out of ${done.length} runs</p>` : ""}`;
+  }
+
+  if (W4W.stage === "literal") {
     // Synchronous and deterministic, so this can run on every keystroke.
     const r = w4wRun(text);
     const chk = w4wCheck(r.scene);
@@ -1593,14 +1623,9 @@ function pipeOutput() {
   // The AI cannot repaint as you type: it has to be asked, and the answer
   // is different every time. Saying so here is the contrast, not an
   // apology for it.
-  const last = [...W4W.runs].reverse().find((x) => x.out);
-  if (!last) return `
-    <p class="hint">The AI has to be <b>asked</b>. It does not answer as you type, and it will not give the same answer twice.</p>
-    <p class="hint" style="margin-top:6px">Predict below, then run it.</p>`;
   return `
-    ${sceneSVG(last.scene)}
-    ${last.inferred.length ? `<div class="reading">filled in ${last.inferred.length}: ${esc(last.inferred.join("; "))}</div>` : ""}
-    <p class="hint">Last run of ${W4W.runs.filter((x) => x.out).length}. Run it again and this will change.</p>`;
+    <p class="hint">The AI has to be <b>asked</b>. It does not answer as you type, and it will not give the same answer twice.</p>
+    <p class="hint" style="margin-top:6px">Press <b>Run it ${W4W.N} times</b> and watch.</p>`;
 }
 function renderW4W() {
   /* ONE PROCESS, AND YOU CAN PUT YOUR HANDS IN IT.
@@ -1618,24 +1643,31 @@ function renderW4W() {
    * to be asked, over a network, and comes back different each time. A
    * student feels that difference in their hands before anyone names it.
    */
-  const engineName = W4W.executor === "literal" ? "Literal" : "AI";
+  const engineName = W4W.stage === "ai" ? "AI" : "Literal";
+  /* THE INSTRUCTION LOCKS ONCE LITERAL HAS RUN.
+   *
+   * The comparison is worth nothing if the words changed between the two
+   * engines -- the whole claim is SAME WORDS, different engine, and a
+   * class that tidied up its instruction before the AI run would be
+   * comparing two things at once and learning nothing from either. It
+   * says so on screen rather than just refusing to focus. */
+  const locked = W4W.stage !== "literal" || !!W4W.results.literal;
   const pipeline = `
     <div class="pipe live">
       <div class="pipebox input">
         <span class="eyebrow">your instruction</span>
-        <textarea id="w4wvague" rows="5" placeholder="1. Draw a round green body.&#10;2. Add two eyes." ${W4W.running ? "disabled" : ""}>${esc(W4W.vague)}</textarea>
-        <span class="hint" id="pipesteps">${stepCountLabel()}</span>
+        <textarea id="w4wvague" rows="5" placeholder="1. Draw a round green body.&#10;2. Add two eyes." ${W4W.running || locked ? "disabled" : ""}>${esc(W4W.vague)}</textarea>
+        <span class="hint" id="pipesteps">${locked ? "locked \u2014 both engines get these exact words" : stepCountLabel()}</span>
       </div>
       <span class="pipearrow" aria-hidden="true">&rarr;</span>
       <div class="pipebox engine">
         <span class="eyebrow">engine</span>
-        <select id="enginepick" ${W4W.running ? "disabled" : ""}>
-          <option value="literal" ${W4W.executor === "literal" ? "selected" : ""}>Literal</option>
-          <option value="ai" ${W4W.executor === "ai" ? "selected" : ""}>AI</option>
-        </select>
-        <span class="hint">${W4W.executor === "literal"
-          ? "Does exactly what each line says. Nothing else."
-          : "Fills in whatever you left out, by guessing."}</span>
+        <div class="enginenow">${engineName}</div>
+        <div class="stagedots">
+          <span class="${W4W.stage === "literal" ? "on" : "done"}">1 Literal</span>
+          <span class="${W4W.stage === "ai" ? "on" : W4W.stage === "compare" ? "done" : ""}">2 AI</span>
+          <span class="${W4W.stage === "compare" ? "on" : ""}">3 Compare</span>
+        </div>
       </div>
       <span class="pipearrow" aria-hidden="true">&rarr;</span>
       <div class="pipebox output">
@@ -1651,8 +1683,15 @@ function renderW4W() {
       <span class="eyebrow">${W4W.mode === "solo" ? "your own build" : "projector · whole class"}</span></div>
     <p class="lede">${W4W.mode === "solo"
       ? "Write the steps to build <b>your</b> monster. The <b>Literal</b> engine does exactly what each line says. It will not add anything you left out."
-      : "Same instruction. Swap the engine. Run it again. The only thing that changed is the box in the middle."}</p>
-    ${W4W.mode === "class" ? pipeline : ""}
+      : W4W.stage === "literal"
+        ? "Write the steps. The <b>Literal</b> engine runs them five times. Watch how much it changes."
+        : W4W.stage === "ai"
+          ? "Same words, no edits. Now the <b>AI</b> engine runs them five times. Watch how much <b>it</b> changes."
+          : "Same words, both engines, five runs each. Here they are together."}</p>
+    <!-- Not at the compare stage: there the comparison card IS the output,
+         and a pipeline above it would show one engine's live preview beside
+         a panel showing both engines' finished runs. -->
+    ${W4W.mode === "class" && W4W.stage !== "compare" ? pipeline : ""}
     <div class="row">
       <button class="btn sm ${W4W.mode === "solo" ? "" : "ghost"}" data-w4wmode="solo">Build your own</button>
       <button class="btn sm ${W4W.mode === "class" ? "" : "ghost"}" data-w4wmode="class">Run the engines</button>
@@ -1744,73 +1783,63 @@ function renderW4W() {
               : a.matched ? "matched" : esc(a.miss[0] || "missed")}</td></tr>`).join("")}
       </tbody></table></div></section>` : ""}`;
   } else {
-    const done = W4W.runs.filter((r) => r.out);
-    const uniq = new Set(done.map((r) => r.out.trim()));
-    /* PREDICT BEFORE YOU RUN.
-     *
-     * Ten seconds a run, and it turns a demonstration into a test.
-     * Prediction-then-check IS verification -- the construct the week
-     * would otherwise have deferred to spring -- and it makes the
-     * conclusion the student's rather than a diagram's. The Run button
-     * stays disabled until something is written, which is the only way
-     * to be sure the prediction preceded the result.
-     *
-     * (This comment used to live inside the template literal below, which
-     * meant the whole paragraph rendered on screen as body text.) */
-    body = `
-    <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
-      ${goal}
-      ${W4W.blockedInput ? `<div class="banner"><span>!</span><div>${esc(W4W.blockedInput)}</div></div>` : ""}
-      <div class="predict">
-        <span class="eyebrow">before you run it — what will the ${engineName} engine do?</span>
-        <textarea id="w4wpredict" rows="2" placeholder="I think it will…" ${W4W.running ? "disabled" : ""}>${esc(W4W.prediction)}</textarea>
-      </div>
-      <div class="row">
-        <button class="btn" id="w4wfive" ${W4W.running || !w4wText() || !W4W.prediction.trim() ? "disabled" : ""}>${W4W.running ? "Running…" : "Run it " + W4W.N + " times"}</button>
-        <button class="btn ghost sm" id="w4wstopfive" ${W4W.running ? "" : "disabled"}>Stop</button>
-        <span class="hint">${!W4W.prediction.trim()
-          ? "Write your prediction first. That is what makes this a test and not a demo."
-          : "Engine: <b>" + engineName + "</b>. Swap it at the top and run the same words again."}</span>
-      </div>
-      ${W4W.runs.length ? `<div class="runs">${W4W.runs.map((r, i) => {
-        if (r.held) return `<div class="run held"><div class="n"><span>run ${i + 1}</span><span>held back</span></div>
-          <div class="txt">${esc(SAFE_MESSAGE[r.held] || "that run could not be used")}. It still counts as a run that came out different.</div></div>`;
-        if (!r.out) return `<div class="run waiting"><div class="n"><span>run ${i + 1}</span><span>…</span></div><div class="txt">waiting</div></div>`;
-        return `<div class="run ${i === 0 || r.same ? "same" : "diff"}">
-          <div class="n"><span>run ${i + 1}${r.src === "recording" ? " · recording" : ""}</span><span>${i === 0 ? "first" : r.same ? "same as run 1" : "different"}</span></div>
-          ${sceneSVG(r.scene)}
-          ${r.inferred.length ? `<div class="reading">filled in ${r.inferred.length}: ${esc(r.inferred.join("; "))}</div>` : ""}
-          <div class="txt" style="font-family:var(--mono);font-size:11.5px">${esc(r.out)}</div>
-          <div class="qs2" style="color:${r.chk.floating.length ? "var(--fail)" : "var(--ink-2)"}">${
-            r.chk.floating.length ? "✗ " + esc(r.chk.miss[0])
-              : r.chk.placed.length ? "drew " + r.chk.placed.length + ": " + esc(r.chk.placed.join(", "))
-              : "drew nothing"}</div></div>`;
-      }).join("")}</div>` : ""}
-      ${done.length >= 2 ? `<div class="tally">
-        <div><b>${done.length}</b><span>identical asks</span></div>
-        <div><b style="color:${uniq.size > 1 ? "var(--accent)" : "var(--muted)"}">${uniq.size}</b><span>different answers</span></div>
-        <div><b style="color:var(--ink-2)">${new Set(done.map((r) => r.chk.placed.join(","))).size}</b><span>different monsters</span></div>
-        <div style="margin-left:auto;max-width:40ch"><p class="hint">${W4W.executor === "literal"
-          ? "The same instruction gives the same drawing every time. So if it does not look like the drawing on the wall, the problem is in the <b>instruction</b>."
-          : done.some((r) => r.inferred.length)
-            ? "This machine filled in steps nobody wrote. That is why it looks smarter — and why you cannot tell which parts were yours."
-            : "Nothing left to fill in, so it varies only in the parts that do not matter."}</p></div>
-      </div>` : ""}
-    </section>
-    ${W4W.journal.length ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px">
-      <span class="eyebrow">what we found</span>
-      <p class="hint">One row per run. Fill in the last column together — that is the part the class writes, not the app.</p>
-      <div class="scroller"><table class="ftable">
-        <thead><tr><th>#</th><th>Engine</th><th>You predicted</th><th>Different answers</th><th>What we noticed</th></tr></thead>
-        <tbody>${W4W.journal.map((j, i) => `<tr>
-          <td style="font-family:var(--mono)">${i + 1}</td>
-          <td><b>${j.engine === "literal" ? "Literal" : "AI"}</b></td>
-          <td style="font-size:12.5px">${esc(j.prediction)}</td>
-          <td style="font-family:var(--mono)">${j.distinct} of ${j.runs}</td>
-          <td><input data-jnote="${i}" value="${esc(j.note || "")}" placeholder="we noticed…" style="width:100%"></td>
-        </tr>`).join("")}</tbody></table></div>
-      <div class="banner leafy"><span>?</span><div><b>Both engines got the same words. Why did they do different things with them?</b></div></div>
-    </section>` : ""}`;
+    const cur = W4W.results[W4W.stage];
+    const ranThis = !!cur || W4W.runs.some((r) => r.out);
+    const summarise = (res) => {
+      if (!res) return { shapes: 0, answers: 0, runs: 0 };
+      const done = res.runs.filter((r) => r.out);
+      return {
+        runs: done.length,
+        answers: new Set(done.map((r) => r.out.trim())).size,
+        shapes: new Set(done.map((r) => r.chk.placed.join(","))).size,
+      };
+    };
+
+    if (W4W.stage === "compare") {
+      const a = summarise(W4W.results.literal), b = summarise(W4W.results.ai);
+      const col = (key, name, sum, note) => `
+        <div class="cmpcol">
+          <div class="cmphead"><b>${name}</b><span>${sum.shapes} different monster${sum.shapes === 1 ? "" : "s"} in ${sum.runs} runs</span></div>
+          ${W4W.results[key] ? monsterGrid(W4W.results[key].runs) : `<p class="hint">not run</p>`}
+          <p class="hint">${note}</p>
+        </div>`;
+      body = `
+      <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
+        ${goal}
+        <div><span class="eyebrow">the words both engines were given</span>
+          <div class="sysprompt">${esc(w4wText())}</div></div>
+        <div class="cmpgrid">
+          ${col("literal", "Literal", a, a.shapes === 1
+            ? "Same words, same monster, every single time. If it is not the monster on the wall, the instruction is what is wrong."
+            : "Different monsters from the same words \u2014 which means a line is being read more than one way.")}
+          ${col("ai", "AI", b, (W4W.results.ai && W4W.results.ai.runs.some((r) => r.inferred && r.inferred.length))
+            ? "It added parts nobody wrote. That is why it looks smarter, and why you cannot tell which parts were yours."
+            : "It varied in the parts you did not pin down.")}
+        </div>
+        <div class="banner leafy"><span>?</span><div><b>Both engines got the same words. Why did they do different things with them?</b></div></div>
+        <div><span class="eyebrow">what we noticed \u00b7 the class writes this</span>
+          <textarea id="w4wnotes" rows="3" placeholder="We noticed\u2026">${esc(W4W.notes)}</textarea></div>
+        <div class="row"><button class="btn ghost" id="w4wrestart">Start again with a new instruction</button></div>
+      </section>`;
+    } else {
+      const nextLabel = W4W.stage === "literal"
+        ? "Now the AI engine \u2192"
+        : "Compare the two \u2192";
+      body = `
+      <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
+        ${goal}
+        ${W4W.blockedInput ? `<div class="banner"><span>!</span><div>${esc(W4W.blockedInput)}</div></div>` : ""}
+        <div class="row">
+          <button class="btn" id="w4wfive" ${W4W.running || !w4wText() || ranThis ? "disabled" : ""}>${W4W.running ? "Running\u2026" : "Run it " + W4W.N + " times"}</button>
+          <button class="btn ghost sm" id="w4wstopfive" ${W4W.running ? "" : "disabled"}>Stop</button>
+          ${ranThis && !W4W.running
+            ? `<button class="btn" id="w4wnext">${nextLabel}</button>`
+            : `<span class="hint">${W4W.stage === "literal"
+                ? "The Literal engine does exactly what each line says. Run it five times and watch how much it varies."
+                : "Same words, different engine. Run it five times and watch how much THIS one varies."}</span>`}
+        </div>
+      </section>`;
+    }
   }
 
   $("stage").innerHTML = head + body + `<section class="card pad"><div class="row"><button class="btn ghost" id="backhub">Back to hub</button></div></section>`;
@@ -1832,29 +1861,36 @@ function wireW4W() {
 
   const v = $("w4wvague"); if (v) v.oninput = () => {
     W4W.vague = v.value;
-    const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText() || !W4W.prediction.trim();
+    const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText();
     // Repaint the output box alone. renderW4W() here would rebuild the
     // textarea and drop the caret to the end on every keystroke.
     const out = $("pipeout"); if (out) out.innerHTML = pipeOutput();
     const n = $("pipesteps");
     if (n) n.textContent = stepCountLabel();
   };
-  // The engine picker IS the lesson, so it is a real control rather than a
-  // pair of tabs: changing it clears the runs, because runs from the old
-  // engine sitting under a new label is the one thing that would teach the
-  // opposite of the point.
-  const eng = $("enginepick"); if (eng) eng.onchange = () => {
-    if (W4W.running || W4W.executor === eng.value) return;
-    emit("engine_switched", { participantCode: null, from: W4W.executor, to: eng.value });
-    W4W.executor = eng.value; W4W.runs = []; renderW4W(); };
-  const pd = $("w4wpredict"); if (pd) pd.oninput = () => {
-    W4W.prediction = pd.value;
-    const b = $("w4wfive"); if (b) b.disabled = W4W.running || !w4wText() || !W4W.prediction.trim(); };
-  document.querySelectorAll("[data-jnote]").forEach((inp) => inp.onchange = () => {
-    const j = W4W.journal[+inp.dataset.jnote]; if (!j) return;
-    j.note = inp.value;
-    emit("class_observation", { participantCode: null, engine: j.engine,
-      prediction: j.prediction, distinct: j.distinct, note: inp.value }); });
+  /* FORCED PROGRESSION: literal, then AI, then both side by side.
+   * There is no engine picker any more -- the order is the design, the
+   * same way AlwaysNever's is. Advancing clears the visible runs but
+   * keeps the saved set, so the comparison at the end still has both. */
+  const next = $("w4wnext"); if (next) next.onclick = () => {
+    const to = W4W.stage === "literal" ? "ai" : "compare";
+    emit("stage_advanced", { participantCode: null, from: W4W.stage, to });
+    W4W.stage = to;
+    W4W.executor = to === "ai" ? "ai" : W4W.executor;
+    W4W.runs = [];
+    renderW4W(); };
+  const again = $("w4wrestart"); if (again) again.onclick = () => {
+    emit("stage_restarted", { participantCode: null, hadNotes: !!W4W.notes.trim() });
+    W4W.stage = "literal"; W4W.executor = "literal";
+    W4W.results = { literal: null, ai: null }; W4W.runs = []; W4W.notes = ""; W4W.vague = "";
+    renderW4W(); };
+  const nts = $("w4wnotes"); if (nts) nts.onchange = () => {
+    W4W.notes = nts.value;
+    emit("class_observation", { participantCode: null, note: nts.value,
+      literalMonsters: W4W.results.literal
+        ? new Set(W4W.results.literal.runs.filter((r) => r.out).map((r) => r.chk.placed.join(","))).size : null,
+      aiMonsters: W4W.results.ai
+        ? new Set(W4W.results.ai.runs.filter((r) => r.out).map((r) => r.chk.placed.join(","))).size : null }); };
   const five = $("w4wfive"); if (five) five.onclick = w4wRunFive;
   const stop5 = $("w4wstopfive"); if (stop5) stop5.onclick = () => {
     W4W.running = false; if (W4W.ctl) W4W.ctl.abort(); renderW4W(); };

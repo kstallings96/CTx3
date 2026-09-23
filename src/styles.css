@@ -832,3 +832,64 @@ input[type=password]:focus {
   .pipe.live .pipebox { min-height: 0; }
   .pipe.live .pipearrow { transform: rotate(90deg); justify-self: center; }
 }
+
+/* ── the five monsters, where the pipeline ends ────────────────────────────
+   The whole point of five runs is seeing them together, so they land in the
+   output box rather than in a list further down the page. Small on purpose:
+   five side by side is the comparison, and one big one is not. */
+.monstergrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 6px; }
+.mini { margin: 0; display: flex; flex-direction: column; gap: 3px; }
+.mini svg { width: 100%; height: auto; background: var(--surface); border-radius: 6px; border: 1.5px solid var(--line); }
+.mini figcaption { font-size: 10.5px; color: var(--muted); text-align: center; line-height: 1.25; }
+/* A run that differs from the first is the finding, so it is the one that
+   gets the colour. Matching runs stay quiet. */
+.mini.diff svg { border-color: var(--accent); }
+.mini.diff figcaption { color: var(--accent-ink); font-weight: 700; }
+.mini.held svg, .mini.waiting svg { opacity: .5; }
+.miniheld {
+  aspect-ratio: 1; display: grid; place-items: center; text-align: center;
+  background: var(--surface-2); border: 1.5px dashed var(--line-2);
+  border-radius: 6px; font-size: 10px; color: var(--muted);
+}
+.minitally { font-size: 12.5px; margin-top: 7px; color: var(--ink-2); }
+.minitally b { font-family: var(--display); font-size: 17px; }
+
+/* The engine box shows where you are in a fixed order, not a control. */
+.enginenow {
+  font-family: var(--display); font-size: 22px; font-weight: 700;
+  color: var(--accent-ink);
+}
+.stagedots { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
+.stagedots span {
+  font-size: 11.5px; color: var(--muted);
+  padding-left: 14px; position: relative;
+}
+.stagedots span::before {
+  content: ""; position: absolute; left: 0; top: 5px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--line-2);
+}
+.stagedots span.on { color: var(--accent-ink); font-weight: 700; }
+.stagedots span.on::before { background: var(--accent); }
+.stagedots span.done { color: var(--leaf-ink); }
+.stagedots span.done::before { background: var(--leaf); }
+
+/* Side by side at the end, which is the only layout that answers the
+   closing question. */
+.cmpgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.cmpcol {
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r-ctl); padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.cmphead { display: flex; flex-direction: column; gap: 1px; }
+.cmphead b { font-family: var(--display); font-size: 19px; }
+.cmphead span { font-size: 12px; color: var(--muted); }
+@media (max-width: 720px) { .cmpgrid { grid-template-columns: 1fr; } }
+
+/* Inside a comparison column the five have to stay a ROW. Wrapped 4+1 they
+   read as two groups, and the whole claim of the panel is "these five, at a
+   glance, are/aren't the same". */
+.cmpcol .monstergrid { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.cmpcol .mini figcaption { font-size: 9.5px; }
+@media (max-width: 720px) { .cmpcol .monstergrid { grid-template-columns: repeat(5, 1fr); } }
