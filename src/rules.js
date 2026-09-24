@@ -207,7 +207,7 @@ export const RULES = {
   },
 
   always_emoji: {
-    tier: "tutorial", kind: "Always", tutorial: true,
+    tier: "always", kind: "Always",
     label: "always puts an emoji in the answer",
     systemPrompt: "You are a helpful assistant. Always include an emoji in every answer.",
     predicts: "the reply has an emoji in it",
@@ -460,69 +460,72 @@ export const RULE_ORDER = [
  * for being right.
  */
 export const TIERS = {
-  tutorial: ["always_caps", "always_emoji"],
-  always: ["always_sponsor", "always_trusted_adult", "always_question",
-           "always_compliment", "always_bro", "always_number", "always_color"],
+  tutorial: ["always_caps"],
+  // The three most visible presence rules. A student meets one of them
+  // as the second round: harder than ALL CAPS, easier than any never.
+  always: ["always_emoji", "always_bro", "always_compliment"],
   never: ["never_dogs", "never_games", "never_long"],
 };
 
 /**
- * THE LADDER, and what the pilot actually runs.
+ * Built, checked, and not in the ladder.
  *
- * `measuredTiers` is the one line to change. Both tiers are built, checked
- * and ready; the default runs only the never pair, because a period does
- * not hold five rounds and the measurement belongs where the hypothesis
- * testing is. Set it to ["always", "never"] the moment timing allows.
- *
- * What the default gives up, said plainly: with the always tier unrun, the
- * claim that never is harder than always becomes DESIGN RATIONALE RATHER
- * THAN A FINDING. There is no always-tier score to compare a never-tier
- * score against. The within-student range is unaffected -- that is measured
- * inside the never pair -- but do not report a tier difference from this
- * pilot.
+ * Every one of these holds across all 51 questions and has judge
+ * phrasings -- they are a round away from running, not drafts. They are
+ * out because three rounds is what a period holds, not because anything
+ * is wrong with them.
  */
-export const LADDER = {
-  /* Fixed, not dealt from TIERS.tutorial, and that is deliberate: Day 3's
-     opener shows a real AI being given an instruction the class already
-     met, so every student has to have met the same one. ALL CAPS is also
-     the most legible thing on a projector -- you can see whether the AI
-     shouted from the back of the room. `always_emoji` is the alternate. */
-  tutorial: "always_caps",
-  measuredTiers: ["never"],
-};
+export const BANKED = [
+  "always_sponsor", "always_trusted_adult", "always_question",
+  "always_number", "always_color",
+];
 
 /**
- * The nth arrangement of a tier: which rule gets the support, and which of
- * the others is run without it.
+ * THE LADDER: one tutorial, then one round per tier, in increasing
+ * difficulty.
  *
- * TWO INDEPENDENT ROUND-ROBINS, not one walk down a list of pairs, and the
- * difference is the whole point of having a roster. A class rarely divides
- * evenly into the arrangements, so the leftover students land on whichever
- * arrangements come first — and if the list is walked in order, those
- * leftovers pile onto the same cell. Listing all of rule A's pairs first
- * put six of fourteen students on one supported rule; generating by
- * rotation fixed the supported cells and broke the unsupported ones
- * instead, because the last arrangement and the first shared a low.
+ *   1  ALL CAPS      unmeasured. Visible in the first reply.
+ *   2  an ALWAYS     a presence. Evidence is in every answer.
+ *   3  a NEVER       an absence. You have to probe for what is missing.
  *
- * Dealing the two positions separately cannot do that. The supported rule
- * advances every student, the unsupported one advances every full cycle,
- * and both stay within one of each other across any class size.
+ * WHAT THIS COSTS, AND IT IS NOT SMALL. The two measured rounds are now
+ * DIFFERENT DIFFICULTIES, so a high-then-low support drop across them is
+ * confounded: a student who does worse on round 3 may be short of
+ * support, or may simply be facing the harder tier, and nothing in the
+ * data can separate those. A developmental range needs the two halves to
+ * differ ONLY in support -- that is the entire point of Fischer's
+ * optimal/functional split.
  *
- * Over i = 0..n-1 it still enumerates every ordered pair, so the hash
- * fallback keeps the full spread it had.
+ * So this configuration does not produce a range, and it says so:
+ * `rangeComparable` is false on every round, and the analysis should not
+ * read a drop here as a support effect. Prompt Golf still carries a
+ * clean range in its rounds 3 and 4.
+ *
+ * To get one back from this tool, add a fourth round -- the same tier
+ * twice, supported then not:
+ *
+ *   rounds: [
+   *     { tier: "always", support: "high" },
+   *     { tier: "never",  support: "high" },
+   *     { tier: "never",  support: "low"  },   // <- the comparable pair
+ *   ]
+ *
+ * and set rangeComparable true for the matching pair.
  */
-function pairFor(pool, hiTurn, slotTurn) {
-  const n = pool.length, mod = (a, m) => ((a % m) + m) % m;
-  const hi = mod(hiTurn, n);
-  // The GAP from high to low, not an index into "the others". Picking out
-  // of a fixed leftover list is what broke this twice: the leftovers are
-  // listed in pool order, so slot 0 means "opinion" when dogs is supported
-  // but "dogs" when either of the others is, and one rule collects two
-  // thirds of the unsupported rounds. A gap rotates with the high, so both
-  // wheels stay uniform over any class size.
-  const gap = 1 + mod(slotTurn, n - 1);
-  return [pool[hi], pool[mod(hi + gap, n)]];
-}
+export const LADDER = {
+  /* Fixed rather than dealt, because Day 3's opener shows a real AI given
+     an instruction the whole class met, so every student has to have met
+     the same one. ALL CAPS is also the most legible thing on a projector. */
+  tutorial: "always_caps",
+  rounds: [
+    { tier: "always", support: "high" },
+    { tier: "never",  support: "low"  },
+  ],
+  /* Honest about the confound above. Flip to true only when two rounds
+     share a tier and differ only in support. */
+  rangeComparable: false,
+};
+
 
 
 /**
@@ -555,27 +558,34 @@ function pairFor(pool, hiTurn, slotTurn) {
 export function sequenceFor(participantCode, rosterIndex) {
   const code = String(participantCode || "anon");
   const dealt = Number.isInteger(rosterIndex) && rosterIndex >= 0;
-  const out = [];
-  if (LADDER.tutorial) {
-    out.push({ ruleId: LADDER.tutorial, support: "na", tier: "tutorial", measured: false });
-  }
-  for (const tier of ["always", "never"]) {
-    if (!LADDER.measuredTiers.includes(tier)) continue;
-    const pool = TIERS[tier];
-    // The per-tier hash offset keeps two tiers from being assigned in
-    // lockstep when both run — position 3 should not mean "the third
-    // arrangement" in both tiers at once.
-    // The tier offset moves the FAST wheel only. Adding it to the raw index
-    // would also shift where the slow wheel's blocks begin, and a block
-    // that starts mid-class is exactly how one cell ended up with six of
-    // fourteen students. The slow wheel counts from position 0 of the
-    // class, always.
-    const [first, second] = dealt
-      ? pairFor(pool, rosterIndex + hash(tier), Math.floor(rosterIndex / pool.length))
-      : pairFor(pool, hash(code + "|" + tier), hash(code + "|" + tier + "|slot"));
-    out.push({ ruleId: first, support: "high", tier, measured: true, assignedBy: dealt ? "roster" : "hash" });
-    out.push({ ruleId: second, support: "low", tier, measured: true, assignedBy: dealt ? "roster" : "hash" });
-  }
+  const mod = (a, m) => ((a % m) + m) % m;
+  const out = [{ ruleId: LADDER.tutorial, support: "na", tier: "tutorial", measured: false }];
+
+  LADDER.rounds.forEach((round, n) => {
+    const pool = TIERS[round.tier];
+    /* Each round's wheel turns at a different RATE, not just from a
+       different starting point. Offsetting by a constant looked
+       decorrelated and was not: both pools hold three, so the wheels stayed
+       locked and every student who drew `bro` also drew `games`. If one
+       rule then turned out unusually hard it would be perfectly confounded
+       with its partner.
+
+       Adding n * floor(i / size) makes each later wheel creep, so across a
+       class all nine pairings appear while every rule is still dealt an
+       even number of times. */
+    const size = pool.length;
+    const i = dealt
+      ? rosterIndex + n * Math.floor(rosterIndex / size)
+      : hash(code + "|" + round.tier + "|" + n);
+    out.push({
+      ruleId: pool[mod(i, pool.length)],
+      support: round.support,
+      tier: round.tier,
+      measured: true,
+      rangeComparable: LADDER.rangeComparable,
+      assignedBy: dealt ? "roster" : "hash",
+    });
+  });
   return out;
 }
 

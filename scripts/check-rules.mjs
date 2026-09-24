@@ -171,15 +171,16 @@ for (const a of RULE_ORDER) for (const b of RULE_ORDER) {
       `a student on ${a} could answer "${RULES[b].label}" and be right`);
 }
 
-/* The sequence: the tutorial first and unmeasured, then each measured tier
-   as a high-then-low pair, counterbalanced by code so neighbours differ. */
+/* The ladder: an unmeasured tutorial, then one rule per round, getting
+   harder. Each round's rule is dealt from its tier's pool. */
 {
   const seq = sequenceFor("AAAAA");
-  const expected = 1 + LADDER.measuredTiers.length * 2;
+  const expected = 1 + LADDER.rounds.length;
   if (seq.length !== expected)
     fail("sequence", `${seq.length} rounds, expected ${expected}`, JSON.stringify(seq.map((x) => x.ruleId)));
   if (!(seq[0].tier === "tutorial" && seq[0].measured === false && seq[0].support === "na"))
     fail("sequence", "round 0 is not an unmeasured tutorial", JSON.stringify(seq[0]));
+
   // A tutorial a student can fail is not a tutorial. It has to be readable
   // off the very first reply, whatever they happen to ask first.
   const tut = RULES[LADDER.tutorial];
@@ -187,61 +188,68 @@ for (const a of RULE_ORDER) for (const b of RULE_ORDER) {
   else if (!COMBOS.every((p) => tut.check(answerFor(LADDER.tutorial, p))))
     fail("sequence", "the tutorial rule does not hold on every question", "it cannot be the guaranteed win");
 
-  for (let i = 1; i < seq.length; i += 2) {
-    const [a, b] = [seq[i], seq[i + 1]];
-    if (!(a.support === "high" && b.support === "low"))
-      fail("sequence", "a measured pair is not high-then-low", a.support + " then " + b.support);
-    if (a.tier !== b.tier) fail("sequence", "a pair spans two tiers", a.tier + " and " + b.tier);
-    if (a.ruleId === b.ruleId) fail("sequence", "a pair is the same rule twice", a.ruleId);
-    if (!a.measured || !b.measured) fail("sequence", "a measured round is flagged unmeasured", a.ruleId);
+  // The rounds have to get harder, not wander.
+  const order = ["tutorial", "always", "never"];
+  for (let i = 1; i < seq.length; i++) {
+    if (order.indexOf(seq[i].tier) < order.indexOf(seq[i - 1].tier))
+      fail("sequence", "the ladder goes backwards",
+        `${seq[i - 1].tier} then ${seq[i].tier}`);
+    if (!seq[i].measured) fail("sequence", "a measured round is flagged unmeasured", seq[i].ruleId);
   }
-  // Every rule in a running tier must actually reach students, and the
-  // support must not always land on the same one — otherwise the pairing
-  // is counterbalanced in name only.
-  const seqs = [...Array(120).keys()].map((i) => sequenceFor("code" + i));
-  const orders = new Set(seqs.map((s) => s.map((x) => x.ruleId + ":" + x.support).join()));
-  for (const tier of LADDER.measuredTiers) {
-    const want = TIERS[tier].length * (TIERS[tier].length - 1);
-    const got = new Set(seqs.map((s) => s.filter((x) => x.tier === tier).map((x) => x.ruleId).join()));
-    if (got.size < want)
-      fail("sequence", `only ${got.size} of ${want} pairings appear in tier "${tier}"`,
-        "some rule never gets the support, or never gets it withheld");
-    for (const id of TIERS[tier]) {
-      const high = seqs.filter((s) => s.some((x) => x.ruleId === id && x.support === "high")).length;
-      const low = seqs.filter((s) => s.some((x) => x.ruleId === id && x.support === "low")).length;
-      if (!high || !low) fail("sequence", `"${id}" is never run in both conditions`, `high ${high}, low ${low}`);
+
+  /* THE CONFOUND, ASSERTED RATHER THAN REMEMBERED.
+     Two rounds are only a developmental range if they differ in support
+     alone. Round 2 is an always and round 3 is a never, so a drop across
+     them is support OR difficulty and nothing separates the two. The
+     ladder must therefore declare rangeComparable false -- and if anyone
+     later builds a matched pair, this check makes them say so. */
+  const byTier = {};
+  for (const r of seq.slice(1)) (byTier[r.tier] ||= []).push(r.support);
+  const matched = Object.values(byTier).some(
+    (sup) => sup.includes("high") && sup.includes("low"));
+  if (LADDER.rangeComparable && !matched)
+    fail("sequence", "rangeComparable is true but no two rounds share a tier",
+      "a high-then-low drop across different tiers is difficulty, not support");
+  if (!LADDER.rangeComparable && matched)
+    fail("sequence", "there IS a matched high/low pair but rangeComparable is false",
+      "the range is measurable here and the flag is hiding it");
+  if (seq.some((r) => r.measured && r.rangeComparable !== LADDER.rangeComparable))
+    fail("sequence", "a round disagrees with LADDER.rangeComparable", "the log would mislead");
+
+  /* The deal: every rule in a running pool must reach students an even
+     number of times, and the pools must not turn in lockstep. Offsetting
+     the second wheel by a constant looked decorrelated and was not --
+     both pools hold three, so every student who drew `bro` also drew
+     `games`, which would confound the two rules perfectly. */
+  for (const N of [11, 12, 13, 14, 15, 16, 18, 24]) {
+    const cnt = {}, pairs = new Set();
+    for (let i = 0; i < N; i++) {
+      const q = sequenceFor("student" + i, i).slice(1);
+      for (const x of q) cnt[x.ruleId] = (cnt[x.ruleId] || 0) + 1;
+      pairs.add(q.map((x) => x.ruleId).join("+"));
     }
-  }
-  /* A roster deal has to actually balance a class of fourteen. Hashing does
-     not: it draws from the arrangements independently, and a simulated
-     class came out 6/5/3/3/5/6, which leaves an instruction barely seen in
-     the supported condition. Round-robin should hold every cell within one
-     of every other. */
-  // The claim is "any class size", so check a range around the pilot's 14
-  // rather than 14 alone -- an absentee or a late add must not unbalance it.
-  for (const tier of LADDER.measuredTiers) {
-    const shown = [];
-    for (const N of [11, 12, 13, 14, 15, 16, 18, 24]) {
-      const cell = {};
-      for (let i = 0; i < N; i++)
-        for (const x of sequenceFor("student" + i, i).filter((s) => s.tier === tier))
-          cell[x.ruleId + ":" + x.support] = (cell[x.ruleId + ":" + x.support] || 0) + 1;
-      const counts = TIERS[tier].flatMap((id) => [cell[id + ":high"] || 0, cell[id + ":low"] || 0]);
+    for (const round of LADDER.rounds) {
+      const counts = TIERS[round.tier].map((id) => cnt[id] || 0);
       const spread = Math.max(...counts) - Math.min(...counts);
       if (spread > 1)
-        fail("sequence", `roster deal leaves tier "${tier}" unbalanced across ${N} students`,
-          `cells ${counts.join("/")} — spread ${spread}, want 1 or less`);
-      if (N === 14) shown.push(counts.join("/"));
+        fail("sequence", `tier "${round.tier}" unbalanced across ${N} students`,
+          `counts ${counts.join("/")} \u2014 spread ${spread}, want 1 or less`);
     }
-    console.log(`ok   roster deal      tier "${tier}" balanced at 11-24 students · at 14: ${shown[0]}`);
+    const possible = LADDER.rounds.reduce((n, r) => n * TIERS[r.tier].length, 1);
+    if (N >= possible && pairs.size < possible)
+      fail("sequence", `only ${pairs.size} of ${possible} rule combinations appear across ${N} students`,
+        "the pools are turning in lockstep, so two rules are confounded");
   }
-  if (sequenceFor("x", 3).some((s) => s.measured && s.assignedBy !== "roster"))
+
+  if (sequenceFor("x", 3).some((r) => r.measured && r.assignedBy !== "roster"))
     fail("sequence", "a roster index did not produce a roster deal", "assignedBy is wrong");
-  if (sequenceFor("x", -1).some((s) => s.measured && s.assignedBy !== "hash"))
+  if (sequenceFor("x", -1).some((r) => r.measured && r.assignedBy !== "hash"))
     fail("sequence", "no roster did not fall back to the hash", "assignedBy is wrong");
 
-  console.log(`ok   sequence         ${orders.size} orders over 120 codes · `
-    + `${sequenceFor("AAAAA").map((x) => x.ruleId).join(" → ")}`);
+  console.log(`ok   ladder           ${seq.map((x) => x.ruleId + ":" + x.support).join(" \u2192 ")}`);
+  console.log(`ok   deal             every pool balanced 11-24 students \u00b7 all combinations appear`);
+  console.log(`     range            rangeComparable=${LADDER.rangeComparable}` +
+    (LADDER.rangeComparable ? "" : " \u2014 rounds differ in tier AND support, so no range from this tool"));
 }
 
 /* The claims table, and two classes of guess that have failed before. */
