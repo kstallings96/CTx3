@@ -8,6 +8,7 @@ import { RECORDINGS, followedCount } from "./recordings.js";
 import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision,
          buildPrompt, checkSafe, SAFE_MESSAGE, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
+import { DEMO, DEMO_PASSWORD, DEMO_IDENTITY, demoPasswordOk, demoOpen } from "./demo.js";
 import { sha256hex } from "./lib/sha256.js";
 
 /* ============================ shared ============================ */
@@ -1951,17 +1952,16 @@ function renderHub() {
     <h1>Pick your activity</h1>
     <p class="lede">Three tools, one session. You sign in once, here, and everything you do stays together — so nothing you produce today goes missing.</p>
   </section>
-  <div class="tiles">${TOOLS.map((t) => { const live = t.day === S.day && t.built;
+  <div class="tiles">${TOOLS.map((t) => { const live = (DEMO ? demoOpen(t.id) : t.day === S.day) && t.built;
     return `<button class="tile${live ? "" : " off"}" data-tool="${t.id}" ${live ? "" : "disabled"}>
       ${t.tag ? `<span class="tag">${t.tag}</span>` : ""}<h3>${t.name}</h3><p>${t.blurb}</p>
       ${!t.built ? `<span class="ext">…/${t.id}?pc=${S.code}</span>` : ""}
       <span class="con">day ${t.day}</span></button>`; }).join("")}</div>
-  <section class="card pad" style="display:flex;flex-direction:column;gap:8px">
-    <span class="eyebrow">Today's idea</span>
-    <p class="lede">${S.day === 2
-      ? "A rule that holds <b>every single time</b>. BIT never slips — not once."
-      : "The same words, a different answer every time you ask."}</p>
-  </section>`;
+  ${DEMO ? `<section class="card pad">
+    <div class="banner"><span>!</span><div><b>Demo mode.</b>
+      One password, and every row saved as <span class="kbd">${DEMO_IDENTITY.code}</span>.
+      Turn it off in <span class="kbd">src/demo.js</span> before a class.</div></div>
+  </section>` : ""}`;
   document.querySelectorAll("[data-tool]").forEach((b) => b.onclick = () => go(b.dataset.tool));
 }
 function renderGate() {
@@ -2011,7 +2011,53 @@ function renderGate() {
     go(hit);
   };
 }
+/* One switch. src/demo.js explains what it costs. */
 function renderCode() {
+  return DEMO ? renderCodeDemo() : renderCodeReal();
+}
+/**
+ * Sign-in while DEMO is on: one password, nothing else.
+ *
+ * The real screen asks for a card code, a first name and a last initial,
+ * and checks the code against the roster. None of that is useful when the
+ * point is to show somebody the thing, and all of it is friction. The
+ * session still gets written -- with the obviously-fake demo identity, so
+ * the rows are excludable and unmistakable.
+ */
+function renderCodeDemo() {
+  $("stage").innerHTML = `
+  <section class="card pad" style="display:flex;flex-direction:column;gap:16px">
+    <div><span class="eyebrow">Demo</span><h1 style="font-size:27px;margin-top:3px">Sign in</h1></div>
+    <p class="lede">Enter the password to open the activities.</p>
+    <div class="codewrap">
+      <label style="display:block"><span class="eyebrow">Password</span>
+        <input type="password" id="demopw" class="bigname primary" autocomplete="off" spellcheck="false" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022"></label>
+      <p class="hint" id="codemsg">Capital letters do not matter.</p>
+      <div class="row"><button class="btn" id="codego">Start</button></div>
+      <p class="note">Demo mode. Everything you do is saved under one shared demo code, not under a student.</p>
+    </div>
+  </section>`;
+  const pw = $("demopw"), msg = $("codemsg");
+  pw.focus();
+  pw.onkeydown = (e) => { if (e.key === "Enter") $("codego").click(); };
+  $("codego").onclick = () => {
+    if (!demoPasswordOk(pw.value)) {
+      msg.textContent = "That is not the password.";
+      msg.style.color = "var(--fail)";
+      pw.focus(); pw.select();
+      return;
+    }
+    S.code = DEMO_IDENTITY.code; S.first = DEMO_IDENTITY.first; S.initial = DEMO_IDENTITY.initial;
+    $("pcchip").textContent = nameChip(); save();
+    window.__CTX3_CODE__ = S.code;
+    startSession(S.code, S.deviceId, S.day,
+      { first_name: S.first, last_initial: S.initial, grade: GRADE });
+    emit("session_start", { participantCode: S.code, tool: "hub", day: S.day,
+      deviceId: S.deviceId, recorded: false, demo: true });
+    go(S.pinned || "hub");
+  };
+}
+function renderCodeReal() {
   $("stage").innerHTML = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:16px">
     <div><span class="eyebrow">Day ${S.day}</span><h1 style="font-size:27px;margin-top:3px">Sign in</h1></div>
@@ -2119,7 +2165,8 @@ const canRoute = () => location.protocol === "http:" || location.protocol === "h
  */
 const digestFor = (tool, word) => sha256hex(PASSWORD_SALT + ":" + tool + ":" + String(word).trim().toLowerCase());
 const needsPassword = (tool) => Boolean(PASSWORDS[tool]);
-const unlocked = (tool) => !needsPassword(tool) || S.unlocked.includes(tool);
+/* DEMO holds every door open. See src/demo.js -- one line puts them back. */
+const unlocked = (tool) => demoOpen(tool) || !needsPassword(tool) || S.unlocked.includes(tool);
 /* Which tool this word opens, or null. */
 function toolForPassword(word) {
   if (!String(word).trim()) return null;
