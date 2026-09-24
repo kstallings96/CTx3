@@ -340,6 +340,27 @@ function applyOne(scene, t, locHint) {
   }
 
   if (!scene.parts[parent]) {
+    /* THE PART MAY ALREADY BE ON THE PAGE.
+     *
+     * "big green head / add head to yellow body" names the head twice: once
+     * to draw it, once to move it onto a body that was never drawn. The
+     * move is what fails. Floating it anyway put the head in `parts` AND in
+     * `floating` at the same time -- drawn and not drawn -- so the picture
+     * showed a head with a dashed "head" ghost hovering over it, and the
+     * log said it had been drawn twice.
+     *
+     * What is true is narrower: the head stays exactly where it was, and
+     * the instruction to move it could not be carried out. */
+    if (scene.parts[name]) {
+      Object.assign(scene.parts[name], merged);
+      return {
+        ok: true,
+        msg: "The " + parent + " has not been drawn yet, so I could not put the "
+          + name + " on it. The " + name + " is where it was.",
+        missing: parent,
+        unplaced: true,
+      };
+    }
     scene.floating.push(name);
     return {
       ok: true,

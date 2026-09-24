@@ -8,9 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "rescore": "node scripts/rescore.mjs",
-    "demo": "npm run check:rules && vite build --mode demo && node scripts/bundle-demo.mjs",
+    "demo": "npm run check:rules && npm run check:engine && vite build --mode demo && node scripts/bundle-demo.mjs",
     "passwords": "node scripts/set-passwords.mjs",
     "check:rules": "node scripts/check-rules.mjs",
+    "check:engine": "node scripts/check-engine.mjs",
     "record": "node scripts/record-runs.mjs"
   },
   "dependencies": {
