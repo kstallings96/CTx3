@@ -362,10 +362,10 @@ const BRIEFS = {
     id: "w4w_intro", once: true, eyebrow: "MonsterMaker",
     title: "Same words. Two engines.",
     lines: [
-      "You write the steps once. Then you pick an <b>engine</b> to run them.",
-      "<b>Literal</b> does exactly what you wrote. <b>AI</b> guesses at the parts you left out.",
+      "You write the steps once. Then two different <b>engines</b> run them.",
+      "<b>Exact</b> does only what you wrote. <b>AI</b> guesses at the parts you left out.",
     ],
-    warn: "You run the Literal engine first, then the AI, then you put the two side by side.",
+    warn: "You run the Exact engine first, then the AI, then you put the two side by side.",
     button: "Let's go",
   },
 };
@@ -1650,14 +1650,22 @@ function renderW4W() {
    * middle box actually does, which is the only thing today is about.
    *
    * THE TWO ENGINES BEHAVE DIFFERENTLY *AS CONTROLS*, and that is the
-   * lesson rather than a limitation. Literal is deterministic and
+   * lesson rather than a limitation. The exact engine is deterministic and
    * synchronous, so its output repaints on every keystroke -- ask it the
    * same thing and it answers identically, instantly, forever. The AI has
    * to be asked, over a network, and comes back different each time. A
    * student feels that difference in their hands before anyone names it.
    */
-  const engineName = W4W.stage === "ai" ? "AI" : "Literal";
-  /* THE INSTRUCTION LOCKS ONCE LITERAL HAS RUN.
+  /* "Exact" on screen, `literal` in the code and in every event payload.
+     The label changed because "literal" is a three-syllable abstraction and
+     "exact" is a word these students already use; the key did not, because
+     renaming it would churn every branch of the run loop and rewrite the
+     shape of the data for no reader who is not already in this file.
+     NOT "Machine": the AI is also a machine, and putting that word on one
+     engine while the other is called AI invites exactly the inference this
+     week exists to correct. */
+  const engineName = W4W.stage === "ai" ? "AI" : "Exact";
+  /* THE INSTRUCTION LOCKS ONCE THE EXACT ENGINE HAS RUN.
    *
    * The comparison is worth nothing if the words changed between the two
    * engines -- the whole claim is SAME WORDS, different engine, and a
@@ -1677,7 +1685,7 @@ function renderW4W() {
         <span class="eyebrow">engine</span>
         <div class="enginenow">${engineName}</div>
         <div class="stagedots">
-          <span class="${W4W.stage === "literal" ? "on" : "done"}">1 Literal</span>
+          <span class="${W4W.stage === "literal" ? "on" : "done"}">1 Exact</span>
           <span class="${W4W.stage === "ai" ? "on" : W4W.stage === "compare" ? "done" : ""}">2 AI</span>
           <span class="${W4W.stage === "compare" ? "on" : ""}">3 Compare</span>
         </div>
@@ -1693,9 +1701,9 @@ function renderW4W() {
   <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
     <h1 style="font-size:24px">MonsterMaker</h1>
     <p class="lede">${W4W.mode === "solo"
-      ? "Write the steps to build <b>your</b> monster. The <b>Literal</b> engine does exactly what each line says. It will not add anything you left out."
+      ? "Write the steps to build <b>your</b> monster. The <b>Exact</b> engine does only what each line says. It will not add anything you left out."
       : W4W.stage === "literal"
-        ? "Write the steps. The <b>Literal</b> engine runs them five times. Watch how much it changes."
+        ? "Write the steps. The <b>Exact</b> engine runs them five times. Watch how much it changes."
         : W4W.stage === "ai"
           ? "Same words, no edits. Now the <b>AI</b> engine runs them five times. Watch how much <b>it</b> changes."
           : "Same words, both engines, five runs each. Here they are together."}</p>
@@ -1724,7 +1732,7 @@ function renderW4W() {
   const machineHead = `
     <div class="chathead">
       ${w4wBit(W4W.playing ? "thinking" : W4W.stepLog.length ? "pleased" : "idle")}
-      <div class="chatwho"><b>Literal engine</b><span>${W4W.playing ? "building\u2026" : "does exactly what you wrote"}</span></div>
+      <div class="chatwho"><b>Exact engine</b><span>${W4W.playing ? "building\u2026" : "does exactly what you wrote"}</span></div>
     </div>`;
 
   /* What to build, in the words a student would use for it. This used to
@@ -1815,7 +1823,7 @@ function renderW4W() {
         <div><span class="eyebrow">the words both engines were given</span>
           <div class="sysprompt">${esc(w4wText())}</div></div>
         <div class="cmpgrid">
-          ${col("literal", "Literal", a, a.shapes === 1
+          ${col("literal", "Exact", a, a.shapes === 1
             ? "Same words, same monster, every single time. So if it is not the monster you wanted, the steps are what to change."
             : "Different monsters from the same words \u2014 which means a line is being read more than one way.")}
           ${col("ai", "AI", b, (W4W.results.ai && W4W.results.ai.runs.some((r) => r.inferred && r.inferred.length))
@@ -1849,7 +1857,7 @@ function renderW4W() {
           ${ranThis && !W4W.running
             ? `<button class="btn" id="w4wnext">${nextLabel}</button>`
             : `<span class="hint">${W4W.stage === "literal"
-                ? "The Literal engine does exactly what each line says. Run it five times and watch how much it varies."
+                ? "The Exact engine does only what each line says. Run it five times and watch how much it varies."
                 : "Same words, different engine. Run it five times and watch how much THIS one varies."}</span>`}
         </div>
       </section>`;
@@ -1932,7 +1940,7 @@ const TOOLS = [
   { id: "ftr", path: "alwaysnever", name: "AlwaysNever", day: 2, con: "reverse-engineering an AI", built: true,
     blurb: "An AI is following a secret rule. Ask it questions and work out what the rule is." },
   { id: "w4w", path: "monstermaker", name: "MonsterMaker", day: 3, con: "decomposition · pseudocode", built: true,
-    blurb: "Write the steps. Run them through the Literal engine, then the AI engine. Same words, two very different results." },
+    blurb: "Write the steps. Run them through the Exact engine, then the AI engine. Same words, two very different results." },
   { id: "pg", path: "prompt-golf", name: "Prompt Golf", day: 3, con: "abstraction · debugging", built: true,
     blurb: "Hit the target in as few words as possible. Opens by fixing someone else's broken prompt." },
 ];

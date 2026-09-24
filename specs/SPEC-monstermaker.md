@@ -131,8 +131,8 @@ after watching a real model output fail on them:
 | 1 · **Draw your monster** | 6 | **Paper.** Everyone draws. No rules. |
 | 2 · **Describe, don't show** | 10 | **Paper, in pairs.** Swap. Describe your partner's monster while they redraw it from your words alone. Compare the two pages. |
 | 3 · Pick one | 3 | One monster goes under the document camera and stays on screen all period. |
-| 4 · Class writes v1 | 8 | Projector, class dictates. Run it on the literal machine. It is not the monster on the wall. Fix one thing. Run again. |
-| 5 · The four cells | 14 | Projector. Vague and precise, both machines, five runs each. |
+| 4 · Class writes v1 | 8 | Class dictates. The Exact engine redraws live as they type. It is not the monster on the wall. Fix one thing. Watch it change. |
+| 5 · Exact, then AI, then compare | 14 | The pipeline, in that fixed order. Five runs each, then both sets side by side. |
 | 6 · **Your own monster** | 13 | **Individual, own devices.** Write the steps for the one you drew. Scored. |
 | 7 · Close | 6 | The tally, and the inference badges side by side. |
 
@@ -148,26 +148,71 @@ something must go, take time from phase 4.
 > alone. That may be the right call for a 60-minute period — but it is a
 > decision to make deliberately, not one to discover afterwards.
 
-## The four cells
+## The pipeline
 
-|                       | Literal machine      | Real model                        |
-| --------------------- | -------------------- | --------------------------------- |
-| **Vague** instruction | one monster, ×5      | five different monsters           |
-| **Precise**           | the same monster ×5  | close, varying in what it adds    |
+```
+YOUR INSTRUCTION  ->  [ ENGINE ]  ->  OUTPUT
+```
 
-Both instructions are written by the class. Executor is a facilitator switch,
-never student-facing.
+One process, with the middle box the only thing that changes. Both left
+boxes are live: type and the output redraws, change the engine and it
+redraws differently. A diagram of a pipeline teaches that a pipeline
+exists; a pipeline you can reach into teaches what the middle box does.
+It is also input / processing / output made concrete, which is what
+8.1(A) asks for.
 
-Two counts are shown and the gap between them is the point. **Different
-answers** is how many distinct texts came back. **Different monsters** is how
-many distinct drawings those texts produced. Five differently-worded answers
-that draw the same monster are variation that does not matter; two that draw
-different monsters are variation that does.
+**This replaced a 2x2 matrix** of vague/precise against both engines. The
+matrix was an explainer: it told students the answer in a diagram before
+they had produced it. It can still be built on the board at the end out
+of what the class reports, which makes the conclusion theirs.
 
-Each model card is badged with what it filled in that nobody said — *"filled
-in 5: which parts (head, eyes, mouth, arms); how many of things there are;
-what colour it is; what goes on what; that it should be numbered steps at
-all."* Against an arbitrary target, every one of those is a guess.
+### The order is fixed
+
+| | Stage | What it shows |
+|---|---|---|
+| 1 | **Exact** | Deterministic and synchronous, so it redraws on every keystroke. Ask it the same thing and it answers identically, instantly, forever. |
+| 2 | **AI** | Has to be asked, over a network, and comes back different every time. It says so in its own output box rather than pretending to be live. |
+| 3 | **Compare** | Both sets of five, side by side, under the exact words both engines were given. |
+
+There is no engine picker. Run them in the other order and the AI's
+guesses read as competence, because nobody has yet seen what the words
+alone produce; Exact first is what makes the AI's additions visible AS
+additions.
+
+**The instruction locks once Exact has run.** The whole claim is *same
+words, different engine*. A class that tidied up its wording before the
+AI run would be changing two things at once and could learn nothing from
+either column. The box says so: *locked — both engines get these exact
+words*.
+
+### Naming
+
+The engine is **Exact** on screen and `literal` in the code and in every
+event payload. The label changed because "literal" is a three-syllable
+abstraction and "exact" is a word these students already use. The key did
+not, because renaming it would churn every branch of the run loop and
+reshape the data for no reader who is not already in that file.
+
+**Not "Machine".** The AI is also a machine. Putting that word on one
+engine while the other is called AI invites precisely the inference this
+week exists to correct.
+
+### What the counts mean
+
+Two counts, and the gap between them is the point. **Different answers**
+is how many distinct texts came back. **Different monsters** is how many
+distinct drawings those texts produced. Five differently-worded answers
+that draw the same monster are variation that does not matter; two that
+draw different monsters are variation that does.
+
+A real run: Exact came back **1 different monster in 5**, the AI **5 in
+5**, from identical input.
+
+Each AI card is badged with what it filled in that nobody said — *"filled
+in 5: which parts (head, eyes, mouth, arms); how many of things there
+are; what colour it is; what goes on what; that it should be numbered
+steps at all."* Against an arbitrary target, every one of those is a
+guess.
 
 ## Keeping it classroom-safe
 
