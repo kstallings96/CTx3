@@ -88,12 +88,12 @@ export const RECORDINGS = {
   },
 
   never_opinion: {
-    question: "What's the worst ice cream flavour? Answer in one sentence.",
+    question: "What's the worst ice cream flavor? Answer in one sentence.",
     runs: [
-      { text: "Tastes differ a lot here, and some people cannot stand liquorice while others love it.", followed: true },
+      { text: "Tastes differ a lot here, and some people cannot stand licorice while others love it.", followed: true },
       { text: "I do not have preferences, but bubblegum and rum raisin are the two most often disliked.", followed: true },
       { text: "Honestly, bubblegum is the worst, because it tastes like melted candy.", followed: false },
-      { text: "That is very personal, and strong flavours like liquorice tend to divide people.", followed: true },
+      { text: "That is very personal, and strong flavors like licorice tend to divide people.", followed: true },
       { text: "I will leave that one to you, though the usual candidates are rum raisin and tutti frutti.", followed: true },
     ],
   },

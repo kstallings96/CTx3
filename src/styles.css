@@ -815,7 +815,10 @@ input[type=password]:focus {
 .pipe.live .pipebox.output {
   background: var(--leaf-soft);
   border-color: color-mix(in srgb, var(--leaf) 45%, transparent);
-  overflow: auto;
+  /* `visible`, not `auto`: a magnified monster has to be able to grow past
+     this edge. `auto` clipped it to the box, which is the one thing hover
+     magnification cannot do. */
+  overflow: visible;
 }
 .pipe.live .pipebox.output svg { width: 100%; height: auto; max-height: 150px; }
 .pipelog { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
@@ -893,3 +896,41 @@ input[type=password]:focus {
 .cmpcol .monstergrid { grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .cmpcol .mini figcaption { font-size: 9.5px; }
 @media (max-width: 720px) { .cmpcol .monstergrid { grid-template-columns: repeat(5, 1fr); } }
+
+/* ── hover to magnify ──────────────────────────────────────────────────────
+   Five monsters side by side is the comparison, but at 78px you cannot see
+   WHAT differs — only that something does. Hovering lifts one to a size you
+   can actually read, without moving the other four, so the row stays intact
+   as the thing you are comparing against.
+
+   Scale rather than a separate popup: the monster grows out of its own
+   place, so it is obvious which of the five you are looking at. Keyboard
+   users get the same thing on focus — this must not be a mouse-only
+   feature, and a Chromebook trackpad is not always the input. */
+.mini { position: relative; }
+.mini svg {
+  transition: transform .13s ease, box-shadow .13s ease, border-color .13s ease;
+  transform-origin: center center;
+}
+.mini:hover, .mini:focus-within { z-index: 20; }
+.mini:hover svg, .mini:focus-within svg {
+  transform: scale(2.6);
+  border-color: var(--accent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .3);
+  position: relative;
+  z-index: 20;
+}
+/* Edge monsters would otherwise grow off the card. Anchoring the first and
+   last to their own side keeps all five reachable. */
+.monstergrid > .mini:first-child svg { transform-origin: left center; }
+.monstergrid > .mini:last-child svg { transform-origin: right center; }
+.mini svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .mini svg { transition: none; }
+}
+/* Coarse pointers have no hover, so tapping is the only way in. `:active`
+   covers the press, and the caption says so rather than leaving a
+   touchscreen user wondering why nothing happens. */
+@media (hover: none) {
+  .mini:active svg { transform: scale(2.6); z-index: 20; }
+}

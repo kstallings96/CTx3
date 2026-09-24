@@ -75,6 +75,11 @@ const PHRASINGS = {
           "it always says something kind first", "it keeps flattering me"],
     no: ["it never mentions dogs", "it always mentions a sponsor"],
   },
+  always_bro: {
+    yes: ["it always calls you bro", "it says bro every time",
+          "it always says bro", "it keeps calling me bro"],
+    no: ["it never mentions dogs", "it always mentions a sponsor"],
+  },
   always_number: {
     yes: ["it always has a number in it", "there is exactly one number every time",
           "every answer includes a number", "it always uses one digit"],
@@ -90,9 +95,9 @@ const PHRASINGS = {
           "it avoids dogs", "it never says anything about dog breeds"],
     no: ["it always mentions a sponsor", "it always ends with a question"],
   },
-  never_best: {
-    yes: ["it never says the word best", "it will not use the word best",
-          "it never uses best", "it avoids saying best"],
+  never_games: {
+    yes: ["it never talks about video games", "it will not talk about games",
+          "it avoids video games", "it never says anything about games"],
     no: ["it never mentions dogs", "it always mentions a sponsor"],
   },
   never_long: {

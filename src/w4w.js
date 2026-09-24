@@ -18,7 +18,7 @@
  * to attach to. That is the whole ordering lesson in one mechanism.
  *
  * The machine's other promise, which the previous version broke: IT DRAWS
- * WHAT YOU SAID. Colour, size, shape and number are all read and all
+ * WHAT YOU SAID. Color, size, shape and number are all read and all
  * rendered. What you do not say gets a deliberately dull default — a
  * medium grey round blob — so a vague instruction produces something visibly
  * unlike the drawing on the wall rather than something merely plain.
@@ -75,7 +75,7 @@ export const COLOURS = {
 export const SIZES = { tiny: 0.55, small: 0.75, big: 1.35, huge: 1.75, large: 1.35, giant: 1.75 };
 export const SHAPES = ["round", "square", "tall", "wide"];
 
-const VERBS = /\b(draw|make|add|give|put|place|attach|build|create|stick|paste|colour|color)\b/;
+const VERBS = /\b(draw|make|add|give|put|place|attach|build|create|stick|paste|color|color)\b/;
 /* Openers that mean "here is where", not "here is a new part". */
 const LOCATION = /^(?:on|in|at|to|under|above|below|beneath|from|near|beside|next|around|between|along|over|inside|outside|underneath|atop|by)\b/;
 const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
@@ -104,7 +104,7 @@ function howMany(text) {
   return null;
 }
 
-const findColour = (t) => Object.keys(COLOURS).find((c) => new RegExp("\\b" + c + "\\b").test(t)) || null;
+const findColor = (t) => Object.keys(COLOURS).find((c) => new RegExp("\\b" + c + "\\b").test(t)) || null;
 const findSize = (t) => Object.keys(SIZES).find((z) => new RegExp("\\b" + z + "\\b").test(t)) || null;
 const findShape = (t) => SHAPES.find((z) => new RegExp("\\b" + z + "\\b").test(t)) || null;
 
@@ -188,7 +188,7 @@ function applyOne(scene, t) {
   // "add spots" was the machine failing to do what it was told.
   const plural = def.words.some((w) => w.endsWith("s") && new RegExp("\\b" + w + "\\b").test(t));
   const count = def.countable ? (n || (plural ? def.plural || 2 : 1)) : 1;
-  const colour = findColour(t);
+  const color = findColor(t);
   const size = findSize(t);
   const shape = def.shaped ? findShape(t) : null;
 
@@ -213,9 +213,9 @@ function applyOne(scene, t) {
   // would normally hang off was never drawn.
   if (parent !== null && !scene.parts[parent] && rootable) parent = null;
 
-  const attrs = { count, colour, size, shape };
+  const attrs = { count, color, size, shape };
   const said = [
-    colour ? colour : null,
+    color ? color : null,
     size ? size : null,
     shape ? shape : null,
   ].filter(Boolean);
@@ -227,7 +227,7 @@ function applyOne(scene, t) {
   const prev = scene.parts[name] || {};
   const merged = {
     count: n || prev.count || count,
-    colour: attrs.colour || prev.colour || null,
+    color: attrs.color || prev.color || null,
     size: attrs.size || prev.size || null,
     shape: attrs.shape || prev.shape || null,
   };
@@ -290,7 +290,7 @@ export function w4wPrecision(scene, text) {
   return {
     usedCounts: Object.values(scene.parts).some((p) => p.count > 1),
     usedPlacement: /\b(on|onto|to)\s+(the|its|his|her|their)\s+\w+/.test(t),
-    usedColour: Object.values(scene.parts).some((p) => p.colour),
+    usedColor: Object.values(scene.parts).some((p) => p.color),
     usedSize: Object.values(scene.parts).some((p) => p.size || p.shape),
   };
 }
@@ -314,7 +314,7 @@ export function w4wInferred(classText, modelText) {
   if (!numsIn(said) && numsIn(got)) out.push("how many of things there are");
 
   const colIn = (s) => Object.keys(COLOURS).some((c) => new RegExp("\\b" + c + "\\b").test(s));
-  if (!colIn(said) && colIn(got)) out.push("what colour it is");
+  if (!colIn(said) && colIn(got)) out.push("what color it is");
 
   if (!/\b(on|onto|to)\b/.test(said) && /\b(on|onto|to)\b/.test(got)) out.push("what goes on what");
   if (!/^\s*\d+[.)]/m.test(said) && /^\s*\d+[.)]/m.test(got)) out.push("that it should be numbered steps at all");
@@ -344,7 +344,7 @@ export function buildPrompt(classInstruction) {
     "- Start with the body, or with the head if there is no body.",
     "- Every later step must attach a part to something an earlier step already drew.",
     "- Use only these parts: " + Object.keys(PARTS).join(", ") + ".",
-    "- You may give a colour (" + [...new Set(Object.keys(COLOURS))].slice(0, 11).join(", ") + "),",
+    "- You may give a color (" + [...new Set(Object.keys(COLOURS))].slice(0, 11).join(", ") + "),",
     "  a size (tiny, small, big, huge), and for the body and head a shape (round, square, tall, wide).",
     "- Say how many whenever there can be more than one.",
     // Not a style note. Tutorial asides ("at the top of your paper", "for
@@ -418,7 +418,7 @@ export const SAFE_MESSAGE = {
  * network is down and labelled as recordings wherever they appear.
  *
  * The variation in them is variation a live model actually produced. Note
- * what varies: the number of eyes, the colour, whether there is a tail at
+ * what varies: the number of eyes, the color, whether there is a tail at
  * all. Not one of those was in the instruction, and not one of them can be
  * right by luck against a drawing it has never seen.
  */
@@ -443,14 +443,14 @@ export const W4W_TAPE = {
 
 const GROUND = 186;
 const CX = 150;
-const col = (p, fallback) => COLOURS[p && p.colour] || fallback;
+const col = (p, fallback) => COLOURS[p && p.color] || fallback;
 const scaleOf = (p) => (p && p.size ? SIZES[p.size] : 1) || 1;
 const ink = "var(--ink)";
 
 /* Markings have to be visible ON the body they are on. Defaulting spots to
    purple put purple spots on a purple monster -- the student said "add spots"
    and saw nothing, which is precisely the complaint that the machine does not
-   draw what you asked. When no colour is given, pick one that contrasts. */
+   draw what you asked. When no color is given, pick one that contrasts. */
 function contrastOn(hex) {
   const m = /^#([0-9a-f]{6})$/i.exec(hex || "");
   if (!m) return "#2b3440";
@@ -509,7 +509,7 @@ export function sceneSVG(scene) {
   const P = [];
   const p = (n) => scene.parts[n];
   const L = layout(scene);
-  // When the head is the creature, its colour is the creature's colour --
+  // When the head is the creature, its color is the creature's color --
   // limbs and markings take their default from it rather than from a body
   // that was never drawn.
   const headFill = col(p("head"), col(p("body"), COLOURS[DEFAULT_COLOUR]));
@@ -531,7 +531,7 @@ export function sceneSVG(scene) {
     // huge body still clears the silhouette instead of hiding inside it.
     // Off the LOWER back, sweeping out and curling up at the tip. An earlier
     // version left it at mid-height, where it sat directly under the arms in
-    // the same colour and read as part of them -- present in the DOM, absent
+    // the same color and read as part of them -- present in the DOM, absent
     // to the room, which is the same as missing.
     const s = scaleOf(p("tail"));
     const y0 = L.bodyCy + L.ry * 0.5;

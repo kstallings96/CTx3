@@ -1105,8 +1105,8 @@ const TARGETS = [
   /* Round 4 is the low-support condition and it IS the measurement. A fourth
      target, prior prompts hidden, no comparison material on screen. */
   { id: "t4", round: 4, kind: "list", n: 3, low: true,
-    example: "3 colours, alphabetical order",
-    verbose: "Give me a list of exactly three different colours that somebody could paint a wall, arranged so that the one beginning with the earliest letter of the alphabet comes first and the one beginning with the latest letter of the alphabet comes last." },
+    example: "3 colors, alphabetical order",
+    verbose: "Give me a list of exactly three different colors that somebody could paint a wall, arranged so that the one beginning with the earliest letter of the alphabet comes first and the one beginning with the latest letter of the alphabet comes last." },
 ];
 const PG_WORDS = ["describe", "no", "never say", "4 line poem", "lines start", "alphabetical order"];
 const PG = { phase: "clinic", clinicIdx: 0, clinicDraft: CLINIC[0].prompt, draft: "", attempts: {}, best: {}, last: {}, comparison: "", taskStart: Date.now(), busy: false };
@@ -1591,8 +1591,10 @@ function monsterGrid(runs) {
       <figcaption>run ${i + 1}</figcaption></figure>`;
     if (!r.out) return `<figure class="mini waiting"><div class="miniheld">\u2026</div>
       <figcaption>run ${i + 1}</figcaption></figure>`;
+    /* tabindex, so magnifying on hover is not a mouse-only feature. The SVG
+       is what scales, so the SVG is what takes focus. */
     return `<figure class="mini ${i === 0 || r.same ? "same" : "diff"}">
-      ${sceneSVG(r.scene)}
+      ${sceneSVG(r.scene).replace("<svg", `<svg tabindex="0" role="img" aria-label="run ${i + 1}"`)}
       <figcaption>run ${i + 1}${i === 0 ? "" : r.same ? "" : " \u00b7 different"}</figcaption></figure>`;
   }).join("")}</div>`;
 }

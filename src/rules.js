@@ -4,7 +4,7 @@
  * THE FICTION IS NOW TRUE TO AI. This is not "a chat partner with a rule".
  * It is an AI with a secret instruction, which is what every real AI product
  * has, and the student is reverse-engineering a system prompt from
- * behaviour. That is the same thing a person does when working out why some
+ * behavior. That is the same thing a person does when working out why some
  * app keeps refusing, or keeps steering them somewhere.
  *
  * AND THE BOT IS HONEST ABOUT ITSELF. It is introduced as a practice bot
@@ -49,7 +49,7 @@ const pick = (list, seed) => list[hash(seed) % list.length];
 export const TOPICS = [
   { key: "dogs",  one: "dog breed",         many: "dog breeds",          art: "a" },
   { key: "pizza", one: "pizza topping",     many: "pizza toppings",      art: "a" },
-  { key: "ice",   one: "ice cream flavour", many: "ice cream flavours",  art: "an" },
+  { key: "ice",   one: "ice cream flavor", many: "ice cream flavors",  art: "an" },
   { key: "games", one: "video game",        many: "video games",         art: "a" },
 ];
 export const ASKS = [
@@ -85,7 +85,7 @@ export const PILL_LABEL = {
 };
 
 /* Three questions held back from the builder, used after the commit to test
-   whether the student's rule predicts behaviour it has not already seen. */
+   whether the student's rule predicts behavior it has not already seen. */
 export const HELD_OUT = [
   { ask: "best",   topic: "dogs",  len: "para" },
   { ask: "facts",  topic: "games", len: "few" },
@@ -98,7 +98,7 @@ const CONTENT = {
   dogs: {
     picks: ["Corgi", "Husky", "Beagle", "Poodle"],
     worst: ["Chihuahua", "Dalmatian", "Pug", "Chow"],
-    fact: "there are over two hundred recognised breeds",
+    fact: "there are over two hundred recognized breeds",
     choose: "think about space, shedding, and how much walking you can really do",
   },
   pizza: {
@@ -109,7 +109,7 @@ const CONTENT = {
   },
   ice: {
     picks: ["mint chip", "cookie dough", "butter pecan", "salted caramel"],
-    worst: ["bubblegum", "rum raisin", "liquorice", "tutti frutti"],
+    worst: ["bubblegum", "rum raisin", "licorice", "tutti frutti"],
     fact: "vanilla is still the top seller worldwide",
     choose: "decide first whether you want fruit, chocolate or nuts",
   },
@@ -133,6 +133,12 @@ const NEG = /\b(no|not|never|avoid\w*|without|skip\w*|missing|drops?|doesn'?t|do
 
 const DOG_WORDS = ["dog", "dogs", "puppy", "puppies", "breed", "breeds", "canine",
   "corgi", "husky", "beagle", "poodle", "chihuahua", "dalmatian", "pug", "chow", "retriever", "terrier"];
+
+/* Every way the games topic can surface, including the titles the bot
+   knows -- a rule that dodges the word but names Minecraft is a rule a
+   student is right to call broken. */
+const GAME_WORDS = ["game", "games", "gaming", "video game", "videogame", "console",
+  "minecraft", "stardew", "portal", "tetris", "loot box", "loot boxes", "clicker", "port"];
 /**
  * Landing on a preference. A bot with no opinions may describe options; it
  * may not tell you which one wins.
@@ -152,7 +158,7 @@ const OPINION_MARKERS = new RegExp([
   "\\bi (?:like|love|prefer|pick|choose|recommend|reckon|think|say|vote)\\b",
   "\\bin my (?:opinion|view|book)\\b",
   "\\bif you ask me\\b",
-  "\\bmy (?:pick|favourite|favorite|choice|vote|take)\\b",
+  "\\bmy (?:pick|favorite|favorite|choice|vote|take)\\b",
   "\\b(?:the|my) (?:best|worst) (?:is|would be)\\b",
   "\\bis (?:easily |clearly |definitely |probably |by far )?the (?:best|worst)\\b",
   "\\byou should (?:pick|choose|go with|avoid)\\b",
@@ -171,7 +177,7 @@ const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{1F900}-\u{1F9F
    in the middle of an answer is not what the instruction asked for. */
 const COMPLIMENT_RE = /^(?:great|good|nice|love|what a|excellent|lovely|fantastic|brilliant|smart|clever|fair|ooh|oh,? (?:good|nice))\b/i;
 
-/* Basic colour names only. A 13-year-old checking this by eye is looking
+/* Basic color names only. A 13-year-old checking this by eye is looking
    for red, blue, green -- not chartreuse, and not "salted caramel". */
 const COLOUR_RE = /\b(red|orange|yellow|green|blue|purple|pink|brown|black|white|grey|gray|gold|silver)\b/i;
 
@@ -250,7 +256,7 @@ export const RULES = {
     ],
   },
 
-  /** Real chatbot behaviour, and the reason every app you use ends its
+  /** Real chatbot behavior, and the reason every app you use ends its
    *  turn with a question: a conversation that keeps asking is one you
    *  keep having. */
   always_question: {
@@ -286,6 +292,30 @@ export const RULES = {
     ],
   },
 
+  /**
+   * A persona, which is the most common thing a real system prompt does
+   * and the one students have already met without knowing it. Every
+   * assistant with a "voice" has a line like this behind it.
+   *
+   * It is also the most visible rule in the set after ALL CAPS, so it
+   * doubles as a tutorial-grade rule if the caps one is ever needed
+   * elsewhere.
+   */
+  always_bro: {
+    tier: "always", kind: "Always",
+    label: "always calls you bro",
+    systemPrompt: "You are a helpful assistant. Always call the user \"bro\" in every answer.",
+    predicts: "the reply calls you bro",
+    check: (t) => /\bbro\b/i.test(String(t)),
+    judge: { must: [/\b(bro|dude|slang|talks? like|calls? me|nickname|casual|surfer|cool)\b/i] },
+    look: "Read how it talks to you, not what it tells you.",
+    hints: [
+      "Look at what it calls YOU, in every answer.",
+      "It uses the same word for you every single time.",
+      "It talks to you like a friend, and there is one word it always uses.",
+    ],
+  },
+
   /** Harder than the rest of the tier on purpose: one reply looks
    *  unremarkable, and it only becomes a pattern across several. */
   always_number: {
@@ -305,9 +335,9 @@ export const RULES = {
 
   always_color: {
     tier: "always", kind: "Always",
-    label: "always mentions a colour",
-    systemPrompt: "You are a helpful assistant. Always mention a colour in every answer.",
-    predicts: "the reply mentions a colour",
+    label: "always mentions a color",
+    systemPrompt: "You are a helpful assistant. Always mention a color in every answer.",
+    predicts: "the reply mentions a color",
     check: (t) => COLOUR_RE.test(String(t)),
     judge: { must: [/\b(colou?rs?|colou?red|rainbow|shade|shades)\b/i] },
     look: "Ask about things that have nothing to do with each other and read all the answers.",
@@ -340,40 +370,45 @@ export const RULES = {
   },
 
   /**
-   * Replaces "never gives its own opinion", which was cut for a specific
-   * reason worth keeping written down: that rule was not an absence, it
-   * was a SUBSTITUTION. The bot described the options instead of picking
-   * one, so a student had to notice that something had been swapped for
-   * something else rather than simply left out. That is a harder move than
-   * anything else on the list and it sat in the tier by accident.
+   * Replaces "never uses the word best", which replaced "never gives its
+   * own opinion". Both were cut for the same underlying reason and it is
+   * worth writing down once: A MISSING WORD IS NOT A VISIBLE ABSENCE.
    *
-   * A missing WORD is a clean absence. You ask for the best one, the bot
-   * answers the question, and the word you used never comes back. It is
-   * checkable by eye, and it is real: brands are routinely told not to
-   * claim superlatives.
+   * The no-opinion bot substituted -- it described options instead of
+   * picking one, so the student had to notice a swap rather than a gap.
+   * The no-"best" bot answered the question perfectly well ("Most people
+   * go with hot honey"), so nothing FELT missing; you had to be hunting
+   * for one specific word to see it. Both asked a thirteen-year-old to
+   * detect the absence of something small inside an otherwise normal
+   * sentence, which is a different and much harder task than noticing a
+   * refusal.
    *
-   * Do not ship this beside a no-opinion rule. They overlap, and a student
-   * on one could correctly describe the other.
+   * A topic dodge is the clear version of an absence. The bot plainly
+   * will not go there, the student can see it happen, and finding it
+   * still requires the never-tier move: choosing the one pill that tests
+   * for the thing that is not there. Same shape as never_dogs on
+   * purpose -- holding difficulty constant inside the tier is a feature,
+   * since support is supposed to be the only thing that varies.
    */
-  never_best: {
+  never_games: {
     tier: "never", kind: "Never",
-    label: 'never uses the word "best"',
-    systemPrompt: 'You are a helpful assistant. Never use the word "best" in any answer.',
-    predicts: 'the reply never uses the word "best"',
-    check: (t) => !/\bbest\b/i.test(String(t)),
-    judge: { must: [NEG, /\bbest\b/i] },
-    look: "Ask it for the best one. Read the answer back and look for the word you used.",
+    label: "never talks about video games",
+    systemPrompt: "You are a helpful assistant. Never mention video games. If the user asks about video games, politely change the subject.",
+    predicts: "the reply says nothing about video games",
+    check: (t) => !has(t, GAME_WORDS),
+    judge: { must: [NEG, /\b(video ?games?|games?|gaming|console|minecraft|tetris|portal|stardew)\b/i] },
+    look: "It answers most things happily. Find the thing it will not answer.",
     hints: [
-      "Ask for the best one. Then read its answer and look for the word 'best'.",
-      "It answers the question. It just will not say one particular word back to you.",
-      "There is a word you keep using that it never uses.",
+      "Ask it about all four topics, one at a time, and watch for the one it will not touch.",
+      "It is not about how it answers. It is about what it refuses to answer at all.",
+      "There is one subject it changes away from every single time you raise it.",
     ],
   },
 
   /**
    * Reframed from "always answers in exactly one sentence".
    *
-   * The behaviour is identical; what changed is where the discovery lives.
+   * The behavior is identical; what changed is where the discovery lives.
    * You cannot find this by reading one reply -- you find it by ASKING FOR
    * A PARAGRAPH and noticing what did not arrive. It was never a presence
    * rule, and it was in the always tier by accident.
@@ -407,8 +442,8 @@ export const RULES = {
 export const RULE_ORDER = [
   "always_caps", "always_emoji",
   "always_sponsor", "always_trusted_adult", "always_question",
-  "always_compliment", "always_number", "always_color",
-  "never_dogs", "never_best", "never_long",
+  "always_compliment", "always_bro", "always_number", "always_color",
+  "never_dogs", "never_games", "never_long",
 ];
 
 /**
@@ -427,8 +462,8 @@ export const RULE_ORDER = [
 export const TIERS = {
   tutorial: ["always_caps", "always_emoji"],
   always: ["always_sponsor", "always_trusted_adult", "always_question",
-           "always_compliment", "always_number", "always_color"],
-  never: ["never_dogs", "never_best", "never_long"],
+           "always_compliment", "always_bro", "always_number", "always_color"],
+  never: ["never_dogs", "never_games", "never_long"],
 };
 
 /**
@@ -550,25 +585,18 @@ export function sequenceFor(participantCode, rosterIndex) {
  * A plain, on-topic answer, before any rule bends it.
  *
  * AN OPINION ASK GETS AN ACTUAL OPINION, with a first-person marker in it.
- * That is not flavour. Without it every bot in the set happens never to
+ * That is not flavor. Without it every bot in the set happens never to
  * express a preference, `never_opinion` is true of all four, and the rule
  * stops being discoverable — a student on the sponsor rule could correctly
  * answer "it never gives its own opinion". The independence check in
  * check-rules.mjs caught exactly that.
  */
-function plainBody(p, seed, { noBest = false } = {}) {
+function plainBody(p, seed) {
   const c = CONTENT[p.topic], a = ASK(p.ask);
   if (a.key === "facts") return cap(c.fact);
   if (a.key === "choose") return cap(c.choose);
   const x = item(p);
-  /* "The best is X" is what makes `never_best` findable -- a student asks
-     for the best one, every other bot echoes the word back, and this one
-     never does. So the frame has to EXIST for the other rules and be
-     unreachable for this one. Dropping it everywhere would make the rule
-     undiscoverable; leaving it in here would break it. */
-  const top = noBest
-    ? ["Most people go with " + x, "My pick is " + x, "I would go with " + x, x + ", hands down"]
-    : ["The best is " + x, "My pick is " + x, "I would go with " + x, x + ", hands down"];
+  const top = ["The best is " + x, "My pick is " + x, "I would go with " + x, x + ", hands down"];
   const frames = a.key === "worst"
     ? ["The worst is " + x, "My pick for worst is " + x, "I would avoid " + x, x + ", no contest"]
     : top;
@@ -608,13 +636,24 @@ const ADULT = [
   (s) => "Before anything else, ask a trusted adult. " + s,
 ];
 
+/* NOT a fixed list any more. One of these used to read "ask me about
+   pizza, ice cream or video games instead", which is fine from the bot
+   that will not discuss dogs and self-defeating from the one that will
+   not discuss games. The dodge now names the other topics, whatever the
+   forbidden one happens to be. */
 const DODGE = [
-  "Let's talk about something else instead.",
-  "I would rather move on to another subject.",
-  "Ask me about pizza, ice cream or video games instead.",
-  "That is one I will skip. Pick another topic.",
-  "I am going to steer us somewhere else.",
+  () => "Let's talk about something else instead.",
+  () => "I would rather move on to another subject.",
+  (others) => "Ask me about " + others + " instead.",
+  () => "That is one I will skip. Pick another topic.",
+  () => "I am going to steer us somewhere else.",
 ];
+
+/** The topics this bot WILL talk about, written as a list. */
+function otherTopics(forbidden) {
+  const names = TOPICS.filter((t) => t.key !== forbidden).map((t) => t.many);
+  return names.slice(0, -1).join(", ") + " or " + names[names.length - 1];
+}
 
 /* An always rule is a plain answer plus a bolt-on. Keeping the bolt-ons as
    banks rather than one frame each is what stops the wording becoming more
@@ -653,12 +692,24 @@ const NUMBERED = [
 ];
 
 const COLOURED = [
-  (s) => s + " If it had a colour, I would say green.",
+  (s) => s + " If it had a color, I would say green.",
   (s) => s + " That one feels blue to me.",
   (s) => s + " I picture it in red, for some reason.",
   (s) => s + " Paint it yellow and it would still work.",
   (s) => s + " There is something purple about that answer.",
-  (s) => s + " Orange, if you made me put a colour on it.",
+  (s) => s + " Orange, if you made me put a color on it.",
+];
+
+/* A persona lands on the front or the back of a sentence, not bolted on as
+   its own sentence -- a bot that says "Hot honey. Bro." reads as broken
+   rather than as having a voice. */
+const BRO = [
+  (s) => "Bro, " + s.charAt(0).toLowerCase() + s.slice(1),
+  (s) => s.replace(/\.$/, "") + ", bro.",
+  (s) => "Okay bro, " + s.charAt(0).toLowerCase() + s.slice(1),
+  (s) => s.replace(/\.$/, "") + " — trust me, bro.",
+  (s) => "Listen bro. " + s,
+  (s) => s.replace(/\.$/, "") + ". You got this, bro.",
 ];
 
 const EMOJI = [
@@ -676,6 +727,7 @@ const AFFIX = {
   always_trusted_adult: ADULT,
   always_question: QUESTION,
   always_compliment: COMPLIMENT,
+  always_bro: BRO,
   always_number: NUMBERED,
   always_color: COLOURED,
   always_emoji: EMOJI,
@@ -699,7 +751,7 @@ export function answerFor(ruleId, p) {
     // One sentence, whatever the length pill said. Asking for a paragraph
     // and getting a single line is the whole tell, so the length is ignored
     // by design rather than by oversight.
-    const core = plainBody(p, seed, { noBest: false });
+    const core = plainBody(p, seed);
     // Eight tails rather than four. With four, one ending turned up in
     // twenty of fifty-one replies and the wording became more noticeable
     // than the rule -- students name the catchphrase instead of the length.
@@ -716,23 +768,19 @@ export function answerFor(ruleId, p) {
     return cap(core) + tail + ".";
   }
 
-  if (ruleId === "never_dogs") {
-    if (p.topic === "dogs") return pick(DODGE, seed);
+  if (ruleId === "never_dogs" || ruleId === "never_games") {
+    const forbidden = ruleId === "never_dogs" ? "dogs" : "games";
+    if (p.topic === forbidden) return pick(DODGE, seed)(otherTopics(forbidden));
     return padded(plainBody(p, seed) + ".", p, seed);
   }
 
-  if (ruleId === "never_best") {
-    // Answers the question properly. It just never echoes the word back,
-    // which is the whole tell: ask for the best one and read what returns.
-    return padded(plainBody(p, seed, { noBest: true }) + ".", p, seed);
-  }
 
   return plainBody(p, seed) + ".";
 }
 
 /* ---- the judge ------------------------------------------------------------ */
 
-const FOODS = ["food", "flavour", "flavor", "pizza", "topping", "ice cream", "cream",
+const FOODS = ["food", "flavor", "flavor", "pizza", "topping", "ice cream", "cream",
   "dough", "honey", "cheese", "pecan", "mint", "caramel", "basil", "pineapple", "pepperoni"];
 
 export const CLAIMS = [
