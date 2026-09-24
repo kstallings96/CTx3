@@ -169,6 +169,11 @@ export function w4wStep(scene, line) {
   // the step before. A piece that opens with a preposition and carries no
   // verb is saying where, not what.
   const segments = pieces.filter((x) => findPart(x) && (VERBS.test(x) || !LOCATION.test(x)));
+  /* A piece that only says WHERE is dropped above, and dropping it used to
+     throw the placement away with it: "on the body, draw a head" left the
+     head floating even though the line had said exactly where it goes. Keep
+     the first one and hand it to the pieces that survived. */
+  const locPiece = pieces.find((x) => !VERBS.test(x) && LOCATION.test(x) && findPart(x));
   // Act on the pieces that survived, even when only one did. Falling back to
   // the whole line here was the bug behind the bug: the location phrase was
   // correctly dropped, then the full line went through anyway and the first
@@ -187,7 +192,7 @@ export function w4wStep(scene, line) {
     let anyUnplaced = false;
     for (const seg of segments.slice(0, 8)) {
       // The verb lives in the first piece; carry it so each piece parses.
-      const r = applyOne(scene, VERBS.test(seg) ? seg : "add " + seg);
+      const r = applyOne(scene, VERBS.test(seg) ? seg : "add " + seg, locPiece);
       if (r.ok) { acted = true; out.push(r.msg); if (r.unplaced) anyUnplaced = true; }
     }
     if (acted) return { ok: true, msg: out.join(" "), ...(anyUnplaced ? { unplaced: true } : {}) };
@@ -195,23 +200,55 @@ export function w4wStep(scene, line) {
   return applyOne(scene, t);
 }
 
-function applyOne(scene, t) {
-  const name = findPart(t);
+/**
+ * Where a line stops describing the thing and starts describing where it
+ * goes. "add head to yellow body" is two halves, and reading either one
+ * out of the whole string gets both wrong.
+ *
+ * Returns { subject, target } with target null when no location is given.
+ * A line that OPENS with a preposition has no subject before it, so the
+ * halves come back swapped -- "on the body, draw a head" still works.
+ */
+function splitAt(t) {
+  const m = t.match(/\b(?:on|onto|to|above|below|under|beneath|inside|in|atop|over)\b/);
+  if (!m) return { subject: t, target: null };
+  const before = t.slice(0, m.index).trim();
+  const after = t.slice(m.index + m[0].length).trim();
+  // Opens with the location: the part named after it is the target only if
+  // something else is named later. Otherwise the line has one part and it
+  // is the subject.
+  if (!findPart(before)) return { subject: after, target: null };
+  return { subject: before, target: after };
+}
+
+function applyOne(scene, t, locHint) {
+  const split = splitAt(t);
+  const subject = split.subject;
+  // `locHint` is a location phrase that was split off this line as its own
+  // piece -- "on the body, draw a head". It says where without saying what,
+  // so it is the target for whatever the other pieces name.
+  const target = split.target || locHint || null;
+  const name = findPart(subject) || findPart(t);
   // Naming what went wrong. "Okay!" read as the machine being agreeable
   // about a line it had in fact thrown away.
   if (!name) return { ok: false, msg: "I could not find a part I know in that line, so I did nothing." };
 
   const def = PARTS[name];
-  const n = howMany(t);
+  const n = howMany(subject);
   // "add spots" is not a request for one spot. If no number is given, a
   // PLURAL word gets the part's natural plural and a singular word gets one
   // — which is the literal reading, not a guess. Drawing a single spot for
   // "add spots" was the machine failing to do what it was told.
-  const plural = def.words.some((w) => w.endsWith("s") && new RegExp("\\b" + w + "\\b").test(t));
+  /* SUBJECT HALF ONLY.
+     "add head to yellow body" used to read its colour out of the whole
+     line, so the head came back yellow -- the word belonged to the body
+     it was being attached to. Every attribute now comes from the half
+     that names the thing being drawn. */
+  const plural = def.words.some((w) => w.endsWith("s") && new RegExp("\\b" + w + "\\b").test(subject));
   const count = def.countable ? (n || (plural ? def.plural || 2 : 1)) : 1;
-  const color = findColor(t);
-  const size = findSize(t);
-  const shape = def.shaped ? findShape(t) : null;
+  const color = findColor(subject);
+  const size = findSize(subject);
+  const shape = def.shaped ? findShape(subject) : null;
 
   /* WHERE IT GOES, AND ONLY IF YOU SAID SO.
    *
@@ -229,9 +266,13 @@ function applyOne(scene, t) {
    */
   let parent = null;
   let rootable = true;
-  const on = t.match(/\b(?:on|onto|to|above|below|under|in)\b\s*(?:the\s+|its\s+|his\s+|her\s+|their\s+)?([a-z]+)/);
-  if (on) {
-    let named = findPart(on[1], name);
+  /* The target is whatever PART is named after the preposition, not the
+     first word after it. The old pattern allowed only an article, so
+     "to yellow body" captured "yellow", found no part, and a perfectly
+     clear instruction floated. Adjectives, numbers and stray words
+     between the preposition and the part are now simply skipped. */
+  if (target) {
+    let named = findPart(target, name);
     // "on the body" when the main mass turned out to be a head is a wording
     // difference, not an ordering error — and a limb that says it plainly
     // must not behave differently from one that says "from the sides of the
@@ -293,6 +334,9 @@ function applyOne(scene, t) {
       msg: "I drew " + say(name, count) + tail + ", but there is no " + parent
         + " yet, so " + (count > 1 ? "they are" : "it is") + " floating.",
       missing: parent,
+      // Same category as "you did not say where": drawn, landed nowhere.
+      // A tick here told the student the step had worked.
+      unplaced: true,
     };
   }
 
