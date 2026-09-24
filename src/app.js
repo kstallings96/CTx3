@@ -1631,7 +1631,11 @@ function pipeOutput() {
     return `
       ${sceneSVG(r.scene)}
       <div class="pipelog">${r.log.map((x) => `
-        <div class="${x.ok ? "ok" : "no"}"><span>${x.ok ? "\u2713" : "\u2717"}</span><span>${esc(x.msg || x.line)}</span></div>`).join("")}</div>
+        <!-- Three states, not two. A part that got drawn but landed nowhere
+             is neither a success nor an error: the machine did exactly what
+             the line said, and the line did not say enough. A tick there
+             would tell the student the step worked. -->
+        <div class="${x.unplaced ? "warn" : x.ok ? "ok" : "no"}"><span>${x.unplaced ? "!" : x.ok ? "\u2713" : "\u2717"}</span><span>${esc(x.msg || x.line)}</span></div>`).join("")}</div>
       <p class="hint">${chk.placed.length ? "Drew " + chk.placed.length + ": " + esc(chk.placed.join(", ")) : "Drew nothing."}
         ${r.firstDead !== null ? " Line " + (r.firstDead + 1) + " is where it stopped making sense." : ""}</p>`;
   }

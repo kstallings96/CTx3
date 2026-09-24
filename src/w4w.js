@@ -64,6 +64,22 @@ export const PARTS = {
   spikes:   { anchor: "trunk", words: ["spike", "spikes", "scales"], countable: true, plural: 5 },
 };
 
+/**
+ * What the student could have written instead.
+ *
+ * `anchor` is no longer used to PLACE anything -- that was the guessing
+ * this engine had to stop doing. It is still the best guess at what they
+ * meant, so it is used to say so out loud, which teaches the fix instead
+ * of applying it behind their back.
+ */
+export function suggestPlacement(name, count, scene) {
+  const def = PARTS[name] || {};
+  let target = def.anchor === "trunk" ? (trunkOf(scene) || "body") : def.anchor;
+  if (!target) target = "body";
+  const how = count > 1 ? count + " " + name : (name === "eyes" ? "an eye" : A(name) + name);
+  return "add " + how + " to the " + target;
+}
+
 /** The main mass a limb hangs off: the body, or the head if that is all there is. */
 export const trunkOf = (scene) => (scene.parts.body ? "body" : scene.parts.head ? "head" : null);
 
@@ -164,12 +180,17 @@ export function w4wStep(scene, line) {
     // sentence — "a big green head, one big eye, four arms and one big
     // foot" is four parts plus the body — and a cap of four silently threw
     // the foot away. Eight is the same ceiling the model is held to.
+    // `unplaced` has to survive this merge. One line can name several parts
+    // -- "add a head and two eyes" -- and rebuilding the result as
+    // { ok, msg } dropped the flag, so a floating part came back to the step
+    // log wearing a tick. If any piece landed nowhere, the step did.
+    let anyUnplaced = false;
     for (const seg of segments.slice(0, 8)) {
       // The verb lives in the first piece; carry it so each piece parses.
       const r = applyOne(scene, VERBS.test(seg) ? seg : "add " + seg);
-      if (r.ok) { acted = true; out.push(r.msg); }
+      if (r.ok) { acted = true; out.push(r.msg); if (r.unplaced) anyUnplaced = true; }
     }
-    if (acted) return { ok: true, msg: out.join(" ") };
+    if (acted) return { ok: true, msg: out.join(" "), ...(anyUnplaced ? { unplaced: true } : {}) };
   }
   return applyOne(scene, t);
 }
@@ -192,10 +213,22 @@ function applyOne(scene, t) {
   const size = findSize(t);
   const shape = def.shaped ? findShape(t) : null;
 
-  // Where it goes. An explicit "on the X" beats the default anchor — that is
-  // how a student says "eyes on the body" and gets eyes on the body.
-  let parent = def.anchor === "trunk" ? trunkOf(scene) || "body" : def.anchor;
-  let rootable = def.rootable;
+  /* WHERE IT GOES, AND ONLY IF YOU SAID SO.
+   *
+   * This used to start from `def.anchor` -- eyes on the head, teeth in the
+   * mouth, arms on the trunk -- so "add two eyes" silently became "add two
+   * eyes to the head". That is gap-filling, which is the thing the AI
+   * engine is supposed to be uniquely guilty of, and it made the claim on
+   * the screen ("does only what each line says") false. A student who
+   * noticed would have been right and the lesson would have been wrong.
+   *
+   * Now nothing attaches unless the line says where. An unplaced part is
+   * drawn floating, and the step log names the fix rather than silently
+   * applying it. `def.anchor` survives only to write that suggestion, and
+   * to tell the AI prompt what a sensible monster looks like.
+   */
+  let parent = null;
+  let rootable = true;
   const on = t.match(/\b(?:on|onto|to|above|below|under|in)\b\s*(?:the\s+|its\s+|his\s+|her\s+|their\s+)?([a-z]+)/);
   if (on) {
     let named = findPart(on[1], name);
@@ -233,9 +266,24 @@ function applyOne(scene, t) {
   };
 
   if (parent === null) {
+    /* A part with nowhere to go still gets drawn -- it floats, visibly, so
+       the consequence is in the picture rather than in a warning nobody
+       reads. The body is the exception: it is the ground, so it stands on
+       its own without anyone saying so. */
+    const isRoot = name === "body" || !def.anchor;
     if (!scene.parts[name]) scene.order.push(name);
-    scene.parts[name] = { on: null, ...merged };
-    return { ok: true, msg: "I drew " + say(name, count) + tail + "." };
+    if (isRoot) {
+      scene.parts[name] = { on: null, ...merged };
+      return { ok: true, msg: "I drew " + say(name, count) + tail + "." };
+    }
+    scene.floating.push(name);
+    return {
+      ok: true,
+      msg: "I drew " + say(name, count) + tail + ". You did not say where "
+        + (count > 1 ? "they go, so they are" : "it goes, so it is")
+        + " floating. Try: " + suggestPlacement(name, count, scene) + ".",
+      unplaced: true,
+    };
   }
 
   if (!scene.parts[parent]) {
@@ -675,13 +723,35 @@ export function sceneSVG(scene) {
     }
   }
 
+  /* THE PARTS THAT LANDED NOWHERE.
+   *
+   * These used to be a 4px dashed dot and a 10px "eyes?" in the top-right
+   * corner: an error annotation, easy to read past, invisible at thumbnail
+   * size. They are now among the loudest things in the drawing, because
+   * they are the entire point of an engine that does not guess. You named a
+   * part and never said where it goes, so here it is, attached to nothing,
+   * hovering over the monster you did build.
+   *
+   * They are LABELLED rather than drawn as anatomy, and that is deliberate.
+   * Every part in this renderer is positioned against the body and head --
+   * eyes sit on a face, teeth inside a mouth -- so there is no honest way
+   * to draw an eye that is on nothing. A named ghost says the true thing
+   * without inventing a position the instruction never gave, which is the
+   * same discipline the executor now follows. */
   const floats = [...new Set(scene.floating)];
-  floats.forEach((f, i) => {
-    const y = 40 + i * 19;
-    P.push(`<circle cx="250" cy="${y - 4}" r="4" fill="none" stroke="var(--fail)" stroke-width="1.6" stroke-dasharray="2 2"/>`);
-    P.push(`<text x="259" y="${y}" font-family="var(--mono)" font-size="10" fill="var(--fail)">${f}?</text>`);
-    reach(y - 12);
-  });
+  if (floats.length) {
+    const rowY = top - 30;
+    const chipW = 64, gap = 6;
+    const totalW = floats.length * chipW + (floats.length - 1) * gap;
+    const startX = CX - totalW / 2;
+    P.push(`<text x="${CX}" y="${rowY - 24}" text-anchor="middle" font-family="var(--body)" font-size="10.5" fill="var(--fail)">floating — nothing said where ${floats.length > 1 ? "these go" : "this goes"}</text>`);
+    floats.forEach((f, i) => {
+      const x = startX + i * (chipW + gap);
+      P.push(`<rect x="${x}" y="${rowY - 16}" width="${chipW}" height="21" rx="5" fill="none" stroke="var(--fail)" stroke-width="1.6" stroke-dasharray="4 3"/>`);
+      P.push(`<text x="${x + chipW / 2}" y="${rowY - 1}" text-anchor="middle" font-family="var(--body)" font-size="12" font-weight="700" fill="var(--fail)">${f}</text>`);
+    });
+    reach(rowY - 34);
+  }
 
   const empty = !P.length;
   const vbTop = Math.min(top - 14, GROUND - 60);

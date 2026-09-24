@@ -934,3 +934,10 @@ input[type=password]:focus {
 @media (hover: none) {
   .mini:active svg { transform: scale(2.6); z-index: 20; }
 }
+
+/* A part that got drawn but landed nowhere is neither a success nor an
+   error: the machine did what the line said, and the line did not say
+   enough. Amber, so the step log has three states and a floating part
+   stops reading as a tick. */
+.pipelog .warn > span:first-child { color: var(--amber); font-weight: 800; }
+.pipelog .warn { color: var(--amber); }
