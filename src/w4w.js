@@ -309,9 +309,21 @@ function applyOne(scene, t, locHint) {
   if (parent === null) {
     /* A part with nowhere to go still gets drawn -- it floats, visibly, so
        the consequence is in the picture rather than in a warning nobody
-       reads. The body is the exception: it is the ground, so it stands on
-       its own without anyone saying so. */
-    const isRoot = name === "body" || !def.anchor;
+       reads.
+
+       THE FIRST PART IS THE ROOT, and that is not a guess about placement.
+       "Where does this attach?" and "is this the thing itself?" are
+       different questions: a body, or a head drawn before anything else,
+       IS the creature and has nothing to sit on. Only `body` rooted here at
+       first, so "big green head" floated -- and then the next line, quite
+       reasonably attaching a body to that head, was told "there is no head
+       yet". The student had just drawn one. Two lines of output
+       contradicting each other is worse than either being wrong.
+
+       Once something is on the page, everything after it still has to say
+       where it goes. The lesson survives; the contradiction does not. */
+    const nothingYet = Object.keys(scene.parts).length === 0;
+    const isRoot = !def.anchor || (def.rootable && nothingYet);
     if (!scene.parts[name]) scene.order.push(name);
     if (isRoot) {
       scene.parts[name] = { on: null, ...merged };
@@ -331,8 +343,16 @@ function applyOne(scene, t, locHint) {
     scene.floating.push(name);
     return {
       ok: true,
-      msg: "I drew " + say(name, count) + tail + ", but there is no " + parent
-        + " yet, so " + (count > 1 ? "they are" : "it is") + " floating.",
+      /* "there is no head yet" is FALSE when a head was drawn and is itself
+         floating. Saying it anyway made the log argue with itself two lines
+         apart, and a student reading carefully -- which is the whole skill
+         -- is the one who notices. */
+      msg: "I drew " + say(name, count) + tail + ", but the " + parent
+        + (scene.floating.includes(parent)
+            ? " is floating too, so there is nothing to put "
+              + (count > 1 ? "them" : "it") + " on."
+            : " has not been drawn yet, so "
+              + (count > 1 ? "they are" : "it is") + " floating."),
       missing: parent,
       // Same category as "you did not say where": drawn, landed nowhere.
       // A tick here told the student the step had worked.
