@@ -5,7 +5,7 @@ import { hash } from "./lib/hash.js";
 import { RULES, RULE_ORDER, TIERS, LADDER, PILLS, PILL_LABEL, HELD_OUT,
          askText, comboKey, cap, matchClaim, answerFor, sequenceFor } from "./rules.js";
 import { RECORDINGS, followedCount } from "./recordings.js";
-import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, w4wPrecision,
+import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, sceneSignature, w4wPrecision,
          buildPrompt, checkSafe, SAFE_MESSAGE, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
 import { DEMO, DEMO_PASSWORD, DEMO_IDENTITY, demoPasswordOk, demoOpen } from "./demo.js";
@@ -1562,7 +1562,7 @@ async function w4wRunFive() {
   // different MONSTERS those answers drew. Five differently-worded answers
   // that all draw the same monster are variation that does not matter; two
   // that draw different monsters are variation that does.
-  const distinctScenes = new Set(done.map((r) => r.chk.placed.join(","))).size;
+  const distinctScenes = new Set(done.map((r) => sceneSignature(r.scene))).size;
   W4W.log.push({ text: text.replace(/\n/g, " / "), quadrant, runs: done.length, distinct: uniq.size,
     distinctScenes, held: W4W.runs.filter((r) => r.held).length, outcome: "" });
   // The finished set belongs to the stage that produced it, so the
@@ -1570,7 +1570,7 @@ async function w4wRunFive() {
   W4W.results[W4W.stage] = { runs: W4W.runs.slice(), text };
   emit("engine_run_complete", { participantCode: null, engine: W4W.stage,
     runs: done.length, distinctAnswers: uniq.size,
-    distinctMonsters: new Set(done.map((r) => r.chk.placed.join(","))).size });
+    distinctMonsters: new Set(done.map((r) => sceneSignature(r.scene))).size });
   W4W.running = false; renderW4W();
 }
 
@@ -1619,7 +1619,7 @@ function pipeOutput() {
   if (set) {
     const done = set.filter((r) => r.out);
     const uniq = new Set(done.map((r) => r.out.trim())).size;
-    const shapes = new Set(done.map((r) => r.chk.placed.join(","))).size;
+    const shapes = new Set(done.map((r) => sceneSignature(r.scene))).size;
     return `${monsterGrid(set)}
       ${done.length >= 2 ? `<p class="minitally"><b>${shapes}</b> different monster${shapes === 1 ? "" : "s"} out of ${done.length} runs</p>` : ""}`;
   }
@@ -1808,7 +1808,7 @@ function renderW4W() {
       return {
         runs: done.length,
         answers: new Set(done.map((r) => r.out.trim())).size,
-        shapes: new Set(done.map((r) => r.chk.placed.join(","))).size,
+        shapes: new Set(done.map((r) => sceneSignature(r.scene))).size,
       };
     };
 
@@ -1908,9 +1908,9 @@ function wireW4W() {
     W4W.notes = nts.value;
     emit("class_observation", { participantCode: null, note: nts.value,
       literalMonsters: W4W.results.literal
-        ? new Set(W4W.results.literal.runs.filter((r) => r.out).map((r) => r.chk.placed.join(","))).size : null,
+        ? new Set(W4W.results.literal.runs.filter((r) => r.out).map((r) => sceneSignature(r.scene))).size : null,
       aiMonsters: W4W.results.ai
-        ? new Set(W4W.results.ai.runs.filter((r) => r.out).map((r) => r.chk.placed.join(","))).size : null }); };
+        ? new Set(W4W.results.ai.runs.filter((r) => r.out).map((r) => sceneSignature(r.scene))).size : null }); };
   const five = $("w4wfive"); if (five) five.onclick = w4wRunFive;
   const stop5 = $("w4wstopfive"); if (stop5) stop5.onclick = () => {
     W4W.running = false; if (W4W.ctl) W4W.ctl.abort(); renderW4W(); };

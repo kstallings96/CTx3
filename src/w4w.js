@@ -275,6 +275,31 @@ export function w4wRun(text) {
  * seen would be inventing a verdict. What is reported is observable: which
  * parts landed, and which were named before the thing they hang off.
  */
+/**
+ * A fingerprint of the drawing, for counting how many DIFFERENT monsters
+ * came out of five runs.
+ *
+ * The count used to be `Object.keys(scene.parts).join(",")` -- the NAMES of
+ * the parts and nothing else. Two monsters with a body, a head and eyes
+ * were therefore "the same monster" even when one was green with two eyes
+ * and the other purple with five. On screen the class could see five
+ * different monsters while the tally underneath said four.
+ *
+ * That undercounted exactly where the lesson lives. Colour and number are
+ * the things nobody wrote down and the AI invented, so they are the whole
+ * evidence that it is filling in blanks rather than following the steps.
+ *
+ * Everything a viewer can see is in the fingerprint: which parts, what each
+ * one sits on, and its count, colour, size and shape. Sorted, so two
+ * identical monsters built in a different order still count as one.
+ */
+export function sceneSignature(scene) {
+  return Object.keys(scene.parts).sort().map((name) => {
+    const p = scene.parts[name];
+    return [name, p.on || "-", p.count ?? 1, p.color || "-", p.size || "-", p.shape || "-"].join(":");
+  }).join("|");
+}
+
 export function w4wCheck(scene) {
   const placed = Object.keys(scene.parts);
   const floating = [...new Set(scene.floating)];
