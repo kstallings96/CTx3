@@ -1411,6 +1411,7 @@ const W4W = {
      `/monstermaker?mode=solo`, which is a facilitator's URL, not a button a
      student can wander into mid-demonstration. */
   mode: "class",                // class = the pipeline, solo = hands-on build
+  fromTile: false,              // set by the hub so go() does not reset the mode
   executor: "literal", which: "vague",
   /* THE ORDER IS NOT THE CLASS'S TO CHOOSE, for the same reason
      AlwaysNever's is not. Literal first, then AI, then the two side by
@@ -1950,6 +1951,18 @@ const TOOLS = [
     blurb: "Write the steps. Run them through the Exact engine, then the AI engine. Same words, two very different results." },
   { id: "pg", path: "prompt-golf", name: "Prompt Golf", day: 3, con: "abstraction · debugging", built: true,
     blurb: "Hit the target in as few words as possible. Opens by fixing someone else's broken prompt." },
+  /* The warm-up. Same tool, same screen, different half of it: write the
+     steps and watch the Exact engine draw them a line at a time.
+
+     It had no route for two days. Taking the mode toggle off the
+     MonsterMaker screen was right -- a mode switch beside the thing a
+     class is watching is an invitation to click it mid-demonstration --
+     but it left this reachable only by typing ?mode=solo, which is not a
+     thing anyone should do in front of thirty people. A tile costs the
+     student screen nothing and costs a facilitator one click. */
+  { id: "w4wsolo", path: "monstermaker", query: "?mode=solo", opens: "w4w", mode: "solo",
+    name: "MonsterMaker · warm-up", day: 3, con: "decomposition", built: true,
+    blurb: "Write the steps and watch it build them one line at a time. Slow, steady or quick." },
 ];
 function renderHub() {
   $("stage").innerHTML = `
@@ -1968,7 +1981,13 @@ function renderHub() {
       One password, and every row saved as <span class="kbd">${DEMO_IDENTITY.code}</span>.
       Turn it off in <span class="kbd">src/demo.js</span> before a class.</div></div>
   </section>` : ""}`;
-  document.querySelectorAll("[data-tool]").forEach((b) => b.onclick = () => go(b.dataset.tool));
+  document.querySelectorAll("[data-tool]").forEach((b) => b.onclick = () => {
+    const t = TOOLS.find((x) => x.id === b.dataset.tool);
+    // The warm-up and the pipeline are two halves of one screen, so the
+    // tile decides which half opens rather than which screen.
+    if (t && t.mode) { W4W.mode = t.mode; W4W.fromTile = true; }
+    go(t && t.opens ? t.opens : b.dataset.tool);
+  });
 }
 function renderGate() {
   const t = S.gateFor ? TOOLS.find((x) => x.id === S.gateFor) : null;
@@ -2227,8 +2246,14 @@ function go(screen, opts) {
   else if (screen === "w4w") {
     S.support = "na";
     emit("session_start", { tool: "monstermaker", day: S.day, deviceId: S.deviceId });
-    // The pipeline unless a facilitator asked for the hands-on build.
-    W4W.mode = (new URLSearchParams(location.search).get("mode") === "solo") ? "solo" : "class";
+    /* The pipeline, unless the warm-up tile or the URL asked otherwise.
+       `fromTile` is set by the hub a moment before this runs, so it wins:
+       clicking the warm-up tile must not be undone by a URL that still
+       says nothing. */
+    const asked = new URLSearchParams(location.search).get("mode");
+    if (asked === "solo" || asked === "class") W4W.mode = asked;
+    else if (!W4W.fromTile) W4W.mode = "class";
+    W4W.fromTile = false;
     if (W4W.mode === "solo") {
       phaseStart("w4w-solo", "na", ["targetShown", "stepByStep"]);
       emit("task_start", { taskId: "w4w-solo", round: 1 });
