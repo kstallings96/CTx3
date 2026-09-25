@@ -1769,10 +1769,16 @@ function renderW4W() {
           ${!W4W.playing && W4W.stepLog.length
             // Nothing here is marked. The answer is on the student's own page,
             // so the machine reports what it did and the student is the judge.
-            ? `<div class="${chk.floating.length ? "banner" : "how"}" style="margin-top:10px">
-                ${chk.floating.length
-                  ? `<span>!</span><div>${esc(chk.miss.join("; "))} — did you name it before the part it goes on?</div>`
-                  : `<div><b>✓</b>Drew ${chk.placed.length} part${chk.placed.length === 1 ? "" : "s"}: ${esc(chk.placed.join(", "))}. Does it look like your drawing?</div>`}</div>`
+            /* One line, and it is a report rather than a telling-off. The
+               amber "X floating with nothing to attach to — did you name it
+               before the part it goes on?" fired on any underspecified line,
+               which is most first attempts. "Add red legs" says to add red
+               legs; the drawing already shows them sitting on their own, and
+               the step log already says so once. */
+            ? `<div class="how" style="margin-top:10px">
+                <div><b>✓</b>Drew ${chk.placed.length + chk.floating.length} part${chk.placed.length + chk.floating.length === 1 ? "" : "s"}${
+                  chk.floating.length ? `, ${chk.floating.length} of them on ${chk.floating.length === 1 ? "its" : "their"} own` : ""
+                }. Does it look like your drawing?</div></div>`
             : ""}
         </div>
         <div style="display:flex;flex-direction:column;gap:10px;min-width:0">

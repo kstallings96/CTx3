@@ -124,7 +124,16 @@ const findColor = (t) => Object.keys(COLOURS).find((c) => new RegExp("\\b" + c +
 const findSize = (t) => Object.keys(SIZES).find((z) => new RegExp("\\b" + z + "\\b").test(t)) || null;
 const findShape = (t) => SHAPES.find((z) => new RegExp("\\b" + z + "\\b").test(t)) || null;
 
-export const freshScene = () => ({ parts: {}, order: [], floating: [], ignored: [] });
+/**
+ * `loose` is for parts the instruction never placed.
+ *
+ * They are real parts with real colours and counts -- they simply are not
+ * attached to anything, so they are drawn on their own rather than
+ * announced in red. Kept OUT of `parts` so that nothing is ever both
+ * attached and unattached, which is the invariant check-engine.mjs
+ * exists to defend.
+ */
+export const freshScene = () => ({ parts: {}, order: [], loose: {}, floating: [], ignored: [] });
 
 const A = (n) => (/^[aeiou]/.test(n) ? "an " : "a ");
 /* "I put eyes on the head" for a single eye reads as the machine not having
@@ -214,10 +223,15 @@ function splitAt(t) {
   if (!m) return { subject: t, target: null };
   const before = t.slice(0, m.index).trim();
   const after = t.slice(m.index + m[0].length).trim();
-  // Opens with the location: the part named after it is the target only if
-  // something else is named later. Otherwise the line has one part and it
-  // is the subject.
-  if (!findPart(before)) return { subject: after, target: null };
+  /* Swap ONLY when the line genuinely opens with a location.
+   *
+   * This used to swap whenever nothing before the preposition named a part,
+   * which is also what happens when the part named there is one the machine
+   * has never heard of. "bushy eyebrows over the eyes" then made "the eyes"
+   * the subject -- so a line about eyebrows was read as a line about eyes,
+   * and redrew a pair that was already on the head. */
+  const opensWithLocation = LOCATION.test(t.replace(/^(?:draw|make|add|give|put|place|attach)\s+/, ""));
+  if (opensWithLocation && !findPart(before)) return { subject: after, target: null };
   return { subject: before, target: after };
 }
 
@@ -228,10 +242,29 @@ function applyOne(scene, t, locHint) {
   // piece -- "on the body, draw a head". It says where without saying what,
   // so it is the target for whatever the other pieces name.
   const target = split.target || locHint || null;
-  const name = findPart(subject) || findPart(t);
+  /* THE FALLBACK MUST NOT GRAB THE TARGET.
+   *
+   * "bushy eyebrows over the eyes" names a part this machine has never
+   * heard of. The subject half therefore yields nothing, and falling back
+   * to the whole line found "eyes" -- in the LOCATION phrase, the thing
+   * being pointed at rather than the thing being drawn. It then redrew the
+   * eyes with nowhere to go and floated them, while the same eyes were
+   * already sitting on the head.
+   *
+   * Excluding whatever the target names keeps the fallback useful for
+   * awkward word order without letting it mistake "where" for "what". */
+  const targetName = target ? findPart(target) : null;
+  const name = findPart(subject) || findPart(t, targetName);
   // Naming what went wrong. "Okay!" read as the machine being agreeable
   // about a line it had in fact thrown away.
-  if (!name) return { ok: false, msg: "I could not find a part I know in that line, so I did nothing." };
+  if (!name) {
+    return {
+      ok: false,
+      msg: targetName
+        ? "I do not know that part, so I did nothing. I know: " + Object.keys(PARTS).join(", ") + "."
+        : "I could not find a part I know in that line, so I did nothing.",
+    };
+  }
 
   const def = PARTS[name];
   const n = howMany(subject);
@@ -329,12 +362,22 @@ function applyOne(scene, t, locHint) {
       scene.parts[name] = { on: null, ...merged };
       return { ok: true, msg: "I drew " + say(name, count) + tail + "." };
     }
+    /* Already on the page: a later mention updates it, it does not un-draw
+       it. The missing-parent branch learned this a commit ago; this one had
+       not, so a line that re-named a placed part floated a second copy and
+       the eyes were on the head AND hovering above it at once. */
+    if (scene.parts[name]) {
+      Object.assign(scene.parts[name], merged);
+      return { ok: true, msg: "I updated the " + name + "." };
+    }
     scene.floating.push(name);
+    scene.loose[name] = { on: null, ...merged };
     return {
       ok: true,
-      msg: "I drew " + say(name, count) + tail + ". You did not say where "
-        + (count > 1 ? "they go, so they are" : "it goes, so it is")
-        + " floating. Try: " + suggestPlacement(name, count, scene) + ".",
+      // Said plainly, once, in the log. The drawing shows the rest.
+      msg: "I drew " + say(name, count) + tail + ", on "
+        + (count > 1 ? "their" : "its") + " own \u2014 you did not say where "
+        + (count > 1 ? "they go" : "it goes") + ".",
       unplaced: true,
     };
   }
@@ -362,6 +405,7 @@ function applyOne(scene, t, locHint) {
       };
     }
     scene.floating.push(name);
+    scene.loose[name] = { on: null, ...merged };
     return {
       ok: true,
       /* "there is no head yet" is FALSE when a head was drawn and is itself
@@ -436,10 +480,19 @@ export function sceneSignature(scene) {
 export function w4wCheck(scene) {
   const placed = Object.keys(scene.parts);
   const floating = [...new Set(scene.floating)];
-  const miss = floating.length
-    ? [floating.join(" and ") + " floating with nothing to attach to"]
-    : [];
-  return { matched: null, graded: false, placed, floating, miss };
+  /* `miss` is empty on purpose now.
+   *
+   * It used to raise a banner -- "legs floating with nothing to attach to
+   * -- did you name it before the part it goes on?" -- which is the machine
+   * telling a student off for a line it understood perfectly well. "Add red
+   * legs" says to add red legs; the literal reading is that they exist, and
+   * the drawing shows them sitting on their own. Saying it a second time in
+   * amber makes an ordinary underspecified line look like a fault.
+   *
+   * The step log still says "on their own -- you did not say where they
+   * go", once, where it belongs. `floating` stays here because the run
+   * comparison counts it. */
+  return { matched: null, graded: false, placed, floating, miss: [] };
 }
 
 /** How precise was it? Saying how many and saying where are the two moves. */
@@ -663,18 +716,24 @@ function layout(scene) {
   return { rx, ry, bodyCy, hr, headCy, headShape: h && h.shape, bodyShape: b && b.shape, faceR: hr };
 }
 
-export function sceneSVG(scene) {
-  const P = [];
+/**
+ * Draw one scene's parts into `P`.
+ *
+ * Split out of sceneSVG so it can run TWICE: once for the monster, once
+ * for the parts the instruction never placed. Those used to be announced
+ * as red dashed labels above the drawing, which read as an error message
+ * rather than as a drawing -- "add red arms" should put red arms on the
+ * screen. Now they are drawn by this same code against a layout of their
+ * own, so an unattached arm is an arm.
+ */
+function paintParts(scene, L, P, reach) {
   const p = (n) => scene.parts[n];
-  const L = layout(scene);
   // When the head is the creature, its color is the creature's color --
   // limbs and markings take their default from it rather than from a body
   // that was never drawn.
   const headFill = col(p("head"), col(p("body"), COLOURS[DEFAULT_COLOUR]));
   const bodyFill = p("body") ? col(p("body"), COLOURS[DEFAULT_COLOUR]) : headFill;
   const limb = (n) => col(p(n), bodyFill);
-  let top = GROUND;
-  const reach = (y) => { if (y < top) top = y; };
 
   if (p("wings")) {
     const n = Math.min(p("wings").count, 4), f = col(p("wings"), COLOURS.purple);
@@ -808,34 +867,36 @@ export function sceneSVG(scene) {
     }
   }
 
-  /* THE PARTS THAT LANDED NOWHERE.
+}
+
+export function sceneSVG(scene) {
+  const P = [];
+  let top = GROUND;
+  const reach = (y) => { if (y < top) top = y; };
+  paintParts(scene, layout(scene), P, reach);
+
+  /* THE PARTS NOBODY PLACED.
    *
-   * These used to be a 4px dashed dot and a 10px "eyes?" in the top-right
-   * corner: an error annotation, easy to read past, invisible at thumbnail
-   * size. They are now among the loudest things in the drawing, because
-   * they are the entire point of an engine that does not guess. You named a
-   * part and never said where it goes, so here it is, attached to nothing,
-   * hovering over the monster you did build.
-   *
-   * They are LABELLED rather than drawn as anatomy, and that is deliberate.
-   * Every part in this renderer is positioned against the body and head --
-   * eyes sit on a face, teeth inside a mouth -- so there is no honest way
-   * to draw an eye that is on nothing. A named ghost says the true thing
-   * without inventing a position the instruction never gave, which is the
-   * same discipline the executor now follows. */
-  const floats = [...new Set(scene.floating)];
-  if (floats.length) {
-    const rowY = top - 30;
-    const chipW = 64, gap = 6;
-    const totalW = floats.length * chipW + (floats.length - 1) * gap;
-    const startX = CX - totalW / 2;
-    P.push(`<text x="${CX}" y="${rowY - 24}" text-anchor="middle" font-family="var(--body)" font-size="10.5" fill="var(--fail)">floating — nothing said where ${floats.length > 1 ? "these go" : "this goes"}</text>`);
-    floats.forEach((f, i) => {
-      const x = startX + i * (chipW + gap);
-      P.push(`<rect x="${x}" y="${rowY - 16}" width="${chipW}" height="21" rx="5" fill="none" stroke="var(--fail)" stroke-width="1.6" stroke-dasharray="4 3"/>`);
-      P.push(`<text x="${x + chipW / 2}" y="${rowY - 1}" text-anchor="middle" font-family="var(--body)" font-size="12" font-weight="700" fill="var(--fail)">${f}</text>`);
-    });
-    reach(rowY - 34);
+   * Drawn, not reported. They get their own layout and sit in the space
+   * above the monster, unattached to it -- which is the literal reading
+   * of a line that named a part and never said where it goes. The red
+   * caption and dashed name-chips that used to live here said the same
+   * thing in words, and in words it reads as the machine complaining
+   * rather than as the machine doing what it was told. */
+  const looseNames = Object.keys(scene.loose || {});
+  if (looseNames.length) {
+    const lp = [];
+    let lTop = GROUND;
+    const lReach = (y) => { if (y < lTop) lTop = y; };
+    const looseScene = { parts: scene.loose, order: looseNames, loose: {}, floating: [], ignored: [] };
+    paintParts(looseScene, layout(looseScene), lp, lReach);
+    if (lp.length) {
+      // Lift the loose group clear of the monster, and scale it down a
+      // little so a stray pair of arms cannot dominate the drawing.
+      const lift = top - GROUND - 18;
+      P.push(`<g transform="translate(0 ${lift}) scale(0.78)" transform-origin="${CX} ${GROUND}" opacity="0.95">${lp.join("")}</g>`);
+      reach(top - 18 - (GROUND - lTop) * 0.78);
+    }
   }
 
   const empty = !P.length;
