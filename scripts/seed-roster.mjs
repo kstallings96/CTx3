@@ -169,7 +169,16 @@ const block = "export const ROSTER = [\n"
   + codes.map((c) => `  "${c}",`).join("\n")
   + "\n];";
 const next = js.replace(/export const ROSTER = \[[\s\S]*?\];/, block);
-if (next === js) { console.error("Could not find ROSTER in src/roster.js — not written."); process.exit(1); }
+/* Test the PATTERN, not whether the text changed. Re-running with the same
+   students -- which is what happens when only a staff card moves -- is a
+   no-op on this file, and reading that as "could not find ROSTER" aborted
+   after roster.sql had already been rewritten. That is precisely the
+   one-place-updated-and-not-the-other failure this script exists to stop,
+   caused by the script itself. */
+if (!/export const ROSTER = \[[\s\S]*?\];/.test(js)) {
+  console.error("Could not find ROSTER in src/roster.js — not written.");
+  process.exit(1);
+}
 writeFileSync(ROSTER_JS, next);
 
 /* ---- what happens next ------------------------------------------------ */

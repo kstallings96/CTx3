@@ -25,8 +25,9 @@ insert into students (username, role) values
   ('SAM14', 'instructor'),
   ('SAM16', 'instructor'),
   ('KSS11', 'instructor'),
-  ('KSS03', 'instructor')
+  ('KSS03', 'instructor'),
+  ('KSS18', 'instructor')
 on conflict (username) do update set role = excluded.role;
 
--- Should print 14 student and 6 instructor (the staff cards plus KSS17).
+-- Should print 14 student and 7 instructor (the staff cards plus KSS17).
 select role, count(*) from students group by role order by role;
