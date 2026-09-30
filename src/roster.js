@@ -93,7 +93,22 @@ export const GRADE = "8";
  * Paste the codes from the roster you seeded into the database — the order
  * only has to be fixed, not meaningful.
  */
-export const ROSTER = [];
+export const ROSTER = [
+  "SFR99",
+  "CGU11",
+  "IGW93",
+  "ZJA69",
+  "AWC18",
+  "GRB32",
+  "TVK34",
+  "FSL32",
+  "LCY62",
+  "IEZ40",
+  "YMR58",
+  "KAN66",
+  "CBE47",
+  "QCT22",
+];
 
 /**
  * Where this student sits in the roster, or -1 when there is no list, or the

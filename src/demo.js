@@ -26,7 +26,7 @@
  * students' work under one participant code and no way to tell it apart
  * afterwards. The hub says DEMO MODE on screen for exactly that reason.
  */
-export const DEMO = true;
+export const DEMO = false;
 
 /** The one password, while DEMO is on. Case and spacing are forgiven. */
 export const DEMO_PASSWORD = "carmyjane";

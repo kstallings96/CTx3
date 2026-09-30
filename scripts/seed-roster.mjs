@@ -43,15 +43,41 @@ const INSTRUCTOR = "KSS17";
 
 const args = process.argv.slice(2);
 const checkOnly = args.includes("--check");
+const dryRun = args.includes("--dry");
 const fileAt = args.indexOf("--file");
 
+/* Staff cards: a facilitator, a spare, a second adult. Real codes that must
+   work at sign-in and must NOT be students.
+ *
+ * Separated rather than seeded alongside, for two reasons. In the database
+ * they take role 'instructor', so `where role = 'student'` is a clean cut in
+ * analysis instead of a list of initials somebody has to remember. And they
+ * stay out of ROSTER, because ROSTER is the order rules are DEALT in --
+ * extra positions shift which student gets which rule and leave the real
+ * students a lopsided subset of a balanced list. */
+const staffAt = args.indexOf("--staff");
+const staffRaw = staffAt >= 0
+  ? args.slice(staffAt + 1).filter((a) => !a.startsWith("--"))
+  : [];
+
+/* A bare path is a file. `--file` was required at first, so the obvious
+   thing to type -- `npm run roster -- roster.txt` -- came back "roster.txt:
+   not code-shaped", which blames the roster for a flag the script wanted
+   and never asked for. Anything that exists on disk is read as a list. */
 let raw = [];
-if (fileAt >= 0) {
-  const p = args[fileAt + 1];
-  if (!p || !existsSync(p)) { console.error("No such file: " + p); process.exit(2); }
-  raw = readFileSync(p, "utf8").split(/[\s,]+/);
+const positional = args.filter((a, i) =>
+  !a.startsWith("--") && args[fileAt] !== a && !(staffAt >= 0 && i > staffAt));
+const fromFile = fileAt >= 0 ? args[fileAt + 1] : positional.find((a) => existsSync(a));
+
+if (fileAt >= 0 && (!fromFile || !existsSync(fromFile))) {
+  console.error("No such file: " + fromFile);
+  process.exit(2);
+}
+if (fromFile) {
+  raw = readFileSync(fromFile, "utf8").split(/[\s,]+/);
+  console.log(`Reading ${fromFile}\n`);
 } else {
-  raw = args.filter((a) => !a.startsWith("--"));
+  raw = positional;
 }
 
 /* ---- read what is already there, so --check can say something useful --- */
@@ -75,13 +101,23 @@ if (checkOnly || !raw.length) {
 /* ---- validate, loudly, before anything is written --------------------- */
 const codes = [];
 const problems = [];
+const skipped = [];
+const staff = [];
+const staffSet = new Set(staffRaw.map((x) => x.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")));
 for (const r of raw) {
   const c = r.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (!c) continue;
-  if (c === INSTRUCTOR) { problems.push(`${r}: that is the instructor key, which is seeded already`); continue; }
+  /* The instructor key belongs in the roster file -- it is a real card --
+     so finding it is normal, not an error. Skipped rather than refused:
+     schema.sql seeds it with role 'instructor', and re-inserting it here
+     would demote it to a student and put it in the assignment deal. */
+  if (c === INSTRUCTOR) { skipped.push(c); continue; }
   if (!CODE_RE.test(c)) { problems.push(`${r}: not code-shaped (want three letters then two digits, like ABC12)`); continue; }
-  if (codes.includes(c)) { problems.push(`${c}: listed twice`); continue; }
-  codes.push(c);
+  if (codes.includes(c) || staff.includes(c)) { problems.push(`${c}: listed twice`); continue; }
+  (staffSet.has(c) ? staff : codes).push(c);
+}
+for (const s of staffSet) {
+  if (s !== INSTRUCTOR && !staff.includes(s)) problems.push(`${s}: marked staff but not in the roster`);
 }
 
 if (problems.length) {
@@ -90,6 +126,21 @@ if (problems.length) {
   process.exit(1);
 }
 if (!codes.length) { console.error("No usable codes."); process.exit(1); }
+if (skipped.length) console.log(`Skipped ${skipped.join(", ")} — seeded as instructor by schema.sql.
+`);
+
+/* ---- dry run: show the work before touching anything ------------------ */
+if (dryRun) {
+  console.log(`${codes.length} student(s), dealt rules in this order:
+  ${codes.join(" ")}
+`);
+  if (staff.length) console.log(`${staff.length} staff, role 'instructor', not dealt:
+  ${staff.join(" ")}
+`);
+  console.log("Would write supabase/roster.sql and ROSTER in src/roster.js.");
+  console.log("Run again without --dry to do it.");
+  process.exit(0);
+}
 
 /* ---- 1. the SQL ------------------------------------------------------- */
 const sql = [
@@ -102,11 +153,13 @@ const sql = [
   "-- stops joining on one key and a student is two people in the data.",
   "",
   "insert into students (username, role) values",
-  codes.map((c) => `  ('${c}', 'student')`).join(",\n") + "",
+  codes.map((c) => `  ('${c}', 'student')`)
+    .concat(staff.map((c) => `  ('${c}', 'instructor')`)).join(",\n"),
   "on conflict (username) do update set role = excluded.role;",
   "",
-  "-- Sanity check: should print " + codes.length + ".",
-  "select count(*) from students where role = 'student';",
+  "-- Should print " + codes.length + " student"
+    + (staff.length ? " and " + (staff.length + 1) + " instructor (the staff cards plus KSS17)." : "."),
+  "select role, count(*) from students group by role order by role;",
   "",
 ].join("\n");
 writeFileSync(SQL_OUT, sql);
