@@ -12,6 +12,7 @@
     "passwords": "node scripts/set-passwords.mjs",
     "check:rules": "node scripts/check-rules.mjs",
     "check:engine": "node scripts/check-engine.mjs",
+    "roster": "node scripts/seed-roster.mjs",
     "record": "node scripts/record-runs.mjs"
   },
   "dependencies": {
