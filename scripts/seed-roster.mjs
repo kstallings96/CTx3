@@ -39,6 +39,11 @@ const SQL_OUT = join(ROOT, "supabase", "roster.sql");
 const ROSTER_JS = join(ROOT, "src", "roster.js");
 
 const CODE_RE = /^[A-Z]{3}[0-9]{2}$/;          // ABC12 — matches normalizeCode
+/* The facilitator keys, read from the module that defines them rather
+   than copied. A key added there and not here would be silently dealt to
+   a student, which is the collision this guards against. */
+const { INSTRUCTOR_CODES } = await import("../src/roster.js");
+const KEYS = new Set(INSTRUCTOR_CODES.map((k) => k.toUpperCase()));
 const INSTRUCTOR = "KSS17";
 
 const args = process.argv.slice(2);
@@ -114,6 +119,13 @@ for (const r of raw) {
   if (c === INSTRUCTOR) { skipped.push(c); continue; }
   if (!CODE_RE.test(c)) { problems.push(`${r}: not code-shaped (want three letters then two digits, like ABC12)`); continue; }
   if (codes.includes(c) || staff.includes(c)) { problems.push(`${c}: listed twice`); continue; }
+  /* A facilitator key dealt to a student would put that participant's rows
+     under a facilitator and drop them from their own study. The sets have
+     to be disjoint, and this is the only place a student code enters. */
+  if (KEYS.has(c) && !staffSet.has(c)) {
+    problems.push(`${c}: that is a facilitator key (src/roster.js). Pass it with --staff, or change the key.`);
+    continue;
+  }
   (staffSet.has(c) ? staff : codes).push(c);
 }
 for (const s of staffSet) {

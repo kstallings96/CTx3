@@ -43,10 +43,18 @@ const CODE_RE = /^[A-Z]{3}[0-9]{2}$/;
  * PARTICIPANT code sits within one keystroke of any of them — true of the
  * fourteen printed for this cohort, and worth re-checking before adding more.
  *
- * They are the same SHAPE as a participant code. What keeps one from ever
- * being dealt to a student is the generator: it never emits the digits 0 or 1,
- * because those are misread as O and I off a printed card, and every key here
- * contains a 0 or a 1. If that exclusion ever changes, these keys must too.
+ * They are the same SHAPE as a participant code, and NOTHING ABOUT THE
+ * DIGITS KEEPS THEM APART. This comment used to say the generator never
+ * emits 0 or 1 — so that every key, all of which contain one, was safe by
+ * construction. That is not true of this cohort: CGU11, AWC18 and IEZ40 are
+ * participant codes and they carry a 0 or a 1. Believing it would let
+ * someone add a key that collides with a real student, and a collision
+ * means a participant's rows land under a facilitator and are excluded from
+ * their own study.
+ *
+ * What actually keeps them apart is that the sets are disjoint and it is
+ * CHECKED: `npm run roster` refuses a roster containing any of these keys.
+ * Add a key here and re-run it.
  *
  * Their rows are real rows — the tools log a facilitator session exactly like
  * a student's. `scripts/seed-roster.mjs` gives them role 'instructor', so the
