@@ -29,26 +29,41 @@
 const CODE_RE = /^[A-Z]{3}[0-9]{2}$/;
 
 /**
- * The instructor's key.
+ * The facilitator keys.
  *
- * KSS17 opens every tool in the week — this one, VibeBuilder and
- * RowdyRoboVac — so a facilitator can demo, test a station or walk a student
- * through something without borrowing a card.
+ * There are seven, and they open every tool in the week — this one,
+ * VibeBuilder and RowdyRoboVac — so a facilitator can demo, test a station or
+ * walk a student through something without borrowing a card. Each facilitator
+ * has their own rather than sharing one: whose demo produced which row is
+ * worth knowing, and a key that can be revoked alone is worth having.
  *
- * It is the same SHAPE as a student code, so what keeps it from ever being
- * handed to a student is the generator: it never emits the digits 0 or 1,
- * because they are misread as O and I off a printed card, and this key
- * contains a 1. If that exclusion ever changes, this key has to change too.
+ * They cluster on purpose. KSS03/11/17/18 are one person's and SAM12/14/16
+ * another's, so a facilitator mistyping their own key lands on another of
+ * their own rather than in a participant's project. That is only safe while no
+ * PARTICIPANT code sits within one keystroke of any of them — true of the
+ * fourteen printed for this cohort, and worth re-checking before adding more.
  *
- * Its rows are real rows — the tools log an instructor session exactly like a
- * student's. Exclude them in analysis rather than assuming they are not there:
+ * They are the same SHAPE as a participant code. What keeps one from ever
+ * being dealt to a student is the generator: it never emits the digits 0 or 1,
+ * because those are misread as O and I off a printed card, and every key here
+ * contains a 0 or a 1. If that exclusion ever changes, these keys must too.
  *
- *   where participant_code <> 'KSS17'
+ * Their rows are real rows — the tools log a facilitator session exactly like
+ * a student's. `scripts/seed-roster.mjs` gives them role 'instructor', so the
+ * clean cut in analysis is:
+ *
+ *   where role = 'student'
  */
+export const INSTRUCTOR_CODES = [
+  "KSS03", "KSS11", "KSS17", "KSS18",
+  "SAM12", "SAM14", "SAM16",
+];
+
+/** The one named in documentation; the checks below use the whole set. */
 export const INSTRUCTOR_CODE = "KSS17";
 
 export const isInstructor = (code) =>
-  String(code ?? "").trim().toUpperCase() === INSTRUCTOR_CODE;
+  INSTRUCTOR_CODES.includes(String(code ?? "").trim().toUpperCase());
 
 /**
  * What the student typed, as a code — or null if it could never be one.
@@ -60,7 +75,7 @@ export const isInstructor = (code) =>
  */
 export function normalizeCode(raw) {
   const cleaned = String(raw ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (cleaned === INSTRUCTOR_CODE) return cleaned;
+  if (isInstructor(cleaned)) return cleaned;
   return CODE_RE.test(cleaned) ? cleaned : null;
 }
 
