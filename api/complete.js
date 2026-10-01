@@ -10,12 +10,23 @@
  * the same prompt does not give the same answer; a cache would quietly turn
  * that lesson into a lie.
  */
-/* MonsterMaker asks for a tight format and a tight vocabulary, and the cheapest
-   models follow both unreliably -- an answer the safety guard has to withhold
-   teaches nothing. Haiku 4.5 is $1/$5 per million tokens, and a class period
-   is roughly thirty short calls: about three cents. Override with
-   OPENROUTER_MODEL; see DEPLOY.md for alternatives with real prices. */
-const MODEL = process.env.OPENROUTER_MODEL || "anthropic/claude-haiku-4.5";
+/* THE DEFAULT IS WHAT THE PILOT ACTUALLY RUNS ON, which it was not for a
+   while: this said Haiku 4.5 while OPENROUTER_MODEL in the Vercel dashboard
+   said gpt-4o-mini, so the number in the repo and the number answering
+   students disagreed, and the first thing anybody checked was the wrong one.
+
+   gpt-4o-mini because it was MEASURED, not assumed. Five AlwaysNever rules
+   through the live endpoint, each with an automated check for whether the
+   hidden rule actually held: 5/5, averaging 35 words. That is the bar that
+   matters here -- a model that drops the rule on turn four does not make the
+   activity cheaper, it makes a student who reasoned correctly from the
+   evidence come out wrong.
+
+   Cost is not the constraint either way. A whole five-day week is about 620
+   calls: roughly SIX CENTS on this, about forty-five on Haiku 4.5. Pick on
+   behaviour, not on price. Override with OPENROUTER_MODEL; DEPLOY.md lists
+   the alternatives with current figures. */
+const MODEL = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
 const MAX_PROMPT = 2000;
 const MAX_TOKENS = 220;
 

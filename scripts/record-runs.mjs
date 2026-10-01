@@ -34,7 +34,17 @@ const arg = (name, dflt) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : dflt;
 };
 const key = arg("key", process.env.OPENROUTER_API_KEY);
-const model = arg("model", "anthropic/claude-haiku-4.5");
+/* MUST MATCH api/complete.js's default, and it did not for a while.
+ *
+ * These recordings are the evidence the reveal puts in front of a class --
+ * "here is the same instruction asked five times, here is where it slipped".
+ * The authoring round a few minutes earlier calls the LIVE model. Record on
+ * one model and serve the other and the two halves of the lesson are about
+ * two different machines, with the reveal's tally describing behaviour the
+ * students never saw. Pass --model to record from something else on purpose;
+ * the slug is written into recordings.js either way, so a mismatch is at
+ * least visible afterwards. */
+const model = arg("model", "openai/gpt-4o-mini");
 const only = arg("rule", null);
 
 if (!key) {

@@ -197,7 +197,7 @@ In the Vercel dashboard, **Settings → Environment Variables**:
 | Name | Value | Scope |
 |---|---|---|
 | `OPENROUTER_API_KEY` | your OpenRouter key | Production, Preview |
-| `OPENROUTER_MODEL` | `anthropic/claude-haiku-4.5` | Production, Preview |
+| `OPENROUTER_MODEL` | `openai/gpt-4o-mini` | Production, Preview |
 | `VITE_SUPABASE_URL` | project URL | all three |
 | `VITE_SUPABASE_ANON_KEY` | anon key | all three |
 
@@ -205,21 +205,42 @@ The `VITE_` ones are build-time, so **redeploy after adding them**.
 
 ### Which model
 
-`anthropic/claude-haiku-4.5` is the default in `api/complete.js`, and it is
-worth the small premium. MonsterMaker asks for a tight format and a tight
-vocabulary, and the cheapest models follow both unreliably — a run the safety
-guard has to withhold teaches nothing.
+`openai/gpt-4o-mini` is the default in `api/complete.js`. **Keep this table
+and that line agreeing with the Vercel variable.** They disagreed once — the
+repo said Haiku, the dashboard said gpt-4o-mini — and the only symptom was
+replies longer than anyone expected, with the first thing checked being the
+wrong number.
+
+Prices per million tokens, from the OpenRouter catalogue:
 
 | Slug | in / out per Mtok | Note |
 |---|---|---|
-| `anthropic/claude-haiku-4.5` | $1.00 / $5.00 | Default. Best format-following of the three. |
-| `openai/gpt-5-mini` | $0.25 / $2.00 | Cheaper, still reliable. |
-| `openai/gpt-4o-mini` | $0.15 / $0.60 | Cheapest. Expect more withheld runs. |
+| `openai/gpt-4o-mini` | $0.15 / $0.60 | **Default.** Measured 5/5 on AlwaysNever rule-following, ~35 words a reply. |
+| `anthropic/claude-haiku-4.5` | $1.00 / $5.00 | ~8× the price. Reach for it only if a rule starts slipping. |
+| `openai/gpt-4.1-nano` | $0.10 / $0.40 | Cheapest tested. Not measured on rule-following — do that before using it. |
 
-**Cost is not the constraint.** A projector session is about thirty short
-calls: roughly **three cents a period** on the default. Set a low spend cap on
-the key anyway — a stuck loop is the only real risk, and `api/complete.js`
-already limits each participant to 40 calls a minute.
+**Cost is not the constraint, so do not choose on it.** Measured against the
+real prompts, a class period is ~124 calls and a five-day week is:
+
+| | whole week |
+|---|---|
+| `openai/gpt-4o-mini` | **$0.06** |
+| `anthropic/claude-haiku-4.5` | **$0.45** |
+
+Thirty-nine cents separates them across the entire pilot. What does matter is
+whether the model follows a student's hidden rule *every* time: a reply that
+drops the rule on turn four marks a student wrong for reasoning correctly
+from the evidence in front of them. Before a pilot, run
+
+```bash
+npm run record -- --key sk-or-...
+```
+
+which puts the real rule set through the live model and reports where any rule
+breaks down. Five samples is reassurance, not proof.
+
+Set a low spend cap on the key anyway — a stuck loop is the only real risk,
+and `api/complete.js` already limits each participant to 40 calls a minute.
 
 `temperature` is pinned to 1 rather than left to the provider default. The
 variation between identical calls *is* the lesson, and a provider quietly
