@@ -8,11 +8,22 @@
  * they are tiles here like anything else, and the only difference is that a
  * tile with an `href` leaves the site.
  *
- * WHY THE EXTERNAL ONES CARRY THE CODE. A tile that links out appends
- * `?pc=<code>`, because the week only joins into one dataset if every tool
- * files its rows under the same participant code. A student who signs in
- * here and then types their name into RowdyRoboVac from memory is two people
- * in the data, and nobody finds out until analysis.
+ * THE EXTERNAL ONES ASK FOR THE CODE THEMSELVES, and that is the weak joint
+ * in the week.
+ *
+ * A tile that links out appends `?pc=<code>`, because the week only becomes
+ * one dataset if every tool files its rows under the same participant code.
+ * NEITHER APP READS IT TODAY — checked, not assumed: RowdyRoboVac's bundle
+ * reads only `?reset`, and VibeBuilder has no query-param handling at all
+ * and asks for the code on its own intake screen. The parameter is appended
+ * anyway because it costs nothing, is ignored harmlessly, and starts working
+ * the day either app chooses to read it.
+ *
+ * Until then the join depends on a thirteen-year-old copying five characters
+ * correctly, which is exactly the failure the code system was meant to
+ * prevent. So the tile SHOWS the code at the moment they are about to need
+ * it — see `renderHub`. A student reading it off the tile in front of them
+ * is a far better bet than one recalling it from the start of the period.
  */
 
 /**
@@ -33,7 +44,7 @@ export const TILES = [
   },
   {
     id: "rrv", name: "RowdyRoboVac", kind: "link",
-    href: "https://rowdyrobovac.vercel.app",
+    href: "https://rowdy-robo.vercel.app/",
     day: 1, con: "randomness · algorithms",
     blurb: "Program a robot vacuum and watch what random choices do to a plan.",
   },
@@ -64,7 +75,7 @@ export const TILES = [
   },
   {
     id: "vbs", name: "VibeBuilder Studio", kind: "link",
-    href: "https://vibebuilder-studio.vercel.app",
+    href: "https://vibebuilder-zeta.vercel.app/",
     days: [4, 5], day: 4, con: "abstraction · building",
     blurb: "Describe what you want and build it. Two days, one project.",
   },

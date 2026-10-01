@@ -2043,9 +2043,16 @@ function renderHub() {
   <div class="tiles">${TILES.map((t) => {
     const live = open.includes(t.id);
     const ext = t.kind === "link";
+    /* THE CODE, ON THE TILE, FOR THE ONES THAT LEAVE.
+       RowdyRoboVac and VibeBuilder ask for the participant code on their
+       own sign-in screens and ignore the `?pc=` we append, so the week
+       joins into one dataset only if the student types the same five
+       characters there as here. Putting it on the tile means they are
+       reading it, not remembering it, at the exact moment they need it. */
     return `<button class="tile${live ? "" : " off"}" data-tile="${t.id}" ${live ? "" : "disabled"}>
       ${ext ? `<span class="tag">opens in a new tab</span>` : ""}
       <h3>${esc(t.name)}</h3><p>${esc(t.blurb)}</p>
+      ${ext && live && S.code ? `<span class="ext">type your code there: <b>${esc(S.code)}</b></span>` : ""}
       <span class="con">${live ? esc(t.con) : "not open yet"}</span></button>`;
   }).join("")}</div>
   ${S.facilitator ? `<section class="card pad">
