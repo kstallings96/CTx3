@@ -131,6 +131,9 @@ export const ROSTER = [
   "KAN66",
   "CBE47",
   "QCT22",
+  "AFG17",
+  "LMZ55",
+  "PYR32",
 ];
 
 /**
