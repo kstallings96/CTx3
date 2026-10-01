@@ -207,5 +207,5 @@ console.log(`${codes.length} codes: ${codes.join(" ")}\n`);
 console.log("  wrote supabase/roster.sql   -> run it in the Supabase SQL editor");
 console.log("  wrote src/roster.js ROSTER  -> commit and deploy\n");
 console.log("Still to do by hand:");
-console.log("  - set DEMO = false in src/demo.js, or none of this is used");
+console.log("  - run supabase/settings.sql too, so the admin page reaches every device");
 console.log("  - run the same roster.sql in VibeBuilder's Supabase project");

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>CTx3</title>
-<meta name="description" content="Three computational-thinking tools for one class session.">
+<title>CT Week</title>
+<meta name="description" content="Computational-thinking tools for a one-week middle-school unit.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -13,19 +13,24 @@
 <body>
 <header class="topbar">
   <div class="brand" id="brand" title="Five taps exports the local event buffer">
-    <b>CTx3</b><span>computational thinking · demo</span>
+    <b>CT Week</b><span>computational thinking</span>
   </div>
   <span class="mode" id="modepill" hidden><span class="dot"></span><span id="modetext">checking…</span></span>
   <div class="daysel" hidden>
     <label for="daypick">day</label>
-    <select id="daypick"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select>
+    <select id="daypick"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select>
   </div>
   <span class="pc" id="pcchip">—</span>
   <!-- "What am I doing?" is the most common thing a student actually needs,
        and needing an adult for it costs them the rest of the round. This
        reopens the briefing for whatever they are in the middle of. -->
   <button class="tbtn help" id="helpbtn" hidden>? What do I do</button>
-  <button class="tbtn" id="resetcode">Next student</button>
+  <!-- "Next student" is a FACILITATOR action sitting on a student's screen.
+       It signs the current student out mid-task, and it was one mis-tap from
+       a round's worth of work being filed under nobody. It goes with the
+       rest of the facilitator controls: five taps on the wordmark, or
+       `?facilitator`. -->
+  <button class="tbtn" id="resetcode" hidden>Next student</button>
   <button class="tbtn" id="hubbtn">Hub</button>
 </header>
 
@@ -72,7 +77,7 @@
     </section>
   </aside>
 </div>
-<p class="footer" id="footer" hidden>Demo build. Events buffer to <span class="kbd">localStorage</span> exactly as the real build does before sync; nothing leaves this page except model calls, and the name asked for at sign-in is not stored at all in this demo. When a live model is available the page calls it on the viewer’s own Claude account with caching off, so repeats really are repeats. Otherwise every reply comes from a deterministic stand-in and is labelled as one. Authored to <span class="kbd">SPEC-alwaysnever.md</span>, <span class="kbd">SPEC-prompt-golf.md</span>, <span class="kbd">SPEC-monstermaker.md</span>, <span class="kbd">EVENTS.md</span> and <span class="kbd">DEVELOPMENTAL-RANGE.md</span>.</p>
+<p class="footer" id="footer" hidden>Study build. Every event is written to <span class="kbd">localStorage</span> first and flushed to Supabase in batches, so a device that loses wifi mid-round keeps its work and sends it on the next load. The name asked for at sign-in is stored once, on the session row, and appears in no event. Model replies come from a live model where one is reachable and from a labelled deterministic stand-in where it is not. Authored to <span class="kbd">SPEC-alwaysnever.md</span>, <span class="kbd">SPEC-prompt-golf.md</span>, <span class="kbd">SPEC-monstermaker.md</span>, <span class="kbd">EVENTS.md</span> and <span class="kbd">DEVELOPMENTAL-RANGE.md</span>.</p>
 <script type="module" src="/src/app.js"></script>
 </body>
 </html>

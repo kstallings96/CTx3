@@ -10,7 +10,7 @@
  * the same prompt does not give the same answer; a cache would quietly turn
  * that lesson into a lie.
  */
-/* Word4Word asks for a tight format and a tight vocabulary, and the cheapest
+/* MonsterMaker asks for a tight format and a tight vocabulary, and the cheapest
    models follow both unreliably -- an answer the safety guard has to withhold
    teaches nothing. Haiku 4.5 is $1/$5 per million tokens, and a class period
    is roughly thirty short calls: about three cents. Override with

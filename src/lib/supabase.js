@@ -68,6 +68,52 @@ export async function checkRoster(code) {
   }
 }
 
+/**
+ * Which tiles the facilitator has opened, or null when nobody has said.
+ *
+ * Null and [] are DIFFERENT ANSWERS and the difference matters. Null means
+ * the question could not be answered — no backend, no network, or the
+ * settings table has not been created — and the caller falls back to the day
+ * defaults, which is a week that runs correctly on its own. An empty array
+ * means the facilitator deliberately closed everything, and a device that
+ * read that as "nobody said" would cheerfully open today's tile against an
+ * explicit instruction.
+ *
+ * `supabase/settings.sql` creates the table. Until it is run this returns
+ * null on every call, which is why the admin page also keeps a local copy.
+ */
+export async function readOpenTiles() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from("settings").select("open_tiles").eq("instrument", INSTRUMENT).maybeSingle();
+    if (error || !data) return null;
+    return Array.isArray(data.open_tiles) ? data.open_tiles : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns true only when the room will actually see this.
+ *
+ * `tiles` may be null, and null is meaningful: it clears the override so
+ * every device goes back to the day defaults. Closing everything is `[]`.
+ */
+export async function writeOpenTiles(tiles) {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from("settings")
+      .upsert({ instrument: INSTRUMENT, open_tiles: tiles ?? null, updated_at: new Date().toISOString() },
+        { onConflict: "instrument" });
+    if (error) { console.warn("[ctx3] tile settings not saved:", error.message); return false; }
+    return true;
+  } catch (err) {
+    console.warn("[ctx3] tile settings unreachable:", err?.message || err);
+    return false;
+  }
+}
+
 /* Identifying fields belong on the sessions row and nowhere else. Nothing
    should ever put one in an event payload -- but a stray field in a future
    payload would be an IRB problem discovered months later in a data dump, so

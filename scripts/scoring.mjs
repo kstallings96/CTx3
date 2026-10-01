@@ -90,7 +90,7 @@ export const STEP_TABLE = {
       needs: ["committedRule", "casesMatched"],
       test: (c) => c.casesMatched === true },
   ],
-  /* Word4Word. TEKS 8.1(A): decompose a real-world problem into structured
+  /* MonsterMaker. TEKS 8.1(A): decompose a real-world problem into structured
      parts using pseudocode. Scored on the hands-on phase only; the projector
      cells carry no participant code and contribute no steps. */
   /* The hands-on build is the student's OWN monster, drawn on paper first, so
@@ -121,7 +121,7 @@ export const STEP_TABLE = {
      Repair behaviour did not disappear -- `revisionType` is on every attempt
      and is worth its own analysis. It just is not an ordinal step, because it
      is not on the same axis as the rest. */
-  "word4word": [
+  "monstermaker": [
     { step: 1, id: "instructs", label: "Writes an instruction the machine acts on at all",
       needs: ["artifact"],
       test: (c) => !!c.artifact && String(c.artifact).trim().length > 0 },
@@ -160,8 +160,24 @@ const built = (c) =>
  * also how Lamborn scored: did the subject EVER demonstrate step N under this
  * condition, not does this one trial show it.
  */
+/**
+ * Tool ids that changed name after rows had already been logged under the old
+ * one. The key in STEP_TABLE is the CURRENT id, because that is what the app
+ * emits today and a reader should not have to know the history to find the
+ * table; this map is what keeps already-logged rows scorable.
+ *
+ * This is not hypothetical bookkeeping. The tool was renamed in the UI and in
+ * `S.tool`, the table key was not, and `STEP_TABLE[tool] || []` is a SILENT
+ * miss: every attempt scored zero steps satisfied, every phase reported a
+ * highest step of 0, and `developmentalRange` came out 0 for the whole tool —
+ * a plausible-looking null result rather than an error anybody would notice.
+ * Rename a tool and add the old id here in the same commit.
+ */
+const TOOL_ALIASES = { word4word: "monstermaker" };
+export const canonicalTool = (tool) => TOOL_ALIASES[tool] || tool;
+
 export function scoreAttempt(tool, ctx) {
-  const defs = STEP_TABLE[tool] || [];
+  const defs = STEP_TABLE[canonicalTool(tool)] || [];
   const satisfied = [];
   let exact = true;
   for (const d of defs) {
@@ -212,7 +228,12 @@ export function replay(events) {
 
   for (const ev of sorted) {
     const p = ev.payload || {};
-    const tool = ev.tool || p.tool;
+    /* Canonicalised here too, not only in scoreAttempt. `tool` is part of the
+       phase key and of the developmentalRange grouping key, so rows logged
+       under a tool's old id would otherwise become a second, separate tool
+       for the same student -- each with only one support condition, and
+       therefore no range at all. */
+    const tool = canonicalTool(ev.tool || p.tool);
     const pc = p.participantCode ?? ev.participantCode ?? null;
 
     if (ev.type === "phase_start") {
@@ -248,7 +269,7 @@ export function replay(events) {
       revisionType: p.revisionType ?? null,
       matched: (evaluated && evaluated.payload.matched) ?? null,
       prevMatched: st.lastMatched ?? null,
-      // Word4Word's hands-on build has no target -- the student drew it -- so
+      // MonsterMaker's hands-on build has no target -- the student drew it -- so
       // there is no `matched` to score against. These are what it has
       // instead, and they are observations rather than grades.
       graded: (evaluated && evaluated.payload.graded) ?? null,

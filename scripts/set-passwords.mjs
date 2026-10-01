@@ -1,9 +1,27 @@
 #!/usr/bin/env node
 /**
- * Set the activity passwords.
+ * Set the two passwords.
  *
- *   npm run passwords -- ftr=compass pg=lantern w4w=harbor
- *   npm run passwords                       # show which tools are set
+ *   npm run passwords -- entry=roadrunners
+ *   npm run passwords -- admin=<word>
+ *   npm run passwords                       # show which are set
+ *
+ * THERE ARE TWO, AND THEY DO DIFFERENT JOBS.
+ *
+ *   entry  — the one word the whole class is given. It opens CT Week, and
+ *            that is all it does: the student still signs in with their own
+ *            card afterwards. Say it out loud, write it on the board.
+ *
+ *   admin  — yours. It opens the page that decides which tiles are open.
+ *            NEVER the same word as `entry`, and never one a student hears,
+ *            or the class can unlock the whole week themselves. The script
+ *            refuses to set them the same.
+ *
+ * There used to be one password PER ACTIVITY, which is what kept a class off
+ * Thursday's tool on Tuesday. The admin page does that job now, and it does
+ * it better: a password has to be read out, mistyped and re-read before a
+ * room of fourteen is moving, while the admin page changes what is open for
+ * everybody at once and does not have to be said out loud at all.
  *
  * Writes src/passwords.js with a salted SHA-256 of each word, so the repo
  * never carries the words themselves. Read the honesty note in that file
@@ -18,9 +36,12 @@ import { sha256hex } from "../src/lib/sha256.js";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "..", "src", "passwords.js");
 const SALT = "ctx3";
-const TOOLS = { ftr: "AlwaysNever", pg: "Prompt Golf", w4w: "Word4Word" };
+const KINDS = {
+  entry: "Entry (the class word)",
+  admin: "Admin (yours)",
+};
 
-const digest = (tool, word) => sha256hex(`${SALT}:${tool}:${word.trim().toLowerCase()}`);
+const digest = (kind, word) => sha256hex(`${SALT}:${kind}:${word.trim().toLowerCase()}`);
 
 /* The bundled implementation and node's must agree, or a password set here
    would never be accepted in the browser. Cheap to check, so check every run. */
@@ -39,32 +60,63 @@ const current = (() => {
 })();
 
 if (!args.length) {
-  console.log("Activity passwords (hashes only — the words are not recoverable from here):\n");
-  for (const [id, name] of Object.entries(TOOLS)) {
-    console.log(`  ${name.padEnd(16)} ${current[id] ? "set   " + current[id].slice(0, 12) + "…" : "NOT SET — the tool opens with no password"}`);
+  console.log("Passwords (hashes only — the words are not recoverable from here):\n");
+  for (const [id, name] of Object.entries(KINDS)) {
+    console.log(`  ${name.padEnd(24)} ${current[id]
+      ? "set   " + current[id].slice(0, 12) + "…"
+      : id === "entry"
+        ? "NOT SET — anyone can open CT Week"
+        : "NOT SET — the admin page is unreachable"}`);
   }
-  console.log("\n  npm run passwords -- ftr=compass pg=lantern w4w=harbor");
+  console.log("\n  npm run passwords -- entry=roadrunners admin=<something-else>");
   process.exit(0);
 }
 
 const next = { ...current };
+const plain = {};
 for (const a of args) {
   const i = a.indexOf("=");
-  if (i < 1) { console.error(`Expected tool=word, got "${a}"`); process.exit(1); }
-  const tool = a.slice(0, i), word = a.slice(i + 1);
-  if (!TOOLS[tool]) { console.error(`Unknown tool "${tool}". One of: ${Object.keys(TOOLS).join(", ")}`); process.exit(1); }
-  if (!word.trim()) { delete next[tool]; console.log(`${TOOLS[tool]}: password removed, the tool now opens freely`); continue; }
+  if (i < 1) { console.error(`Expected entry=word or admin=word, got "${a}"`); process.exit(1); }
+  const kind = a.slice(0, i), word = a.slice(i + 1);
+  if (!KINDS[kind]) { console.error(`Unknown "${kind}". One of: ${Object.keys(KINDS).join(", ")}`); process.exit(1); }
+  if (!word.trim()) {
+    if (kind === "entry") { console.error("entry cannot be empty — that leaves CT Week open to anyone with the URL."); process.exit(1); }
+    delete next[kind]; console.log(`${KINDS[kind]}: removed`); continue;
+  }
   if (word.trim().length < 4) { console.error(`"${word}" is too short to be worth typing. Use four characters or more.`); process.exit(1); }
-  next[tool] = digest(tool, word);
-  console.log(`${TOOLS[tool]}: set`);
+  next[kind] = digest(kind, word);
+  plain[kind] = word.trim().toLowerCase();
+  console.log(`${KINDS[kind]}: set`);
+}
+
+/* THE TWO MUST DIFFER, and this is the check rather than a line in a comment.
+   Set admin to the class word and every student who was told how to get in
+   can also open every tile you closed -- silently, because nothing on screen
+   would look wrong. Compared as words where both were just given, and by
+   digest otherwise, so it also catches setting one to match the other's
+   existing value. */
+if (plain.entry && plain.admin && plain.entry === plain.admin) {
+  console.error("\nentry and admin cannot be the same word. The class is told entry.");
+  process.exit(1);
+}
+for (const [a, b] of [["entry", "admin"], ["admin", "entry"]]) {
+  if (plain[a] && !plain[b] && next[b] && digest(b, plain[a]) === next[b]) {
+    console.error(`\nThat is already the ${b} password. They have to be different words.`);
+    process.exit(1);
+  }
 }
 
 const body = `/**
- * Activity passwords, as salted SHA-256 digests.
+ * The two passwords, as salted SHA-256 digests.
  *
  * Generated by \`npm run passwords\`. Do not hand-edit — set them with
  *
- *   npm run passwords -- ftr=<word> pg=<word> w4w=<word>
+ *   npm run passwords -- entry=<word> admin=<word>
+ *
+ * \`entry\` opens CT Week and is read out to the class. \`admin\` opens the
+ * page that decides which tiles are open and is yours alone. They are
+ * checked to be different words, because telling the class the admin word
+ * by accident hands them the whole week.
  *
  * BE HONEST ABOUT WHAT THIS IS. The digests ship in the client bundle, and a
  * dictionary word behind a single SHA-256 is minutes of work for an adult
@@ -73,12 +125,11 @@ const body = `/**
  * written in plain text is so the words are not sitting in a public GitHub
  * repo for anyone to read at a glance.
  *
- * What the password is actually for: making the facilitator the one who
- * decides when the room starts an activity, and keeping a class off Thursday's
- * tool on Tuesday. For that it is enough. Do not describe it to the IRB as
+ * What \`entry\` is actually for: keeping the URL from being the whole key, so
+ * a link forwarded to a sibling does not put a stranger in the study data.
+ * What \`admin\` is for: making sure the person changing what the class can
+ * see is you. For that they are enough. Do not describe either to the IRB as
  * access control.
- *
- * A tool missing from this object has no password and opens straight away.
  */
 export const PASSWORD_SALT = ${JSON.stringify(SALT)};
 export const PASSWORDS = {

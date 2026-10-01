@@ -1,5 +1,5 @@
 /**
- * The Word4Word machine.
+ * The MonsterMaker machine.
  *
  * ONE subject: a monster. The knight is gone — it needed five parts in a
  * fixed arrangement before it looked like anything, which made it a puzzle
@@ -170,19 +170,57 @@ export function w4wStep(scene, line) {
   // silently drew only the first -- which is exactly the complaint that the
   // machine does not draw what you asked. Split on the words people actually
   // join parts with, and act on each piece in the order it was written.
-  const pieces = t.split(/\s*(?:,|\band\b|\bwith\b|\bplus\b)\s*/).filter((x) => x.trim());
+  /* WHICH WORD JOINED THE PIECES IS PART OF THE INSTRUCTION.
+   *
+   * The split used to throw the joiner away, so "and" and "with" meant the
+   * same thing -- and they do not. "Draw a round green body WITH four legs"
+   * says where the legs go; dropping the word left the legs hanging in
+   * space next to a body, which is the machine not reading the whole line.
+   * Keep the separator that preceded each piece. */
+  const chunks = [];
+  {
+    const JOIN = /\s*(,|\band\b|\bwith\b|\bplus\b)\s*/g;
+    let at = 0, prev = null, m;
+    while ((m = JOIN.exec(t))) {
+      chunks.push({ text: t.slice(at, m.index), joiner: prev });
+      prev = m[1];
+      at = m.index + m[0].length;
+    }
+    chunks.push({ text: t.slice(at), joiner: prev });
+  }
+  const pieces = chunks.filter((c) => c.text.trim());
   // A piece that NAMES a part and a piece that POINTS AT one are different
   // things. "On each side of the head, add two small round ears" is one
   // instruction with a location in front of it — reading the location as a
   // second instruction drew a fresh blank head and wiped the green one from
   // the step before. A piece that opens with a preposition and carries no
   // verb is saying where, not what.
-  const segments = pieces.filter((x) => findPart(x) && (VERBS.test(x) || !LOCATION.test(x)));
+  const segments = pieces.filter((c) =>
+    findPart(c.text) && (VERBS.test(c.text) || !LOCATION.test(c.text)));
   /* A piece that only says WHERE is dropped above, and dropping it used to
      throw the placement away with it: "on the body, draw a head" left the
      head floating even though the line had said exactly where it goes. Keep
      the first one and hand it to the pieces that survived. */
-  const locPiece = pieces.find((x) => !VERBS.test(x) && LOCATION.test(x) && findPart(x));
+  const locPiece = (pieces.find((c) =>
+    !VERBS.test(c.text) && LOCATION.test(c.text) && findPart(c.text)) || {}).text;
+
+  /* A TRAILING "TO THE X" BELONGS TO EVERY PIECE, NOT JUST THE LAST ONE.
+   *
+   * "add two big red eyes and a small green mouth to the head" is one
+   * placement stated once, in the ordinary English way. Splitting on "and"
+   * gave the head to the mouth and told the student "you did not say where
+   * the eyes go" -- when they plainly had, in the same sentence. That is
+   * the complaint, and it is a parsing failure, not the lesson: the line
+   * said where, so the machine has to obey it. Nothing is guessed here,
+   * because the target is a part the student typed.
+   *
+   * Only across "and", "," and "plus". "with" attaches to what came before
+   * it and is handled on its own below. */
+  let sharedTarget = null;
+  if (segments.length > 1) {
+    const tgt = splitAt(segments[segments.length - 1].text).target;
+    if (tgt && findPart(tgt)) sharedTarget = tgt;
+  }
   // Act on the pieces that survived, even when only one did. Falling back to
   // the whole line here was the bug behind the bug: the location phrase was
   // correctly dropped, then the full line went through anyway and the first
@@ -199,10 +237,40 @@ export function w4wStep(scene, line) {
     // { ok, msg } dropped the flag, so a floating part came back to the step
     // log wearing a tick. If any piece landed nowhere, the step did.
     let anyUnplaced = false;
+    /* What the last piece to name a part was called, so a piece joined by
+       "with" knows what it is part of. "Add a mouth with five teeth" and
+       "draw a green body with four legs" both say where the second thing
+       goes, in the one word the split was discarding. */
+    let lastNamed = null;
+    /* Set by a "with", and kept for the pieces after it. "Draw a body with
+       a head and two eyes" hangs BOTH off the body -- the "with" opens a
+       list, and the "and" continues it. Reading only the head would be the
+       same half-a-line failure in a different place. */
+    let withAnchor = null;
     for (const seg of segments.slice(0, 8)) {
+      let text = seg.text;
+      const own = splitAt(text).target;
+      /* Precedence, most explicit first: what THIS piece says, then what a
+         "with" says it hangs off, then a location phrase that was its own
+         piece, then a target stated once at the end of the line. */
+      let hint = locPiece;
+      if (seg.joiner === "with" && lastNamed) {
+        /* "Add a mouth with five teeth to the body" attaches the MOUTH to
+           the body and the teeth to the mouth. The trailing phrase sits at
+           the end of the line, so the split hands it to the teeth -- the
+           innermost piece -- when it belongs to the thing the "with" hangs
+           off. Take it off this piece; `sharedTarget` has already given it
+           to the pieces that should have it. */
+        if (own && own === sharedTarget) text = splitAt(text).subject;
+        withAnchor = lastNamed;
+        hint = "on the " + lastNamed;
+      } else if (!own && withAnchor) hint = "on the " + withAnchor;
+      else if (!own && sharedTarget) hint = sharedTarget;
       // The verb lives in the first piece; carry it so each piece parses.
-      const r = applyOne(scene, VERBS.test(seg) ? seg : "add " + seg, locPiece);
+      const r = applyOne(scene, VERBS.test(text) ? text : "add " + text, hint);
       if (r.ok) { acted = true; out.push(r.msg); if (r.unplaced) anyUnplaced = true; }
+      const named = findPart(splitAt(text).subject) || findPart(text);
+      if (named) lastNamed = named;
     }
     if (acted) return { ok: true, msg: out.join(" "), ...(anyUnplaced ? { unplaced: true } : {}) };
   }

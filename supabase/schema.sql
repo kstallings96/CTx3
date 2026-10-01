@@ -420,20 +420,20 @@ grant execute on function check_roster(text) to anon;
 --   select participant_code, payload->>'text' as response
 --   from events where type = 'comparison_response' order by participant_code;
 
--- Variance held constant by construction (Word4Word's projector cells).
+-- Variance held constant by construction (MonsterMaker's engine-comparison cells).
 --
 --   select payload->>'quadrant' as quadrant, count(*) as runs,
 --          count(*) filter (where (payload->>'sameAsRun1')::boolean is false) as differed,
 --          count(*) filter (where (payload->>'matched')::boolean) as built_it
 --   from events where type = 'run_executed' group by 1;
 
--- Decomposition, per student (Word4Word's hands-on phase).
+-- Decomposition, per student (MonsterMaker's hands-on warm-up).
 --
 --   select participant_code,
 --          count(*) as tries,
 --          count(*) filter (where (payload->>'numbered')::boolean) as numbered_tries,
 --          bool_or((payload->>'matched')::boolean) as ever_built_it
---   from events where tool = 'word4word' and type = 'instruction_executed'
+--   from events where tool = 'monstermaker' and type = 'instruction_executed'
 --     and participant_code is not null
 --   group by 1 order by 1;
 

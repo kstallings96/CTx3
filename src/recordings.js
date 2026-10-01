@@ -6,7 +6,7 @@
  * system prompt and then five runs of a real model given that same prompt —
  * with a tally. The rule said *always*. The real AI did it *usually*.
  *
- * Pre-recorded rather than live, for the same reason Word4Word's tape
+ * Pre-recorded rather than live, for the same reason MonsterMaker's tape
  * exists: it works with no network, it cannot fail in front of a class, and
  * it does not put fourteen simultaneous calls through one key.
  *

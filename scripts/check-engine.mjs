@@ -49,6 +49,36 @@ const CASES = [
   // A part named twice, the second time with a target that does not exist.
   { t: "big green head\nadd head to yellow body",
     drew: ["head"] },
+
+  /* READING THE WHOLE LINE.
+   *
+   * Each of these said where a part goes and got told "you did not say
+   * where it goes" -- the machine split the sentence and then only read one
+   * of the halves. That is a parsing failure, not the lesson: the student
+   * had said, in words they typed, and the engine has to obey what is
+   * written. None of these makes it GUESS; the last case below is the
+   * guard on that. */
+  // A target at the end of the line belongs to everything in the list.
+  { t: "1. Draw a green body.\n2. Add a head to the body.\n3. add two big red eyes and a small green mouth to the head",
+    drew: ["body", "head", "eyes", "mouth"] },
+  { t: "1. Draw a body.\n2. Add a head, two eyes and a mouth to the body.",
+    drew: ["body", "head", "eyes", "mouth"] },
+  // "with" says where. It used to be split away like "and" and the part
+  // after it was left hanging next to the thing it belongs to.
+  { t: "Draw a round green body with four legs.",
+    drew: ["body", "legs"] },
+  // "with" opens a list; the "and" continues it.
+  { t: "Draw a body with a head and two eyes.",
+    drew: ["body", "head", "eyes"] },
+  // Nested: the mouth goes on the body, the teeth go on the mouth. The
+  // trailing phrase sits next to the teeth and belongs to the mouth.
+  { t: "1. Draw a purple body.\n2. Add a mouth with five teeth to the body.",
+    drew: ["body", "mouth", "teeth"] },
+  // AND STILL NO GUESSING. Nothing above may turn into "eyes obviously go
+  // on the head" -- a line that does not say where still floats, which is
+  // the whole contrast the compare panel rests on.
+  { t: "1. Draw a green body.\n2. Add a head to the body.\n3. Add two eyes.",
+    drew: ["body", "head"], floats: ["eyes"] },
 ];
 
 for (const c of CASES) {

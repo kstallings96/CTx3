@@ -119,9 +119,29 @@ Open **SQL Editor**, paste [`supabase/schema.sql`](supabase/schema.sql), run it.
 Safe to re-run, and safe on the existing RowdyRoboVac tables — see the table
 above for what it changes.
 
-**Until you run it, CTx3 writes nothing.** The client is wired and correct; the
-inserts come back `PGRST204 Could not find the 'day' column of 'sessions'`.
+**Until you run it, CT Week writes nothing.** The client is wired and correct;
+the inserts come back `PGRST204 Could not find the 'day' column of 'sessions'`.
 That is the only thing standing between here and live data.
+
+Then paste [`supabase/roster.sql`](supabase/roster.sql) — the class list, so a
+mistyped card is refused at sign-in instead of becoming a participant nobody
+can account for — and [`supabase/settings.sql`](supabase/settings.sql), which
+is what makes the admin page reach every Chromebook instead of just the one
+you are sitting at. All three are safe to re-run.
+
+To check what has actually landed, which no screen in the app can show you
+(row-level security is insert-only by design, so the client can write but
+never read back):
+
+```sql
+select s.participant_code, st.role, s.day, count(e.id) as events,
+       max(e.client_ts) as last_seen
+from sessions s
+left join students st on st.username = s.participant_code
+left join events e on e.session_id = s.id
+where s.instrument = 'ctx3'
+group by 1,2,3 order by last_seen desc nulls last;
+```
 
 Then confirm RLS is actually on — the one check worth doing by hand:
 
@@ -280,60 +300,86 @@ The hub build now also keeps the address bar honest: entering a tool from a
 tile pushes that tool's URL, and Back returns to the hub. So you can read a
 tool's URL straight off the screen instead of looking it up here.
 
-## Activity passwords
+## Passwords, and the admin page
 
-Every tool is behind a password. The sequence a student sees is **sign in,
-password, activity**.
+There are **two passwords**, and there is no longer one per activity.
 
-- On a **pinned URL**, only that tool's password is accepted.
-- On the **hub URL**, the prompt takes any of the three and sends the student
-  to the one it belongs to — so on `/` the password *is* how the activity gets
-  chosen. That is the same three steps with no tile-picking in between.
+| | Word | Who gets it |
+|---|---|---|
+| `entry` | `roadrunners` | the whole class — say it out loud |
+| `admin` | see `admin-password.txt` | you, and nobody in the room |
 
-The passwords as shipped:
+The sequence a student sees is **class word → their own card → the hub**. The
+class word is typed once per device and survives `?reset`, because the next
+student is in the same room being handed the same laptop; what `?reset` clears
+is the person, not the door.
 
-| Tool | Password |
-|---|---|
-| AlwaysNever | `roadrunners` |
-| Prompt Golf | `holeinone` |
-| MonsterMaker | `gorowdy` |
-
-These are in the repo's history, so anyone who can read the repo can read
-them. That is the same speed-bump caveat as below, not a new problem — but if
-you want words no one outside the room has seen, change them:
+`admin-password.txt` is gitignored and is the only plain-text copy of the
+admin word. Change either with:
 
 ```bash
-npm run passwords -- ftr=<word> pg=<word> w4w=<word>
+npm run passwords -- entry=<word> admin=<word>
 ```
 
-That rewrites `src/passwords.js` with a salted SHA-256 of each word; the words
-themselves are never written to disk. `npm run passwords` with no arguments
-shows which tools are set. Rebuild and redeploy for a change to reach
-students. Setting a tool to an empty string removes its password and the tool
-opens straight away.
+That rewrites `src/passwords.js` with a salted SHA-256 of each; the words
+themselves never enter the repo. The script **refuses to set them to the same
+word** — telling the class the admin word hands them the whole week. Rebuild
+and redeploy for a change to reach students.
+
+### Which activity is open
+
+Not a password any more. **`/admin`** is a page with a checkbox per tile:
+tick what should be open, press Save, and every student's hub changes. It is
+reachable without the class word, and the class word does not open it.
+
+Three buttons that are not the same thing:
+
+- **Just today's** — load the day defaults into the checkboxes, ready to edit
+- **Close everything** — a hub with nothing on it, until you come back
+- **Back to day defaults** — stop overriding; each morning opens on its own
+
+With nobody having touched it, the week runs on the defaults in
+`src/tiles.js`: day 1 RowdyRoboVac and the pre-survey, day 2 MonsterMaker,
+day 3 AlwaysNever, days 4–5 VibeBuilder, day 5 the post-survey. The
+MonsterMaker warm-up and Prompt Golf are closed on every day and only open
+from this page.
+
+> **Run [`supabase/settings.sql`](supabase/settings.sql) once.** Until you do,
+> the admin page saves to *the browser you are sitting at* and the page says so
+> in those words. With the table, one change on one device reaches the room.
 
 Behaviour worth knowing on a study day:
 
-- An unlock is remembered on the device until `?reset`, so a student who
-  reloads mid-activity is **not** locked out of their own work.
+- A tile that is shut cannot be walked around by typing its URL. `/alwaysnever`
+  on a day AlwaysNever is closed lands on the hub and logs `tile_refused`.
 - Three wrong tries disables the button for three seconds. A pause, not a
   lockout — a student who cannot spell the word still gets in.
-- `gate_failed` and `gate_unlocked` are logged, with the tool and the try
-  count and **never the typed text**. A student stuck at the gate for four
-  minutes is visible in the data afterwards.
+- `gate_failed` and `gate_unlocked` are logged with the try count and **never
+  the typed text**. A student stuck at the door for four minutes is visible in
+  the data afterwards.
+- `admin_tiles_set` records every change, including whether it reached the
+  class or only that device.
+- A tile that links out (RowdyRoboVac, VibeBuilder, either survey) opens in a
+  new tab with `?pc=<code>` appended and logs `left_for_tool` first. Without
+  that row the data shows a student signing in and then nothing at all.
 
 **Be honest about what this is.** The digests ship in the client bundle, and a
 dictionary word behind a single SHA-256 is minutes of work for an adult with a
 wordlist. It stops a student who opens devtools out of curiosity; it does not
-stop one who is trying. It is hashed rather than plaintext so the words are
-not sitting in a public GitHub repo at a glance — that is all. What it is
-genuinely for is making the facilitator the one who decides when the room
-starts, and keeping a class off Thursday's tool on Tuesday. **Do not describe
-it to the IRB as access control.**
+stop one who is trying. The `settings` table is writable by the anon key for
+the same reason and with the same caveat — see the comments in
+`supabase/settings.sql`, which explain why that trade was taken and what it
+does **not** expose. Nothing study-critical is reachable through it: `events`
+and `sessions` are insert-only and unaffected. **Do not describe any of this
+to the IRB as access control.**
 
-The same goes for the paths: a student who types `/monstermaker` reaches
-MonsterMaker's password prompt, not MonsterMaker. The password is the gate; the URL
-just decides which one they are asked for.
+### The surveys are placeholders
+
+`src/tiles.js` ships `https://example.com/ct-week-pre-survey` and
+`…/ct-week-post-survey`. Replace both `href` values with the real forms and
+drop the `placeholder: true` flag. Until you do, the tiles work and log
+`left_for_tool` with `placeholder: true`, so a run done against the stubs is
+identifiable afterwards rather than silently empty.
 
 ## Study-day checklist
 
@@ -341,8 +387,8 @@ just decides which one they are asked for.
   day with it. On the hub URL, `?day=2` sets the day; the student never
   chooses it either way
 - **Next student** in the topbar, or `?reset` on any URL, clears the device
-  for the next student: their name, their unlocked activities, and anything
-  they had queued but unsent
+  for the next student: their name, their code, and anything they had queued
+  but unsent. The class word stays — the next student is in the same room
 - Open MonsterMaker on the projector machine **before** the period and run one
   cell, to confirm the model responds and to wake Supabase
 - Free Supabase projects pause after about a week idle and take a minute or two

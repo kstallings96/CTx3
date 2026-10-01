@@ -8,7 +8,7 @@
  *     own Claude via the sample capability instead.
  *
  * Caching is off either way. A repeat has to really be a repeat — that is the
- * whole claim Word4Word's right-hand column makes.
+ * whole claim MonsterMaker's right-hand column makes.
  */
 let available = null;
 let sampleFn = null;
