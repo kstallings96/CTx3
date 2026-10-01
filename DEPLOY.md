@@ -307,10 +307,10 @@ There are **two passwords**, and there is no longer one per activity.
 | | Word | Who gets it |
 |---|---|---|
 | `entry` | `roadrunners` | the whole class — say it out loud |
-| `admin` | see `admin-password.txt` | you, and nobody in the room |
+| `admin` | `carmyworm` (also in `admin-password.txt`) | you, and nobody in the room |
 
-The sequence a student sees is **class word → their own card → the hub**. The
-class word is typed once per device and survives `?reset`, because the next
+The sequence a student sees is **passcode → their own card → the hub**. The
+passcode is typed once per device and survives `?reset`, because the next
 student is in the same room being handed the same laptop; what `?reset` clears
 is the person, not the door.
 
@@ -330,7 +330,7 @@ and redeploy for a change to reach students.
 
 Not a password any more. **`/admin`** is a page with a checkbox per tile:
 tick what should be open, press Save, and every student's hub changes. It is
-reachable without the class word, and the class word does not open it.
+reachable without the passcode, and the passcode does not open it.
 
 Three buttons that are not the same thing:
 

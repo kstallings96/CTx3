@@ -26,5 +26,5 @@
 export const PASSWORD_SALT = "ctx3";
 export const PASSWORDS = {
   entry: "20b22b9ef306be2ac3016ae9744f64dd9dc5d87746e86abec6afb6850f72fcba",
-  admin: "b6a46c938ba2f50f5a1cffc9f563d4e66e8d2ce060f3060cc6cb11dc6cb19536",
+  admin: "f04ec44c1089f9a473e5605928ec9ffb2837ceb5697d49bef67aef8306eab491",
 };

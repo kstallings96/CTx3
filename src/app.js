@@ -2099,11 +2099,11 @@ function renderEntry() {
   $("stage").innerHTML = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:16px">
     <div><span class="eyebrow">CT Week</span>
-      <h1 style="font-size:27px;margin-top:3px">Today's word</h1></div>
-    <p class="lede">Your teacher will say the word for this week. Type it in to open CT Week.</p>
+      <h1 style="font-size:27px;margin-top:3px">Passcode</h1></div>
+    <p class="lede">Kayleigh will give you the word for this week.</p>
     <div class="codewrap">
       <input class="codein pw primary" id="pwfield" type="password" maxlength="32" autocomplete="off"
-        spellcheck="false" placeholder="••••••" aria-label="Class word">
+        spellcheck="false" placeholder="••••••" aria-label="Passcode">
       <p class="hint" id="pwmsg">Capital letters do not matter.</p>
       <div class="row"><button class="btn" id="pwgo">Open</button></div>
       <p class="note">Nothing you type here is recorded. You sign in with your own card on the next screen.</p>
@@ -2119,8 +2119,8 @@ function renderEntry() {
       // wrong box should not have put it in the event log.
       emit("gate_failed", { kind: "entry", tries: S.gateTries });
       msg.textContent = S.gateTries >= 3
-        ? "Still not right. Ask your teacher to read it out again."
-        : "That is not the word. Check the board and try again.";
+        ? "Still not right. Ask Kayleigh to read it out again."
+        : "That is not the passcode. Check the board and try again.";
       msg.style.color = "var(--fail)";
       f.select();
       if (S.gateTries >= 3) {
