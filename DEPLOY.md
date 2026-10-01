@@ -230,14 +230,14 @@ real prompts, a class period is ~124 calls and a five-day week is:
 Thirty-nine cents separates them across the entire pilot. What does matter is
 whether the model follows a student's hidden rule *every* time: a reply that
 drops the rule on turn four marks a student wrong for reasoning correctly
-from the evidence in front of them. Before a pilot, run
+from the evidence in front of them.
 
-```bash
-npm run record -- --key sk-or-...
-```
-
-which puts the real rule set through the live model and reports where any rule
-breaks down. Five samples is reassurance, not proof.
+There used to be an `npm run record` here that put the whole rule set through
+the live model and reported where any rule broke down. It is gone, along with
+the Day 3 screen that displayed its output — see `ftrReveal` in `src/app.js`.
+If you want that assurance again, the cheapest version is to open the
+authoring round yourself, write two or three instructions of the kind
+students write, and watch whether the replies hold them.
 
 Set a low spend cap on the key anyway — a stuck loop is the only real risk,
 and `api/complete.js` already limits each participant to 40 calls a minute.

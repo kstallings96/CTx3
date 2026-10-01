@@ -143,12 +143,15 @@ const GAME_WORDS = ["game", "games", "gaming", "video game", "videogame", "conso
  * Landing on a preference. A bot with no opinions may describe options; it
  * may not tell you which one wins.
  *
- * This is deliberately wider than the practice bot needs, because
- * `npm run record` marks a REAL model's runs with this same test and the
- * reveal shows the tally. A model that says "honestly, bubblegum is the
- * worst" has broken the instruction, and a checker that only knew the
- * phrase "the worst is" scored that run as obedient — the tally would have
- * said four of five while the transcript underneath it showed otherwise.
+ * This is deliberately wider than the practice bot strictly needs, and the
+ * width is worth keeping now that the reason has changed. It was written
+ * when `npm run record` marked a REAL model's runs with this same test for
+ * a Day 3 tally; that screen was cut and the script went with it. But the
+ * AUTHORING round still puts a live model behind a student's instruction
+ * and marks it with these same checkers, so the slack still earns its keep.
+ * A model that says "honestly, bubblegum is the worst" has broken the
+ * instruction, and a checker that only knew the phrase "the worst is" would
+ * score that run as obedient.
  *
  * What it must NOT catch is describing the field: "some go for X, others
  * for Y", "X has plenty of fans". Those are the no-opinion frames below.
@@ -169,8 +172,9 @@ const OPINION_MARKERS = new RegExp([
 const sentences = (t) => String(t).split(/[.!?]+/).map((x) => x.trim()).filter(Boolean);
 
 /* Pictographs and emoji presentation selectors. Deliberately narrow: it has
-   to be true of what the bot writes AND of what a real model writes, since
-   `npm run record` marks real runs with this same test. */
+   to be true of what the practice bot writes AND of what a real model
+   writes, because the authoring round holds a live model to this same
+   test. */
 const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{1F900}-\u{1F9FF}]/u;
 
 /* An opening compliment. Anchored to the start, because a nice word buried

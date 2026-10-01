@@ -29,7 +29,6 @@ import {
   RULES, RULE_ORDER, TIERS, LADDER, ASKS, TOPICS, LENGTHS, HELD_OUT, CLAIMS,
   askText, answerFor, matchClaim, sequenceFor,
 } from "../src/rules.js";
-import { RECORDINGS, followedCount } from "../src/recordings.js";
 
 let failures = 0;
 const fail = (who, what, detail) => {
@@ -269,35 +268,6 @@ for (const [guess, ruleId] of [["it always says a food", "never_dogs"], ["always
   const n = held.filter((t) => hit.claim.test(t)).length;
   if (n === 3) fail("claims", `"${guess}" tested as correct against ${ruleId}`, "a wrong guess must not score 3/3");
   else console.log(`ok   wrong guess      ${JSON.stringify(guess)} -> "${hit.claim.id}", holds ${n}/3`);
-}
-
-/* The recorded runs.
- *
- * These no longer belong to AlwaysNever. AlwaysNever is Day 2 -- the day a
- * rule holds EVERY time -- and ending it with a real AI breaking its
- * instruction four times in five would pre-empt Day 3, whose whole subject
- * that is. AlwaysNever keeps the half that shows the instruction written
- * out as a system prompt, which is vocabulary Day 4 needs.
- *
- * So only the instruction Day 3 opens on needs runs: the tutorial rule,
- * which is the one every student met.
- */
-{
-  const id = LADDER.tutorial;
-  const rec = RECORDINGS[id];
-  if (!rec || !rec.runs || rec.runs.length < 3) fail("day3", `no recorded runs for ${id}`, "Day 3 has no opener");
-  else {
-    if (!rec.question) fail("day3", `no question recorded for ${id}`, "the runs would have no context");
-    // The `followed` flag has to agree with the rule's own checker, or the
-    // tally says one thing and the transcript under it shows another.
-    const wrong = rec.runs.filter((x) => RULES[id].check(x.text) !== x.followed);
-    if (wrong.length)
-      fail("day3", `${wrong.length} run(s) for ${id} are marked wrong`,
-        `checker disagrees with the flag: ${JSON.stringify(wrong[0].text.slice(0, 70))}`);
-  }
-  console.log(RECORDINGS.captured
-    ? `ok   day 3 opener    ${followedCount(id)}/5 from ${RECORDINGS.model} on ${RECORDINGS.capturedAt}`
-    : `ok   day 3 opener    ${id} ${followedCount(id)}/5 · AUTHORED examples, labelled as such (run: npm run record)`);
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nEvery instruction holds across every question it can be asked.");

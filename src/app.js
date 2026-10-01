@@ -4,7 +4,6 @@ import { GRADE, rosterIndex, normalizeCode, isInstructor } from "./roster.js";
 import { hash } from "./lib/hash.js";
 import { RULES, RULE_ORDER, TIERS, LADDER, PILLS, PILL_LABEL, HELD_OUT,
          askText, comboKey, cap, matchClaim, answerFor, sequenceFor } from "./rules.js";
-import { RECORDINGS, followedCount } from "./recordings.js";
 import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, sceneSignature, w4wPrecision,
          buildPrompt, checkSafe, SAFE_MESSAGE, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
@@ -755,15 +754,26 @@ function auditScaffolds() {
  * The reveal: what the instruction looks like written down.
  *
  * IT USED TO DO TWO JOBS AND NOW DOES ONE. The other half showed the same
- * instruction handed to a real AI five times with a tally -- the rule
- * said ALWAYS, the AI did it USUALLY. That half has moved to Day 3, where
- * it belongs: AlwaysNever is now Day 2, the day a rule holds EVERY time,
- * and ending it with an AI breaking its instruction would pre-empt the
- * entire subject of the next day. It is no loss to move -- five runs of
- * one instruction is structurally the demonstration Day 3 already makes,
- * so it removes a duplication and hands Day 3 a ready-made opener.
+ * instruction handed to a real AI five times with a tally -- the rule said
+ * ALWAYS, the AI did it USUALLY. That half left AlwaysNever for a good
+ * reason: AlwaysNever is Day 2, the day a rule holds EVERY time, and ending
+ * it with an AI breaking its instruction pre-empts the entire subject of the
+ * next day.
  *
- * What stays is the vocabulary. The rule the student has been hunting,
+ * IT WAS THEN CUT ALTOGETHER, and this is the note that says so, because the
+ * trail it left was confusing. It moved to a Day 3 opener; the opener was
+ * removed as one more thing on a screen that should hold one idea. What went
+ * with it: `src/recordings.js`, `scripts/record-runs.mjs`, the `npm run
+ * record` command, and the check in check-rules.mjs that validated them.
+ * They lived on for a while as an import nothing used and a check that
+ * described a screen that did not exist, which is how a repo starts lying
+ * about itself. `git log -- src/recordings.js` has all of it if the opener
+ * is ever wanted back.
+ *
+ * MonsterMaker's W4W_TAPE is a different thing and is still in use: that is
+ * the offline fallback for its AI engine, not a recorded tally.
+ *
+ * What stays here is the vocabulary. The rule the student has been hunting,
  * shown as the system prompt somebody really would have typed, is what
  * Day 4 needs when their own intake form becomes one.
  */
