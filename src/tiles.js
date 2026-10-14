@@ -86,6 +86,30 @@ export const TILES = [
     day: 5, con: "a few questions",
     blurb: "The same kind of survey as the first one, now that you have done the week.",
   },
+  /* bugHunters, which has NO DAY of its own.
+   *
+   * It is a ten-minute game rather than a day's work, so it is closed by
+   * default and opens from the admin page whenever it fits — end of a period,
+   * a group who finished early, a day that ran short. Giving it a day number
+   * would have put it on the hub every week on that morning whether or not
+   * anybody meant to run it.
+   *
+   * IT DOES NOT USE THE PARTICIPANT CODE. Every other tile here files its
+   * rows under the card code; bugHunters asks for a NICKNAME, for a
+   * leaderboard, and reads no query parameter at all. So `?pc=` is not
+   * appended -- it would be a promise the far end cannot keep -- and the
+   * tile does not show the code the way RowdyRoboVac's and VibeBuilder's do,
+   * because telling a student to type their code into a box that wants a
+   * nickname is worse than saying nothing. Its data stands on its own and
+   * does not join to the rest of the week by student. See the note in
+   * DEPLOY.md if that needs to change. */
+  {
+    id: "bh", name: "bugHunters", kind: "link",
+    href: "https://example.com/bughunters",             // PLACEHOLDER
+    placeholder: true, noCode: true,
+    day: 0, con: "debugging · testing", closedByDefault: true,
+    blurb: "An AI built an app for a younger kid. Something in it is broken — find the glitches.",
+  },
   /* Built and working, and not part of this week. It stays in the list so it
      is one admin checkbox away rather than a deploy away, and stays closed so
      a student who finds /prompt-golf does not wander into it. */
@@ -108,12 +132,17 @@ export function defaultOpen(day) {
 /**
  * A tile that links out, with the participant code attached.
  *
- * The code goes on as `?pc=`, which is what RowdyRoboVac and VibeBuilder
- * already read. A tile whose href carries a query of its own still works —
- * this appends rather than assumes.
+ * The code goes on as `?pc=`, which RowdyRoboVac and VibeBuilder both read
+ * and use to prefill their own sign-in. A tile whose href carries a query of
+ * its own still works — this appends rather than assumes.
+ *
+ * `noCode` opts a tile out. bugHunters identifies students by a nickname and
+ * has no participant-code field to fill, so sending one would be a parameter
+ * that silently does nothing — and worse, it would look from this side like
+ * the join had been taken care of.
  */
 export function hrefFor(tile, code) {
   if (!tile || !tile.href) return null;
-  if (!code) return tile.href;
+  if (!code || tile.noCode) return tile.href;
   return tile.href + (tile.href.includes("?") ? "&" : "?") + "pc=" + encodeURIComponent(code);
 }

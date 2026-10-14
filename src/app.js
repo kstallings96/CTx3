@@ -2062,7 +2062,7 @@ function renderHub() {
     return `<button class="tile${live ? "" : " off"}" data-tile="${t.id}" ${live ? "" : "disabled"}>
       ${ext ? `<span class="tag">opens in a new tab</span>` : ""}
       <h3>${esc(t.name)}</h3><p>${esc(t.blurb)}</p>
-      ${ext && live && S.code ? `<span class="ext">type your code there: <b>${esc(S.code)}</b></span>` : ""}
+      ${ext && live && S.code && !t.noCode ? `<span class="ext">type your code there: <b>${esc(S.code)}</b></span>` : ""}
       <span class="con">${live ? esc(t.con) : "not open yet"}</span></button>`;
   }).join("")}</div>
   ${S.facilitator ? `<section class="card pad">
