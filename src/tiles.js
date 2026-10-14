@@ -105,8 +105,8 @@ export const TILES = [
    * DEPLOY.md if that needs to change. */
   {
     id: "bh", name: "bugHunters", kind: "link",
-    href: "https://example.com/bughunters",             // PLACEHOLDER
-    placeholder: true, noCode: true,
+    href: "https://bughunters-gamma.vercel.app/",
+    noCode: true,
     day: 0, con: "debugging · testing", closedByDefault: true,
     blurb: "An AI built an app for a younger kid. Something in it is broken — find the glitches.",
   },
