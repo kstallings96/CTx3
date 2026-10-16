@@ -43,7 +43,7 @@ export const hasBackend = isSupabaseConfigured;
  *
  * `sessions.id` is a uuid with no default and `events.session_id` is NOT NULL
  * with a foreign key to it — RowdyRoboVac's shape, and the shape of the
- * database we share with it. CTx3 therefore has to supply an id, and the
+ * database we share with it. The Lab therefore has to supply an id, and the
  * obvious move, a random uuid kept in localStorage, has a hole in it: a
  * device whose storage is cleared and then signed back in under the same code
  * would mint a NEW uuid, collide with the existing row, be told "already
@@ -82,7 +82,7 @@ function derivedUuid(parts) {
  *
  * `first_name`, `last_initial` and `grade` are NOT NULL on this table, so
  * they are sent on every session row. That constraint is RowdyRoboVac's and
- * it is load-bearing for its data; CTx3 satisfies it rather than relaxing it.
+ * it is load-bearing for its data; the Lab satisfies it rather than relaxing it.
  */
 export async function startSession(participantCode, deviceId, day, identity, opts = {}) {
   if (!isSupabaseConfigured) { sessionReady = false; return false; }

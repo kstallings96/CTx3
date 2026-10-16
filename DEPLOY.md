@@ -1,4 +1,4 @@
-# Deploying CTx3
+# Deploying The Machine Lab
 
 Same Supabase + Vercel treatment as Manifest, with one addition: a serverless
 function holding the model key.
@@ -27,13 +27,13 @@ idle, and one project is one thing to wake on the morning of instead of three.
 ### The project
 
 Settled: **`jfitzhyrtrurrvhifums`** — the one RowdyRoboVac already writes to.
-CTx3 had no rows and no deployment, so repointing it was two environment
+The Lab had no rows and no deployment, so repointing it was two environment
 variables; RowdyRoboVac is a live Godot export behind a GitHub Action.
 
 Its tables are already there and **their shape is not the one this repo
 originally assumed**, which is worth knowing before you run anything:
 
-| | what is there | what CTx3 needs |
+| | what is there | what the Lab needs |
 |---|---|---|
 | `sessions.id` | `uuid` — RowdyRoboVac's session id | unchanged |
 | `sessions` | `first_name`, `last_initial`, `grade`, `user_agent`, `screen_w`, `screen_h`, `started_at` | plus `instrument`, `participant_code`, `device_id`, `day`, `meta` |
@@ -48,9 +48,9 @@ things it does deliberately:
    `backend.gd` does not send the column and now does not have to — its
    inserts keep working untouched. No GDScript edit, no re-export, no Action
    run. (The earlier plan of adding two lines to `backend.gd` is off the
-   table; this is strictly less risk.) CTx3 always sends it explicitly.
+   table; this is strictly less risk.) The Lab always sends it explicitly.
 2. **Dedup is two partial indexes, not one.** The instruments identify a
-   session differently — RowdyRoboVac by uuid, CTx3 by code plus device. A
+   session differently — RowdyRoboVac by uuid, the Lab by code plus device. A
    single index over a COALESCE of both would have had to treat a null
    participant code as a value, and then every RowdyRoboVac session row would
    collide with every other one and the second student of the day would
@@ -83,7 +83,7 @@ that the index would forbid. Send me the error rather than forcing it.
 
 ## 1b. Identifying data on minors
 
-CTx3 asks every student for a **first name and last initial** at sign-in, so a
+The Lab asks every student for a **first name and last initial** at sign-in, so a
 teacher can match a device to a paper packet. That is the only reason it is
 collected, and the code stays the unit of analysis everywhere else.
 
@@ -119,7 +119,7 @@ Open **SQL Editor**, paste [`supabase/schema.sql`](supabase/schema.sql), run it.
 Safe to re-run, and safe on the existing RowdyRoboVac tables — see the table
 above for what it changes.
 
-**Until you run it, CT Week writes nothing.** The client is wired and correct;
+**Until you run it, The Machine Lab writes nothing.** The client is wired and correct;
 the inserts come back `PGRST204 Could not find the 'day' column of 'sessions'`.
 That is the only thing standing between here and live data.
 
@@ -436,7 +436,7 @@ competing with the thing they are meant to be looking at.
 
 Two ways to bring them back:
 
-- **Five taps on the CTx3 wordmark**, top left. Five more closes it.
+- **Five taps on the wordmark**, top left. Five more closes it.
 - **`?facilitator`** on any URL, e.g.
   `https://<app>.vercel.app/monstermaker?facilitator`, to have it open from
   the start on a projector machine.
@@ -464,7 +464,7 @@ tool that failed to capture a raw input — not drift to shrug at.
 
 ## If a device never reached the network
 
-Tap the **CTx3** header five times to open the facilitator panel, then use
+Tap the header five times to open the facilitator panel, then use
 **Show JSON export**. That surfaces everything the device still holds, including
 events that never flushed. Copy it out and feed it to `npm run rescore`. It is
 the last resort in the resilience chain, not the plan.

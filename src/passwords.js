@@ -5,7 +5,7 @@
  *
  *   npm run passwords -- entry=<word> admin=<word>
  *
- * `entry` opens CT Week and is read out to the class. `admin` opens the
+ * `entry` opens The Machine Lab and is read out to the class. `admin` opens the
  * page that decides which tiles are open and is yours alone. They are
  * checked to be different words, because telling the class the admin word
  * by accident hands them the whole week.

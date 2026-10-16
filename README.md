@@ -1,4 +1,4 @@
-# CTx3
+# The Machine Lab
 
 Three computational-thinking tools for one class session, behind one
 participant code.

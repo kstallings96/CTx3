@@ -8,7 +8,7 @@
  *
  * THERE ARE TWO, AND THEY DO DIFFERENT JOBS.
  *
- *   entry  — the one word the whole class is given. It opens CT Week, and
+ *   entry  — the one word the whole class is given. It opens The Machine Lab, and
  *            that is all it does: the student still signs in with their own
  *            card afterwards. Say it out loud, write it on the board.
  *
@@ -65,7 +65,7 @@ if (!args.length) {
     console.log(`  ${name.padEnd(24)} ${current[id]
       ? "set   " + current[id].slice(0, 12) + "…"
       : id === "entry"
-        ? "NOT SET — anyone can open CT Week"
+        ? "NOT SET — anyone can open the Lab"
         : "NOT SET — the admin page is unreachable"}`);
   }
   console.log("\n  npm run passwords -- entry=roadrunners admin=<something-else>");
@@ -80,7 +80,7 @@ for (const a of args) {
   const kind = a.slice(0, i), word = a.slice(i + 1);
   if (!KINDS[kind]) { console.error(`Unknown "${kind}". One of: ${Object.keys(KINDS).join(", ")}`); process.exit(1); }
   if (!word.trim()) {
-    if (kind === "entry") { console.error("entry cannot be empty — that leaves CT Week open to anyone with the URL."); process.exit(1); }
+    if (kind === "entry") { console.error("entry cannot be empty — that leaves the Lab open to anyone with the URL."); process.exit(1); }
     delete next[kind]; console.log(`${KINDS[kind]}: removed`); continue;
   }
   if (word.trim().length < 4) { console.error(`"${word}" is too short to be worth typing. Use four characters or more.`); process.exit(1); }
@@ -113,7 +113,7 @@ const body = `/**
  *
  *   npm run passwords -- entry=<word> admin=<word>
  *
- * \`entry\` opens CT Week and is read out to the class. \`admin\` opens the
+ * \`entry\` opens The Machine Lab and is read out to the class. \`admin\` opens the
  * page that decides which tiles are open and is yours alone. They are
  * checked to be different words, because telling the class the admin word
  * by accident hands them the whole week.

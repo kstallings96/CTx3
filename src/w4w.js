@@ -970,10 +970,23 @@ export function sceneSVG(scene) {
   const empty = !P.length;
   const vbTop = Math.min(top - 14, GROUND - 60);
   const h = GROUND + 14 - vbTop;
+  /* CENTRED IN THE BAND, NOT PINNED TO ITS TOP EDGE.
+   *
+   * This label used to sit at exactly `GROUND - 60`, which is also what
+   * vbTop works out to for an empty scene -- so the baseline landed on the
+   * top edge of the viewBox and the whole word was clipped away above it.
+   * What a student saw on an empty warm-up was a sliver of a letter
+   * floating over a blank box, which reads as the tool being broken before
+   * they have typed anything. Half way up the band, with the baseline
+   * centred rather than assumed, holds wherever the band ends up. */
+  const label = (vbTop + GROUND) / 2;
   return `<svg class="mon" viewBox="0 ${vbTop} 300 ${h}" preserveAspectRatio="xMidYMax meet"
-      role="img" aria-label="the monster these instructions built">
+      role="img" aria-label="${empty ? "nothing has been drawn yet" : "the monster these instructions built"}">
     <line x1="0" y1="${GROUND}" x2="300" y2="${GROUND}" stroke="var(--line-2)" stroke-width="1.5"/>
     ${P.join("")}
-    ${empty ? `<text x="150" y="${GROUND - 60}" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--muted)">nothing was drawn</text>` : ""}
+    ${/* font-size 8, not 12, because this is USER UNITS and the box is wide:
+          a 300-unit viewBox in a ~780px card scales by about 2.6, so 12 came
+          out near 31px on screen and shouted over an empty canvas. */ ""}
+    ${empty ? `<text x="150" y="${label}" text-anchor="middle" dominant-baseline="middle" font-family="var(--mono)" font-size="8" fill="var(--muted)">write a step below, then press Build it</text>` : ""}
   </svg>`;
 }

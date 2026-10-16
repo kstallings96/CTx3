@@ -91,7 +91,7 @@ export function normalizeCode(raw) {
  * The grade these participants are in.
  *
  * `sessions.grade` is NOT NULL in the shared study database — RowdyRoboVac
- * collects it per student and the column predates CTx3. A single-grade pilot
+ * collects it per student and the column predates this tool. A single-grade pilot
  * does not need to ask fourteen 8th graders what grade they are in, so it is
  * a constant here. If a cohort ever spans grades this becomes a sign-in field
  * rather than a constant.

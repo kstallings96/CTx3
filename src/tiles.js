@@ -1,7 +1,7 @@
 /**
  * What is on the hub, and when.
  *
- * CT Week is five days and more than the tools in this repo. RowdyRoboVac and
+ * The Machine Lab is more than the tools in this repo. RowdyRoboVac and
  * VibeBuilder Studio are separate apps with their own URLs; the surveys are
  * forms somewhere else again. From a student's side none of that is visible
  * or interesting — there is one place to go, and today's thing is on it. So

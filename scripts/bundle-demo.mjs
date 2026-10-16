@@ -37,7 +37,7 @@ const head = readFileSync(join(root, "index.html"), "utf8");
 const body = head.slice(head.indexOf("<body>") + 6, head.lastIndexOf("<script"));
 const fonts = head.match(/<link rel="stylesheet" href="https:\/\/fonts[^>]*>/)[0];
 
-writeFileSync(out, `<title>CTx3</title>
+writeFileSync(out, `<title>The Machine Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 ${fonts}

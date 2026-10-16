@@ -2046,7 +2046,7 @@ function renderHub() {
   const src = settings.source();
   $("stage").innerHTML = `
   <section class="card pad hubhead">
-    <span class="eyebrow">CT Week · one hub · one sign-in</span>
+    <span class="eyebrow">The Machine Lab · one hub · one sign-in</span>
     <h1>Pick your activity</h1>
     <p class="lede">You sign in once, here, and everything you do this week stays together — so nothing you make goes missing.</p>
   </section>
@@ -2115,7 +2115,7 @@ function renderHub() {
 function renderEntry() {
   $("stage").innerHTML = `
   <section class="card pad" style="display:flex;flex-direction:column;gap:16px">
-    <div><span class="eyebrow">CT Week</span>
+    <div><span class="eyebrow">The Machine Lab</span>
       <h1 style="font-size:27px;margin-top:3px">Passcode</h1></div>
     <p class="lede">Kayleigh will give you the word for this week.</p>
     <div class="codewrap">
@@ -2382,7 +2382,7 @@ const canRoute = () => location.protocol === "http:" || location.protocol === "h
 /**
  * The two passwords.
  *
- * `entry` is the class word and opens CT Week; `admin` opens the page that
+ * `entry` is the class word and opens the Lab; `admin` opens the page that
  * decides which tiles are open. Both are salted SHA-256 digests in
  * src/passwords.js, and what they are worth is written down honestly there.
  * They are speed bumps.
@@ -2557,7 +2557,7 @@ $("resetcode").onclick = () => go("code");
  *
  * It is not deleted, though: the JSON export is the documented last resort
  * when a device never reached the network (DEPLOY.md), and losing it would
- * mean losing a participant. Five taps on the CT Week wordmark, or `?facilitator`
+ * mean losing a participant. Five taps on the wordmark, or `?facilitator`
  * in the URL, brings the whole panel back.
  */
 function toggleRail(on) {
