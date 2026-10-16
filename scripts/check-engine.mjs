@@ -105,6 +105,34 @@ const CASES = [
      the mouth with nowhere to go rather than to guess at the head. */
   { t: "1. Draw a body.\n2. Draw a head above the body.\n3. Add a mouth between the eyes and the chin.",
     drew: ["body", "head"], floats: ["mouth"] },
+
+  /* More verbatim model output, from an audit of sixteen live runs. */
+  // "in white" is a COLOUR, not a location. Reading it as one made the
+  // piece look like it had already said where it goes, so the real
+  // placement at the end of the line never reached the eyes.
+  { t: "1. Draw a body.\n2. Draw a head on the body.\n3. Add two big, friendly eyes in white with black pupils on the head.",
+    drew: ["body", "head", "eyes"] },
+  // A place word with nothing after it points at the thing just named.
+  { t: "1. Draw a body.\n2. Draw a head on the body.\n3. Draw a wide mouth on the head, and add three big, white teeth inside.",
+    drew: ["body", "head", "mouth", "teeth"] },
+  // Stripes and spikes, which the model places with "across" and "down".
+  { t: "1. Draw a big orange body.\n2. Add three colorful stripes across the body.",
+    drew: ["body", "stripes"] },
+  { t: "1. Draw a big orange body.\n2. Draw three colorful spikes down the back of the body.",
+    drew: ["body", "spikes"] },
+  /* An "and" INSIDE a location. This used to split the address in half,
+     draw a second head out of the orphan "top right sides of the head",
+     and float the ears whose location had just been truncated. One line,
+     two wrong answers, and a stray head on the page to show for it. */
+  { t: "1. Draw a body.\n2. Draw a head on the body.\n3. Attach two tiny round ears on the top left and top right sides of the head.",
+    drew: ["body", "head", "ears"] },
+
+  /* THE GUARDS. Everything above widens what counts as a placement, and
+     none of it may turn into the engine inventing one. A line that names no
+     place word, and a line pointing at a part that was never drawn, both
+     still float -- which is the contrast the whole compare panel rests on. */
+  { t: "1. Draw a body.\n2. Add two eyes to the head.",
+    drew: ["body"], floats: ["eyes"] },
 ];
 
 for (const c of CASES) {

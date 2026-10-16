@@ -47,7 +47,12 @@
  */
 export const PARTS = {
   body:     { anchor: null,    words: ["body", "blob", "monster", "torso", "creature"], shaped: true },
-  head:     { anchor: "body",  words: ["head"], shaped: true, rootable: true },
+  /* "face" is the head. Every other part here carries its synonyms and this
+     one did not, which showed up in an audit as the commonest remaining
+     failure: the model writes "a small nose in the centre of the face" and
+     the nose floated, because the machine had never heard of a face. A
+     student writing "two eyes on the face" would have hit the same wall. */
+  head:     { anchor: "body",  words: ["head", "face"], shaped: true, rootable: true },
   eyes:     { anchor: "head",  words: ["eye", "eyes", "eyeball", "eyeballs"], countable: true, plural: 2 },
   mouth:    { anchor: "head",  words: ["mouth", "grin", "smile", "frown"] },
   teeth:    { anchor: "mouth", words: ["tooth", "teeth", "fangs"], countable: true, plural: 4 },
@@ -116,7 +121,12 @@ const VERBS = /\b(draw|make|add|give|put|place|attach|build|create|stick|paste|c
  * "it only does what you wrote" and then watches it ignore what was written
  * has been taught something false.
  */
-const PLACE_WORDS = "on|onto|in|into|at|to|under|underneath|above|below|beneath|from|near|beside|next|around|between|along|over|inside|outside|atop|by";
+/* Added after an audit against the live model, not from imagination: every
+   word here was one a real run actually used to say where a part goes.
+   `down the back of the body` and `across the body` -- both for stripes and
+   spikes -- floated for exactly the same reason `at` did, and so did `arms
+   coming OUT OF the sides of the body`. */
+const PLACE_WORDS = "on|onto|in|into|at|to|under|underneath|above|below|beneath|from|near|beside|next|around|between|along|across|down|behind|through|upon|over|inside|outside|out|atop|by";
 /* Openers that mean "here is where", not "here is a new part". */
 const LOCATION = new RegExp("^(?:" + PLACE_WORDS + ")\\b");
 const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
@@ -214,6 +224,41 @@ export function w4wStep(scene, line) {
     chunks.push({ text: t.slice(at), joiner: prev });
   }
   const pieces = chunks.filter((c) => c.text.trim());
+
+  /* AN "AND" INSIDE A LOCATION IS NOT A NEW PART.
+   *
+   * "attach two tiny round ears on the top left and top right sides of the
+   * head" split into "...ears on the top left" and "top right sides of the
+   * head". The second fragment names a part, so the machine DREW A SECOND
+   * HEAD from half of a location phrase -- and the ears, their location now
+   * truncated to "the top left", had nothing to hang off and floated. One
+   * line, two wrong answers, and the visible result was a stray head.
+   *
+   * The tell is that the first piece ends with a place word pointing at
+   * nothing the machine knows: "on the top left" is an unfinished address.
+   * A following piece with no verb of its own is the rest of that address,
+   * not a new instruction. Rejoin them and let the line be read whole.
+   *
+   * Only across "and" and ",". "with" opens a list of parts and is handled
+   * below; a piece carrying its own verb is its own instruction and is left
+   * alone. */
+  for (let i = pieces.length - 1; i > 0; i--) {
+    const cur = pieces[i], prev = pieces[i - 1];
+    if (cur.joiner !== "and" && cur.joiner !== ",") continue;
+    if (VERBS.test(cur.text)) continue;
+    const pt = splitAt(prev.text).target;
+    if (pt === null || findPart(pt)) continue;
+    /* "in white" is a COLOUR, not an unfinished address, and this rule
+       nearly made that worse than it found it: "Draw a round body in white,
+       larger than your head" merged the comparison into the colour phrase,
+       found "head" at the end of it, and attached the BODY to a head that
+       did not exist -- so the body itself floated and every later part
+       cascaded off it. A place word whose object is an attribute was never
+       pointing anywhere. */
+    if (findColor(pt) || findSize(pt)) continue;
+    prev.text = prev.text + " and " + cur.text;
+    pieces.splice(i, 1);
+  }
   // A piece that NAMES a part and a piece that POINTS AT one are different
   // things. "On each side of the head, add two small round ears" is one
   // instruction with a location in front of it — reading the location as a
@@ -274,7 +319,20 @@ export function w4wStep(scene, line) {
     let withAnchor = null;
     for (const seg of segments.slice(0, 8)) {
       let text = seg.text;
-      const own = splitAt(text).target;
+      /* A TARGET THAT NAMES NO PART IS NOT A TARGET.
+       *
+       * "add two big, friendly eyes in white with black pupils on the head"
+       * splits into "add two big" / "friendly eyes in white" / "black pupils
+       * on the head". The eyes piece contains "in", so it looked like it had
+       * already said where it goes -- "white" -- and the real placement at
+       * the end of the line was therefore never offered to it. The eyes
+       * floated while the line said, in plain sight, on the head.
+       *
+       * `in white` is a colour, not a location. Requiring the target to name
+       * a part the machine knows is what tells the two apart, and it costs
+       * nothing: a target naming nothing could never have placed anything. */
+      const rawOwn = splitAt(text).target;
+      const own = rawOwn && findPart(rawOwn) ? rawOwn : null;
       /* Precedence, most explicit first: what THIS piece says, then what a
          "with" says it hangs off, then a location phrase that was its own
          piece, then a target stated once at the end of the line. */
@@ -290,6 +348,20 @@ export function w4wStep(scene, line) {
         withAnchor = lastNamed;
         hint = "on the " + lastNamed;
       } else if (!own && withAnchor) hint = "on the " + withAnchor;
+      /* A PLACE WORD WITH NOTHING AFTER IT points at the thing just named.
+       *
+       * "Draw a wide mouth on the head, and add three big white teeth
+       * INSIDE." The comma splits the teeth off, and "inside" is left
+       * dangling with no object, so nothing placed them and they floated
+       * beside the monster. A reader has no difficulty: inside the mouth.
+       *
+       * This reads the line rather than guessing at it -- the word "inside"
+       * is one the student or the model actually wrote, and the only
+       * candidate is the part named a moment earlier in the same line. It is
+       * the same move "with" already makes. A line that names NO place word
+       * still floats, which is the rule that matters. */
+      else if (!own && lastNamed && /\b(?:on|in|into|inside|under|underneath|above|below|beneath|behind|atop|over|around|between|across|down|along)[\s.!,;]*$/.test(text.trim()))
+        hint = "on the " + lastNamed;
       else if (!own && sharedTarget) hint = sharedTarget;
       // The verb lives in the first piece; carry it so each piece parses.
       const r = applyOne(scene, VERBS.test(text) ? text : "add " + text, hint);
@@ -331,11 +403,17 @@ function splitAt(t) {
 
 function applyOne(scene, t, locHint) {
   const split = splitAt(t);
-  const subject = split.subject;
+  /* The same rule as in w4wStep: a target naming no part the machine knows
+     is not a target. "two eyes in white" splits at "in", and "white" is a
+     colour -- so the split was wrong, and the WHOLE phrase is the subject.
+     Keeping the bad split would also lose the colour, because every
+     attribute is read from the subject half. */
+  const ownTarget = split.target && findPart(split.target) ? split.target : null;
+  const subject = ownTarget ? split.subject : t;
   // `locHint` is a location phrase that was split off this line as its own
   // piece -- "on the body, draw a head". It says where without saying what,
   // so it is the target for whatever the other pieces name.
-  const target = split.target || locHint || null;
+  const target = ownTarget || locHint || null;
   /* THE FALLBACK MUST NOT GRAB THE TARGET.
    *
    * "bushy eyebrows over the eyes" names a part this machine has never
@@ -656,6 +734,12 @@ export function buildPrompt(classInstruction) {
     // decoration", "optionally...") are the difference between a card the
     // back row can read and a wall of prose with a drawing lost in it.
     "- No advice about paper, page position, pencils or decorating. Just the parts.",
+    /* "Draw a round body in white, larger than your head" names a head that
+       is not part of the monster, and the engine reads it literally -- so a
+       stray head appears on the page out of a size comparison. Say where a
+       part goes by naming another PART, never by comparing it to the reader
+       or to anything off the page. */
+    "- Say sizes with the words above only. Never compare a part to anything outside the drawing — not to the reader, their hand, a real animal, or an object.",
     "- Keep it cheerful and suitable for a classroom. Nothing frightening, violent, gory or gross.",
     "",
     'The instruction: "' + String(classInstruction).replace(/"/g, "'").slice(0, 400) + '"',

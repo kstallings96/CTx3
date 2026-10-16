@@ -12,6 +12,7 @@
     "passwords": "node scripts/set-passwords.mjs",
     "check:rules": "node scripts/check-rules.mjs",
     "check:engine": "node scripts/check-engine.mjs",
+    "audit:ai": "node scripts/audit-ai.mjs",
     "roster": "node scripts/seed-roster.mjs"
   },
   "dependencies": {
