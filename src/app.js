@@ -2172,6 +2172,14 @@ function renderEntry() {
  */
 const ADMIN = { ok: false, tries: 0, picked: null, saving: false, saved: null };
 
+/* The teaching slides, linked from the admin page.
+ *
+ * A Google Slides link rather than anything hosted here, because the deck
+ * changes between periods and a copy in this repo would be the stale one
+ * exactly when it matters. Sharing is whatever Drive says it is -- this is
+ * a link, not an embed, so it inherits the deck's own permissions. */
+const SLIDES_URL = "https://docs.google.com/presentation/d/1vNpYKzHnq-5ZioIOXFBPdSQkZWdIToT8TeJULt7uCC0/edit?usp=sharing";
+
 function renderAdmin() {
   if (!ADMIN.ok) return renderAdminGate();
   // Start from what is in force, so an unticked box means "I closed this"
@@ -2211,7 +2219,15 @@ function renderAdmin() {
     <p class="note"><b>Close everything</b> and <b>Back to day defaults</b> are not the same.
       Closing everything leaves a student a hub with nothing on it until you come back.
       Day defaults hands the week back to the calendar, so each morning opens on its own.</p>
-    <div class="row"><button class="btn ghost" id="backhub">Back to hub</button></div>
+    ${/* The teaching slides. An <a>, not a button that calls window.open --
+         a real link gets middle-click, "open in new tab" and a visible
+         target on hover, which is what you want for something you open
+         while a class waits. It lives HERE and only here: the admin page
+         is already behind your own password, so a student never sees it. */ ""}
+    <div class="row" style="border-top:1px solid var(--line);padding-top:12px">
+      <a class="btn ghost" id="adminslides" href="${SLIDES_URL}" target="_blank" rel="noopener">Open the slides ↗</a>
+      <button class="btn ghost" id="backhub">Back to hub</button>
+    </div>
   </section>`;
 
   document.querySelectorAll("[data-tile]").forEach((c) => c.onchange = () => {

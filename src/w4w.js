@@ -92,8 +92,33 @@ export const SIZES = { tiny: 0.55, small: 0.75, big: 1.35, huge: 1.75, large: 1.
 export const SHAPES = ["round", "square", "tall", "wide"];
 
 const VERBS = /\b(draw|make|add|give|put|place|attach|build|create|stick|paste|color|color)\b/;
+
+/**
+ * THE WORDS THAT MEAN "HERE IS WHERE".
+ *
+ * ONE LIST, used by both the test for a line that OPENS with a placement
+ * and the split that finds one MID-LINE. They were two lists and they
+ * disagreed, and the disagreement was a real bug with a confusing symptom.
+ *
+ * `splitAt` knew on/onto/to/above/below/under/beneath/inside/in/atop/over
+ * and did NOT know `at` or `from`. So when the AI engine's model wrote
+ * "three black legs AT the bottom of the purple body", or "coming FROM the
+ * bottom of the body", the engine found no preposition it recognised,
+ * concluded the line had never said where the legs go, and drew them
+ * floating. "attached TO the bottom of the body" -- the same placement, a
+ * different word -- attached correctly.
+ *
+ * That looked from the outside like the AI ignoring its instructions. It
+ * had not: it said where every part went, in plain English, five times out
+ * of five. The engine could not read two of the ways it said it, which is
+ * the one failure this tool must not have -- the entire lesson rests on the
+ * Exact engine doing exactly what the words say, so a student who is told
+ * "it only does what you wrote" and then watches it ignore what was written
+ * has been taught something false.
+ */
+const PLACE_WORDS = "on|onto|in|into|at|to|under|underneath|above|below|beneath|from|near|beside|next|around|between|along|over|inside|outside|atop|by";
 /* Openers that mean "here is where", not "here is a new part". */
-const LOCATION = /^(?:on|in|at|to|under|above|below|beneath|from|near|beside|next|around|between|along|over|inside|outside|underneath|atop|by)\b/;
+const LOCATION = new RegExp("^(?:" + PLACE_WORDS + ")\\b");
 const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
 /** The dull defaults. Saying nothing has to LOOK like saying nothing. */
@@ -287,7 +312,8 @@ export function w4wStep(scene, line) {
  * halves come back swapped -- "on the body, draw a head" still works.
  */
 function splitAt(t) {
-  const m = t.match(/\b(?:on|onto|to|above|below|under|beneath|inside|in|atop|over)\b/);
+  // The same vocabulary LOCATION uses. See PLACE_WORDS for why that matters.
+  const m = t.match(new RegExp("\\b(?:" + PLACE_WORDS + ")\\b"));
   if (!m) return { subject: t, target: null };
   const before = t.slice(0, m.index).trim();
   const after = t.slice(m.index + m[0].length).trim();

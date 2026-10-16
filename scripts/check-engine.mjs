@@ -79,6 +79,32 @@ const CASES = [
   // the whole contrast the compare panel rests on.
   { t: "1. Draw a green body.\n2. Add a head to the body.\n3. Add two eyes.",
     drew: ["body", "head"], floats: ["eyes"] },
+
+  /* EVERY WAY OF SAYING WHERE.
+   *
+   * These are verbatim lines the AI engine's model produced, and three of
+   * the four used to float the legs. `splitAt` knew "to" and not "at" or
+   * "from", so "legs AT the bottom of the body" read as a line that never
+   * said where they go -- and from a classroom it looked like the AI
+   * ignoring its instructions, when it had said where every part went in
+   * five runs out of five.
+   *
+   * A student is told the Exact engine does exactly what the words say. If
+   * the engine can only read some of the ways English says it, that claim
+   * is false and the student who notices is right. */
+  { t: "1. Draw a big green round head.\n2. Add one big yellow eye on the green head.\n3. Draw a purple square body connected to the green head.\n4. Attach two red arms on either side of the purple body.\n5. Add three black legs at the bottom of the purple body.",
+    drew: ["head", "eyes", "body", "arms", "legs"] },
+  { t: "1. Draw a big green round head.\n2. Draw a purple wide body attached to the bottom of the green head.\n3. Draw three black legs coming from the bottom of the purple body.",
+    drew: ["head", "body", "legs"] },
+  { t: "1. Draw a body.\n2. Add two eyes near the top of the body.",
+    drew: ["body", "eyes"] },
+  /* "between the eyes" is read as a placement -- and the eyes were never
+     drawn, so the mouth floats. That is correct and worth pinning: widening
+     the vocabulary must not also start inventing anchors. The line pointed
+     at something that is not on the page, and the honest answer is to draw
+     the mouth with nowhere to go rather than to guess at the head. */
+  { t: "1. Draw a body.\n2. Draw a head above the body.\n3. Add a mouth between the eyes and the chin.",
+    drew: ["body", "head"], floats: ["mouth"] },
 ];
 
 for (const c of CASES) {
