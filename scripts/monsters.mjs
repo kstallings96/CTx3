@@ -53,7 +53,15 @@ if (!file) {
  * at someone whose only mistake was standing in the wrong folder. */
 let raw;
 try {
-  raw = JSON.parse(readFileSync(file, "utf8"));
+  /* STRIP THE BYTE ORDER MARK.
+   *
+   * Windows PowerShell's `Set-Content -Encoding utf8` writes one, and so
+   * does Notepad saving as UTF-8 -- both of which are the obvious ways to
+   * get a copied query result into a file. JSON.parse then fails on an
+   * invisible first character, and the error it produces points at JSON
+   * validity, which sends the reader hunting through their data for a
+   * problem that is not there. Three characters here, one fewer dead end. */
+  raw = JSON.parse(readFileSync(file, "utf8").replace(/^﻿/, ""));
 } catch (err) {
   if (err.code === "ENOENT") {
     console.error(`Could not find: ${err.path || file}\n`);

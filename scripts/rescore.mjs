@@ -33,7 +33,10 @@ if (!file) {
 }
 
 /* ---- accept the three shapes a log arrives in ---- */
-const raw = JSON.parse(readFileSync(file, "utf8"));
+// `.replace(/^﻿/, "")` because PowerShell's `Set-Content -Encoding utf8`
+// and Notepad both write a byte order mark, and JSON.parse chokes on it with
+// an error that blames the JSON. Same trap as scripts/monsters.mjs.
+const raw = JSON.parse(readFileSync(file, "utf8").replace(/^﻿/, ""));
 let events = Array.isArray(raw) ? raw : raw.events ?? raw.rows ?? [];
 if (!Array.isArray(events)) { console.error("no events array found in " + file); process.exit(2); }
 // Supabase rows nest the payload and name columns differently

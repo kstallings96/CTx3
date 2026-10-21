@@ -439,8 +439,18 @@ from events e
 where e.instrument = 'ctx3' and e.tool = 'monstermaker';
 ```
 
-Click the cell, copy it, paste into `log.json`. (Do not use **Download CSV** —
-the script wants JSON, and the nested payload does not survive the round trip.)
+Click the cell and copy it. (Do not use **Download CSV** — the script wants
+JSON, and the nested payload does not survive the round trip.)
+
+**Getting the clipboard into a file**, from the `ctx3` folder in PowerShell:
+
+```powershell
+Set-Content -Path log.json -Value (Get-Clipboard -Raw)
+```
+
+Or `notepad log.json`, say yes to creating it, paste, Ctrl+S. Either is fine —
+if the editor adds a byte order mark the scripts strip it, so that will not
+bite you.
 
 Then:
 
