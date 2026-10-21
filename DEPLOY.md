@@ -300,14 +300,24 @@ variables and no second thing to keep awake.
 
 | URL | What the student gets |
 |---|---|
-| `https://<app>.vercel.app/` | The hub. Sign in, then pick from the three tiles. |
-| `https://<app>.vercel.app/alwaysnever` | Sign in, then straight into AlwaysNever. No hub, no tiles, no way out. |
-| `https://<app>.vercel.app/prompt-golf` | Same, for Prompt Golf. |
-| `https://<app>.vercel.app/monstermaker` | Same, for MonsterMaker. |
+| `https://<app>.vercel.app/` | The hub. Passcode, card, then the tiles that are open. |
+| `https://<app>.vercel.app/monstermaker` | Straight into MonsterMaker, **with the hub still reachable**. |
+| `https://<app>.vercel.app/alwaysnever` | Same, for AlwaysNever. |
+| `https://<app>.vercel.app/admin` | Your page. Its own password. |
+| `…/monstermaker?station` | A LOCKED station: no hub, no tiles, no way out. |
 
-Three things a pinned URL does that the hub does not:
+> **`?station` is required for the locked behaviour, and the path alone no
+> longer does it.** It used to: any URL ending `/monstermaker` was treated as
+> a station. But entering a tool from a tile *pushes that tool's URL*, so a
+> student who opened MonsterMaker from the hub was standing on
+> `/monstermaker` — and one reload later the app decided they were at a
+> locked station and hid both the "Back to hub" button and the topbar "Hub".
+> No button, no explanation, no way out. Pinning is now something you ask
+> for and cannot fall into.
 
-1. **It sets its own day.** `/monstermaker` is day 2, the other two are day 3.
+Three things a `?station` URL does that the hub does not:
+
+1. **It sets its own day.** `/monstermaker?station` is day 2, AlwaysNever day 3.
    "The facilitator opened the right URL but forgot `?day=2`" costs you a
    period's data and is cheaper to design out than to remember. An explicit
    `?day=` still overrides, if you ever need to.
@@ -404,7 +414,7 @@ identifiable afterwards rather than silently empty.
 
 ## Study-day checklist
 
-- Open the **station's own URL** (see the table above) — it carries the right
+- For a locked station, open its **`?station` URL** (see above) — it carries the right
   day with it. On the hub URL, `?day=2` sets the day; the student never
   chooses it either way
 - **Next student** in the topbar, or `?reset` on any URL, clears the device

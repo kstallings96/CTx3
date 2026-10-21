@@ -17,7 +17,7 @@ const LS = "d3station.v2";
    replaces the per-activity `unlocked` list, which is gone -- the admin page
    decides what is open now, so a password per tool was a second answer to a
    question that already had one. */
-const S = { code: "", first: "", initial: "", pinned: null, entered: false, gateTries: 0, day: 2, screen: "hub", tool: "hub", events: [], seq: 0,
+const S = { code: "", first: "", initial: "", pinned: null, landing: null, entered: false, gateTries: 0, day: 2, screen: "hub", tool: "hub", events: [], seq: 0,
   support: "na", phaseId: null, phaseScaffolds: [],
   forceOffline: false, brandTaps: 0, lastAttempt: null, facilitator: false, deviceId: deviceId() };
 const nowISO = () => new Date().toISOString();
@@ -1518,6 +1518,10 @@ function w4wPlay() {
       const prec = w4wPrecision(W4W.scene, text);
       emit("instruction_executed", { matched: chk.matched, graded: chk.graded, mismatch: chk.miss,
         partsPlaced: chk.placed, partsFloating: [...new Set(W4W.scene.floating)], ...prec,
+        /* The monster this student built, in the same compact form the
+           pipeline records -- so "what did each student make" is one query
+           across both halves of the tool rather than two shapes of row. */
+        monster: sceneSignature(W4W.scene),
         failurePoint: dead < 0 ? null : dead, quadrant: "solo" });
       emit("attempt_evaluated", { attemptId: id, partsPlaced: chk.placed,
         partsFloating: [...new Set(W4W.scene.floating)], ...prec,
@@ -1553,7 +1557,7 @@ async function w4wRunFive() {
     const safeIn = checkSafe(text, { structural: false });
     if (!safeIn.ok) {
       W4W.blockedInput = SAFE_MESSAGE[safeIn.reason] || "that instruction was held back";
-      emit("instruction_blocked", { participantCode: null, reason: safeIn.reason, quadrant });
+      emit("instruction_blocked", { reason: safeIn.reason, quadrant });
       renderW4W();
       return;
     }
@@ -1562,7 +1566,7 @@ async function w4wRunFive() {
   W4W.runs = Array.from({ length: W4W.N }, () => ({ out: null }));
   W4W.running = true; W4W.ctl = new AbortController();
   // Projector rows are class-level: no participant attribution, by design.
-  emit("instruction_submitted", { participantCode: null, text, stepCount: text.split("\n").filter(Boolean).length,
+  emit("instruction_submitted", { text, stepCount: text.split("\n").filter(Boolean).length,
     revisionType: "class", numbered: isNumbered(text), quadrant });
   renderW4W();
   for (let k = 0; k < W4W.N; k++) {
@@ -1586,7 +1590,7 @@ async function w4wRunFive() {
     if (!W4W.running) break;
     if (held) {
       W4W.runs[k] = { out: null, held, src: "live" };
-      emit("run_withheld", { participantCode: null, instructionId, runIndex: k + 1, reason: held, quadrant });
+      emit("run_withheld", { instructionId, runIndex: k + 1, reason: held, quadrant });
       renderW4W();
       continue;
     }
@@ -1595,7 +1599,7 @@ async function w4wRunFive() {
     const first = W4W.runs[0].out;
     W4W.runs[k] = { out, src, scene, chk, same: k > 0 && first != null && out.trim() === first.trim(),
       inferred: src === "literal" ? [] : w4wInferred(text, out) };
-    emit("run_executed", { participantCode: null, instructionId, runIndex: k + 1, output: out.slice(0, 60),
+    emit("run_executed", { instructionId, runIndex: k + 1, output: out.slice(0, 60),
       sameAsRun1: k === 0 ? null : W4W.runs[k].same, matched: chk.matched, inferredCount: W4W.runs[k].inferred.length, quadrant });
     renderW4W();
   }
@@ -1612,9 +1616,25 @@ async function w4wRunFive() {
   // The finished set belongs to the stage that produced it, so the
   // comparison at the end has both to put side by side.
   W4W.results[W4W.stage] = { runs: W4W.runs.slice(), text };
-  emit("engine_run_complete", { participantCode: null, engine: W4W.stage,
+  /* THE MONSTERS THEMSELVES, not just how many were different.
+   *
+   * This used to log only the two counts, which answers "did it vary" and
+   * nothing else. It cannot answer what a student actually built, whether
+   * the AI's inventions cluster (does it always add a tail?), or what any
+   * particular picture on the screen was -- and those are the questions
+   * worth asking of a week's data afterwards.
+   *
+   * `sceneSignature` is the compact form -- name:on:count:color:size:shape
+   * per part, sorted -- so a run is a short string, five of them fit in one
+   * row, and two identical monsters are literally equal strings. `inferred`
+   * is what the AI added that nobody asked for, which is the whole claim
+   * the right-hand column makes. */
+  emit("engine_run_complete", { engine: W4W.stage,
     runs: done.length, distinctAnswers: uniq.size,
-    distinctMonsters: new Set(done.map((r) => sceneSignature(r.scene))).size });
+    distinctMonsters: new Set(done.map((r) => sceneSignature(r.scene))).size,
+    instruction: text.replace(/\n/g, " / "),
+    monsters: done.map((r) => sceneSignature(r.scene)),
+    inferred: done.map((r) => (r.inferred || []).join("+")) });
   W4W.running = false; renderW4W();
 }
 
@@ -1808,10 +1828,13 @@ function renderW4W() {
      whoever was running the room rather than for the person reading it. */
   const goal = `
     <div class="goal">
-      <span class="eyebrow">what you are building</span>
-      <p><b>${W4W.mode === "solo"
-        ? "The monster you drew. Write the steps that would build it."
-        : "The monster everyone is looking at. Write the steps that would build it."}</b></p>
+      ${/* One line for both halves. The pipeline's used to say "the monster
+            everyone is looking at", which was the projector framing from
+            when this ran on a screen at the front -- on a Chromebook, with
+            a monster the student drew on their own paper, it was describing
+            a room that is not there. */ ""}
+      <span class="eyebrow">your monster</span>
+      <p><b>The monster you drew. Write the steps that would build it.</b></p>
       <p class="hint">Nothing here is marked. Hold what it builds up against the drawing.</p>
     </div>`;
 
@@ -1965,13 +1988,13 @@ function wireW4W() {
    * keeps the saved set, so the comparison at the end still has both. */
   const next = $("w4wnext"); if (next) next.onclick = () => {
     const to = W4W.stage === "literal" ? "ai" : "compare";
-    emit("stage_advanced", { participantCode: null, from: W4W.stage, to });
+    emit("stage_advanced", { from: W4W.stage, to });
     W4W.stage = to;
     W4W.executor = to === "ai" ? "ai" : W4W.executor;
     W4W.runs = [];
     renderW4W(); };
   const again = $("w4wrestart"); if (again) again.onclick = () => {
-    emit("stage_restarted", { participantCode: null, hadNotes: !!W4W.notes.trim() });
+    emit("stage_restarted", { hadNotes: !!W4W.notes.trim() });
     W4W.stage = "literal"; W4W.executor = "literal";
     W4W.results = { literal: null, ai: null }; W4W.runs = []; W4W.notes = ""; W4W.notesSent = false; W4W.vague = "";
     renderW4W(); };
@@ -1987,7 +2010,7 @@ function wireW4W() {
     const shapes = (key) => W4W.results[key]
       ? new Set(W4W.results[key].runs.filter((r) => r.out).map((r) => sceneSignature(r.scene))).size
       : null;
-    emit("class_observation", { participantCode: null, note: W4W.notes,
+    emit("class_observation", { note: W4W.notes,
       literalMonsters: shapes("literal"), aiMonsters: shapes("ai") });
     W4W.notesSent = true;
     /* Repaint the button and lock the box, not the screen. The panel above
@@ -2150,7 +2173,7 @@ function renderEntry() {
     }
     S.entered = true; S.gateTries = 0; save();
     emit("gate_unlocked", { kind: "entry" });
-    go(S.code ? (S.pinned || "hub") : "code");
+    go(S.code ? (S.pinned || S.landing || "hub") : "code");
   };
 }
 
@@ -2355,7 +2378,7 @@ function renderCodeReal() {
     emit("session_start", { participantCode: v, tool: "hub", day: S.day, deviceId: S.deviceId, recorded: false });
     // The class word came first, so this is the last door. Straight to the
     // hub, or to the one tool on a pinned station.
-    go(S.pinned || "hub");
+    go(S.pinned || S.landing || "hub");
   };
 }
 
@@ -2375,13 +2398,45 @@ function renderCodeReal() {
  */
 const PATHS = Object.fromEntries(TOOLS.map((t) => [t.path, t.id]));
 const IDS = new Set(TOOLS.map((t) => t.id));
-function pinnedTool() {
+/**
+ * PINNING NOW NEEDS `?station`, AND THE PATH ALONE NO LONGER DOES IT.
+ *
+ * A pinned device is one set up for a single activity: no hub, no tiles, no
+ * way out, so a student at that station cannot wander into Thursday's tool.
+ * It used to be inferred from the path, which was right when a facilitator
+ * handed out /monstermaker as a station URL and nothing else ever sat on
+ * that path.
+ *
+ * THAT BECAME A TRAP. go() pushes the tool's own URL into the address bar,
+ * so a student who opens MonsterMaker from the hub is standing on
+ * /monstermaker -- and the moment they reload, or come back to an open tab,
+ * the app reads the path, decides this is a locked station, and hides BOTH
+ * the in-page "Back to hub" and the topbar "Hub". No button, no way out,
+ * and nothing on screen to explain why. On a Chromebook cart where the hub
+ * is the landing page, that is most of a period lost to a reload.
+ *
+ * So pinning is now something you ASK for and cannot fall into. `?station`
+ * says it out loud, and the path is just a path.
+ */
+/** Which tool this URL names, locked or not. */
+function urlTool() {
   const seg = location.pathname.split("/").filter(Boolean).pop();
   if (seg && PATHS[seg]) return PATHS[seg];
   const q = (new URLSearchParams(location.search).get("tool") || "").trim();
   if (PATHS[q]) return PATHS[q];
   if (IDS.has(q)) return q;
   return null;
+}
+
+/**
+ * WHERE THE URL SENDS YOU and WHETHER YOU CAN LEAVE are two questions, and
+ * collapsing them into one is what caused the trap above. `/monstermaker`
+ * should still open MonsterMaker -- that is a useful link to hand out --
+ * it just must not also weld the door shut.
+ */
+const landingTool = () => urlTool();
+function pinnedTool() {
+  return new URLSearchParams(location.search).has("station") ? urlTool() : null;
 }
 /* The admin page has a URL of its own so it can be bookmarked, and so a
    facilitator does not have to find a hidden tap target in front of a
@@ -2495,7 +2550,18 @@ function go(screen, opts) {
     phaseStart("pg-high", "high", ["priorPromptsVisible", "wordCountLive", "targetChecklist"]);
     emit("task_start", { taskId: "pg-c1", round: 0 }); renderPG();
     brief(BRIEFS.pg_intro); }
-  // Whole-class: these rows are not attributed to a student, by design.
+  /* ATTRIBUTED TO THE STUDENT, which it did not used to be.
+   *
+   * Every event here passed `participantCode: null` on purpose: the
+   * pipeline ran on a projector, one screen for the room, and a row filed
+   * under whoever happened to be driving would have been a lie.
+   *
+   * That room is gone. Each student is on their own Chromebook, signed in
+   * with their own card, building their own monster -- so the rows belong
+   * to them, and anonymising them threw away the only thing that makes the
+   * data answerable: which monster was whose. The `null` is removed rather
+   * than overridden, so `emit`'s default (S.code) applies as it does
+   * everywhere else in the app. */
   else if (screen === "w4w") {
     S.support = "na";
     emit("session_start", { tool: "monstermaker", day: S.day, deviceId: S.deviceId });
@@ -2625,14 +2691,19 @@ function start(snap) {
   // state, because everything downstream -- the hub button, the back buttons,
   // where sign-in lands -- has to agree about it.
   S.pinned = pinnedTool();
+  S.landing = landingTool();
   if (qs.has("facilitator")) { S.facilitator = true; toggleRail(true); }
   // A pinned URL carries its own day, so ?day= becomes optional on it.
   // "The facilitator opened /monstermaker but forgot ?day=2" is a study-day
   // failure that costs you the whole period's data, and it is cheaper to
   // design out than to remember. An explicit ?day= still overrides.
-  if (S.pinned && !(qd >= 1 && qd <= 5)) {
-    const tile = TILES.find((t) => t.screen === TOOLS.find((x) => x.id === S.pinned).screen);
-    if (tile) S.day = tile.day;
+  /* A URL that names a tool carries that tool's day, pinned or not --
+     "opened the right link but forgot ?day=" costs a period's data either
+     way. An explicit ?day= still wins. */
+  if (S.landing && !(qd >= 1 && qd <= 5)) {
+    const tool = TOOLS.find((x) => x.id === S.landing);
+    const tile = tool && TILES.find((t) => t.screen === tool.screen);
+    if (tile && tile.day > 0) S.day = tile.day;
   }
   if (S.pinned) $("hubbtn").hidden = true;
   // ?reset hands the device to the next student: nothing of the last one stays,
@@ -2685,7 +2756,7 @@ function start(snap) {
   if (adminRoute()) go("admin");
   else if (!S.entered) go("entry");
   else if (!S.code) go("code");
-  else go(S.pinned || (S.screen === "code" || S.screen === "entry" ? "hub" : S.screen));
+  else go(S.pinned || S.landing || (S.screen === "code" || S.screen === "entry" ? "hub" : S.screen));
 }
 start({});
 

@@ -36,11 +36,10 @@
  */
 export const TILES = [
   {
-    id: "presurvey", name: "Before we start", kind: "link",
-    href: "https://example.com/ct-week-pre-survey",     // PLACEHOLDER
-    placeholder: true,
+    id: "presurvey", name: "Pre Survey", kind: "link",
+    href: "https://utsa.az1.qualtrics.com/jfe/form/SV_ahlzM8ekjzewd4W",
     day: 1, con: "a few questions",
-    blurb: "A short survey before the week begins. There are no right answers.",
+    blurb: "A few questions before we start. There are no right answers.",
   },
   {
     id: "rrv", name: "RowdyRoboVac", kind: "link",
@@ -80,11 +79,10 @@ export const TILES = [
     blurb: "Describe what you want and build it. Two days, one project.",
   },
   {
-    id: "postsurvey", name: "After the week", kind: "link",
-    href: "https://example.com/ct-week-post-survey",    // PLACEHOLDER
-    placeholder: true,
+    id: "postsurvey", name: "Post Survey", kind: "link",
+    href: "https://utsa.az1.qualtrics.com/jfe/form/SV_1Sa5r5hHwXOJEG2",
     day: 5, con: "a few questions",
-    blurb: "The same kind of survey as the first one, now that you have done the week.",
+    blurb: "The same kind of questions as the first one, now that you have done it all.",
   },
   /* bugHunters, which has NO DAY of its own.
    *
