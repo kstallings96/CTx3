@@ -412,6 +412,34 @@ drop the `placeholder: true` flag. Until you do, the tiles work and log
 `left_for_tool` with `placeholder: true`, so a run done against the stubs is
 identifiable afterwards rather than silently empty.
 
+## Seeing the monsters afterwards
+
+No picture is ever stored. Each monster is one short string — the parts, what
+each is attached to, how many, and its colour, size and shape — and the engine
+turns that back into the identical drawing. `npm run check:engine` asserts that
+round trip byte for byte on every case, which is what makes the redraw exact
+rather than approximate.
+
+Pull the rows and redraw them:
+
+```sql
+select * from events
+where instrument = 'ctx3' and tool = 'monstermaker'
+order by participant_code, seq;
+```
+
+Save that as JSON, then:
+
+```bash
+npm run monsters -- log.json
+```
+
+It writes `monsters.html`: every participant, their own warm-up builds, and
+each engine's five runs side by side with the tally and what the AI added that
+nobody asked for. Parts drawn with nowhere to attach get a red border, because
+those are the underspecified instructions and they are the interesting ones.
+It also accepts a device's JSON export, or a bare array of rows.
+
 ## Study-day checklist
 
 - For a locked station, open its **`?station` URL** (see above) — it carries the right

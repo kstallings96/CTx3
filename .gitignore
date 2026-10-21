@@ -7,3 +7,6 @@ dist
 
 # The admin word in plain text, for you to read. Never committed.
 admin-password.txt
+
+# Output of `npm run monsters` — regenerate it, do not commit it.
+monsters.html

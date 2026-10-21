@@ -30,6 +30,8 @@ pre-recorded runs that are labelled as recordings on screen. Add credentials
 | `npm run dev` | dev server |
 | `npm run build` | production build |
 | `npm run rescore -- log.json --check` | recompute every derived field from a raw event log |
+| `npm run monsters -- log.json` | redraw every monster in a log as one HTML sheet |
+| `npm run audit:ai` | check the Exact engine still understands what the AI engine writes |
 
 `?reset` on any URL clears the device for the next student. `?day=2` or
 `?day=3` sets the day; students never choose it.
