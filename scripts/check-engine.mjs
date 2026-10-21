@@ -20,7 +20,7 @@
  * the monster is the student's business. What this checks is narrower and
  * mechanical: the engine must never claim two incompatible things.
  */
-import { w4wRun, w4wCheck, PARTS } from "../src/w4w.js";
+import { w4wRun, w4wCheck, PARTS, sceneSignature, sceneSVG, freshScene } from "../src/w4w.js";
 
 let failures = 0;
 const fail = (what, detail) => {
@@ -188,6 +188,42 @@ for (const c of CASES.slice(0, 3)) {
       fail("the same instruction built a different monster", c.t.replace(/\n/g, " / "));
 }
 console.log("ok   deterministic          same words in, same monster out, 5 times");
+
+/* THE SIGNATURE MUST REBUILD THE DRAWING.
+ *
+ * `sceneSignature` is what the event log stores for every monster -- it is
+ * how "what did this student make" gets answered months later, without
+ * keeping a picture per run. That only holds if the string is COMPLETE:
+ * parse it back, render it, and get the same drawing byte for byte.
+ *
+ * It did not hold once. Floating parts were left out, so a run whose arms
+ * hung unattached hashed identically to a run with no arms -- a redraw
+ * would have silently dropped them, and `distinctMonsters` counted two
+ * different pictures as one. This is the check that would have caught it. */
+function rebuildFromSignature(sig) {
+  const s = freshScene();
+  if (!sig) return s;
+  for (const chunk of sig.split("|")) {
+    const [name, on, count, color, size, shape] = chunk.split(":");
+    const part = { on: (on === "-" || on === "~") ? null : on, count: Number(count),
+      color: color === "-" ? null : color, size: size === "-" ? null : size,
+      shape: shape === "-" ? null : shape };
+    if (on === "~") { s.loose[name] = part; s.floating.push(name); }
+    else { s.parts[name] = part; s.order.push(name); }
+  }
+  return s;
+}
+for (const c of CASES) {
+  const scene = w4wRun(c.t).scene;
+  const sig = sceneSignature(scene);
+  const back = rebuildFromSignature(sig);
+  if (sceneSignature(back) !== sig)
+    fail("a signature did not survive a round trip", sig + "  ->  " + sceneSignature(back));
+  else if (sceneSVG(back) !== sceneSVG(scene))
+    fail("a rebuilt signature drew a different picture",
+      c.t.replace(/\n/g, " / ") + "\n        " + sig);
+}
+console.log(`ok   signature round trip   ${CASES.length} monsters redrawn byte-identical from the log`);
 
 console.log(failures
   ? `\n${failures} FAILURE(S)`

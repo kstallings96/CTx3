@@ -642,11 +642,30 @@ export function w4wRun(text) {
  * one sits on, and its count, colour, size and shape. Sorted, so two
  * identical monsters built in a different order still count as one.
  */
+/**
+ * The whole drawing as one short string: `name:on:count:colour:size:shape`
+ * per part, sorted, joined with `|`. `-` is "nothing said", and `~` in the
+ * `on` field means the part is FLOATING -- drawn, but with nowhere to go.
+ *
+ * It is written to be rebuildable, not just comparable. Parse it back into
+ * a scene and sceneSVG() returns a byte-identical drawing, so every monster
+ * in the event log can be redrawn later without storing a picture.
+ *
+ * FLOATING PARTS USED TO BE MISSING FROM IT, and that was not only a gap in
+ * the log. The signature is what `distinctMonsters` counts -- the "5
+ * different monsters out of 5 runs" line on screen -- and a run whose arms
+ * hung unattached in the corner hashed the same as a run with no arms at
+ * all. Two obviously different pictures, counted as one. The number
+ * undercounted exactly the variation the activity exists to show, since an
+ * unplaced part is what an underspecified instruction produces.
+ */
 export function sceneSignature(scene) {
-  return Object.keys(scene.parts).sort().map((name) => {
-    const p = scene.parts[name];
-    return [name, p.on || "-", p.count ?? 1, p.color || "-", p.size || "-", p.shape || "-"].join(":");
-  }).join("|");
+  const row = (name, p, floating) =>
+    [name, floating ? "~" : (p.on || "-"), p.count ?? 1,
+      p.color || "-", p.size || "-", p.shape || "-"].join(":");
+  const placed = Object.keys(scene.parts).map((n) => row(n, scene.parts[n], false));
+  const loose = Object.keys(scene.loose || {}).map((n) => row(n, scene.loose[n], true));
+  return [...placed, ...loose].sort().join("|");
 }
 
 export function w4wCheck(scene) {
