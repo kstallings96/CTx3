@@ -166,9 +166,26 @@ export async function flushNow(final = false) {
 }
 
 /** The last resort in the chain: everything this device still holds. */
-export function exportJSON(participantCode, day) {
+/**
+ * The device's own copy of its events, as JSON.
+ *
+ * IT USED TO EXPORT THE UNSENT QUEUE, which is almost always empty and is
+ * therefore almost always useless. The queue drains the moment a flush
+ * succeeds, so a device that worked perfectly exported `events: []` --
+ * exactly when you reach for this button to see what a student did. The
+ * failure mode it was built for, a device that never reached the network,
+ * is the one case where the two are the same thing.
+ *
+ * `kept` is the retained buffer the app holds (the last few hundred
+ * events), passed in rather than read here because it lives in app state.
+ * `unsent` still says how many have not reached the database, which is the
+ * number that matters when deciding whether to keep the file.
+ */
+export function exportJSON(participantCode, day, kept) {
+  const events = Array.isArray(kept) && kept.length ? kept : queue;
   return JSON.stringify(
-    { participantCode, day, exportedAt: new Date().toISOString(), unsent: queue.length, events: queue },
+    { participantCode, day, exportedAt: new Date().toISOString(),
+      unsent: queue.length, count: events.length, events },
     null, 1,
   );
 }

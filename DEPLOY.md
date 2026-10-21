@@ -420,25 +420,57 @@ turns that back into the identical drawing. `npm run check:engine` asserts that
 round trip byte for byte on every case, which is what makes the redraw exact
 rather than approximate.
 
-Pull the rows and redraw them:
+There are two ways to get a log, and the quick one is often enough.
+
+**From one device, no SQL.** Five taps on the wordmark (or `?facilitator` in
+the URL) opens the facilitator panel; **Show JSON export** puts that device's
+events in a box. Select all, paste into a file, done. This exports the whole
+retained buffer, not just whatever is unsent — it used to export only the
+unsent queue, which drains to empty the moment a flush succeeds, so a device
+that worked perfectly exported nothing.
+
+**From the database, for everybody.** In the Supabase **SQL Editor**, run this
+— it returns ONE cell containing the whole log as JSON, so there is nothing to
+convert:
 
 ```sql
-select * from events
-where instrument = 'ctx3' and tool = 'monstermaker'
-order by participant_code, seq;
+select json_agg(row_to_json(e) order by e.participant_code, e.seq)
+from events e
+where e.instrument = 'ctx3' and e.tool = 'monstermaker';
 ```
 
-Save that as JSON, then:
+Click the cell, copy it, paste into `log.json`. (Do not use **Download CSV** —
+the script wants JSON, and the nested payload does not survive the round trip.)
+
+Then:
 
 ```bash
 npm run monsters -- log.json
 ```
 
+> `npm run` resolves paths from the **project root**, whatever folder you are
+> standing in. `log.json` in `ctx3/` works; `log.json` in `ctx3/scripts/` does
+> not. Use a full path if in doubt.
+
 It writes `monsters.html`: every participant, their own warm-up builds, and
 each engine's five runs side by side with the tally and what the AI added that
 nobody asked for. Parts drawn with nowhere to attach get a red border, because
 those are the underspecified instructions and they are the interesting ones.
-It also accepts a device's JSON export, or a bare array of rows.
+
+**If the sheet comes back empty**, the rows predate the change that started
+recording monsters (21 October 2026). Check with:
+
+```sql
+select type, count(*) as rows,
+       count(payload->'monster') + count(payload->'monsters') as with_monsters
+from events
+where instrument = 'ctx3' and tool = 'monstermaker'
+group by type order by type;
+```
+
+`with_monsters` at zero means those runs happened on an older build. Nothing is
+recoverable from them — the drawing was never in the row — so run the tool once
+more on the current build and export again.
 
 ## Study-day checklist
 

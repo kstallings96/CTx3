@@ -2669,7 +2669,7 @@ $("brand").onclick = () => {
 };
 function showJSON() {
   const box = $("jsonbox"); box.hidden = false;
-  box.value = exportJSON(S.code, S.day);
+  box.value = exportJSON(S.code, S.day, S.events);
   box.scrollIntoView({ block: "center", behavior: "smooth" }); box.select();
   emit("support_used", { kind: "json_export" });
 }
