@@ -127,6 +127,21 @@ const CASES = [
   { t: "1. Draw a body.\n2. Draw a head on the body.\n3. Attach two tiny round ears on the top left and top right sides of the head.",
     drew: ["body", "head", "ears"] },
 
+  /* A REAL STUDENT INSTRUCTION, verbatim, that lost two parts.
+   *
+   * `findPart` returns the earliest word it recognises, and "striped" was a
+   * word for the stripes part -- so "small yellow striped head on body"
+   * matched the adjective, drew a stripe on the body, and never drew the
+   * head. The next line's eyes then had nothing to sit on and floated.
+   *
+   * And "big red feet on body" drew ONE leg: the plural test wanted a word
+   * ending in "s", and "feet" ends in "t". */
+  { t: "big green body\nsmall yellow striped head on body\nthree eyes on head\nbig red feet on body\npurple arms on feet",
+    drew: ["body", "head", "eyes", "legs", "arms"] },
+  // The noun still makes stripes; only the adjective was removed.
+  { t: "1. Draw a big orange body.\n2. Add four stripes to the body.",
+    drew: ["body", "stripes"] },
+
   /* THE GUARDS. Everything above widens what counts as a placement, and
      none of it may turn into the engine inventing one. A line that names no
      place word, and a line pointing at a part that was never drawn, both

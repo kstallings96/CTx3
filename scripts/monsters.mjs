@@ -44,8 +44,33 @@ if (!file) {
   process.exit(2);
 }
 
-/* ---- the three shapes a log arrives in, normalised exactly as rescore ---- */
-const raw = JSON.parse(readFileSync(file, "utf8"));
+/* ---- the three shapes a log arrives in, normalised exactly as rescore ----
+ *
+ * The read is wrapped because the raw ENOENT stack trace is useless to the
+ * person who will actually hit this. `npm run` sets the working directory to
+ * the PACKAGE ROOT, so `npm run monsters -- log.json` typed from inside
+ * scripts/ looks for ctx3/log.json and throws forty lines of node internals
+ * at someone whose only mistake was standing in the wrong folder. */
+let raw;
+try {
+  raw = JSON.parse(readFileSync(file, "utf8"));
+} catch (err) {
+  if (err.code === "ENOENT") {
+    console.error(`Could not find: ${err.path || file}\n`);
+    console.error("`npm run` always resolves paths from the project root, whatever");
+    console.error("folder you typed it in. So either move the file there, or give");
+    console.error("the full path:\n");
+    console.error("  npm run monsters -- C:\\path\\to\\log.json");
+  } else if (err instanceof SyntaxError) {
+    console.error(`${file} is not valid JSON.\n`);
+    console.error("A Supabase CSV download will not work — pick JSON in the export");
+    console.error("menu, or paste the query result as JSON.\n");
+    console.error("  " + err.message);
+  } else {
+    console.error(`Could not read ${file}: ${err.message}`);
+  }
+  process.exit(2);
+}
 let events = Array.isArray(raw) ? raw : raw.events ?? raw.rows ?? [];
 if (!Array.isArray(events)) { console.error("no events array found in " + file); process.exit(2); }
 events = events.map((e, i) => ({

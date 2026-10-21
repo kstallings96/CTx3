@@ -65,7 +65,15 @@ export const PARTS = {
   tail:     { anchor: "trunk", words: ["tail"] },
   wings:    { anchor: "trunk", words: ["wing", "wings"], countable: true, plural: 2 },
   spots:    { anchor: "trunk", words: ["spot", "spots", "dot", "dots", "polka"], countable: true, plural: 6 },
-  stripes:  { anchor: "trunk", words: ["stripe", "stripes", "striped"], countable: true, plural: 4 },
+  /* "striped" is NOT here, and that is the fix for a line that lost a part.
+     `findPart` returns the EARLIEST word it recognises, so "small yellow
+     striped head on body" matched "striped" before "head" -- the machine
+     drew a stripe on the body and never drew the head at all, and the next
+     line's eyes then floated with nothing to sit on. One adjective, two
+     parts gone. "striped" is only ever an adjective; adjectives the engine
+     cannot draw are ignored, the same as "friendly" or "curly". "add
+     stripes to the body" still works, because that is the noun. */
+  stripes:  { anchor: "trunk", words: ["stripe", "stripes"], countable: true, plural: 4 },
   spikes:   { anchor: "trunk", words: ["spike", "spikes", "scales"], countable: true, plural: 5 },
 };
 
@@ -129,6 +137,10 @@ const VERBS = /\b(draw|make|add|give|put|place|attach|build|create|stick|paste|c
 const PLACE_WORDS = "on|onto|in|into|at|to|under|underneath|above|below|beneath|from|near|beside|next|around|between|along|across|down|behind|through|upon|over|inside|outside|out|atop|by";
 /* Openers that mean "here is where", not "here is a new part". */
 const LOCATION = new RegExp("^(?:" + PLACE_WORDS + ")\\b");
+/* The plural forms in PARTS that do not end in "s". Kept beside the part
+   list so adding an irregular word and forgetting this is one glance, not a
+   silent off-by-a-lot in the count. */
+const IRREGULAR_PLURALS = new Set(["feet", "teeth", "antennae"]);
 const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
 /** The dull defaults. Saying nothing has to LOOK like saying nothing. */
@@ -449,7 +461,14 @@ function applyOne(scene, t, locHint) {
      line, so the head came back yellow -- the word belonged to the body
      it was being attached to. Every attribute now comes from the half
      that names the thing being drawn. */
-  const plural = def.words.some((w) => w.endsWith("s") && new RegExp("\\b" + w + "\\b").test(subject));
+  /* ENGLISH DOES NOT ALWAYS PLURALISE WITH AN S, and this used to assume it
+     did. "big red feet on body" drew ONE leg, because no word ending in "s"
+     appeared in the line -- "feet" is the plural and it ends in "t". Same
+     for "add teeth", which drew a single tooth where the part's own natural
+     count is four. A student writing the ordinary English word got the
+     wrong number back and nothing on screen said why. */
+  const plural = def.words.some((w) =>
+    (w.endsWith("s") || IRREGULAR_PLURALS.has(w)) && new RegExp("\\b" + w + "\\b").test(subject));
   const count = def.countable ? (n || (plural ? def.plural || 2 : 1)) : 1;
   const color = findColor(subject);
   const size = findSize(subject);
