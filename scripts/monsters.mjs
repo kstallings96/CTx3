@@ -86,8 +86,29 @@ events = events.map((e, i) => ({
   ts: e.ts ?? e.client_ts ?? e.clientTs ?? null,
   type: e.type,
   participantCode: e.participantCode ?? e.payload?.participantCode ?? e.participant_code ?? null,
+  /* `seq` RESTARTS AT 1 IN EVERY SESSION, so it orders events only within
+     one. The session is what makes it unique, and it is needed for more
+     than sorting -- see the pairing below. */
+  sessionId: e.session_id ?? e.sessionId ?? e.deviceId ?? e.device_id ?? null,
   payload: e.payload ?? e,
 }));
+
+/* PUT THEM IN THE ORDER THEY HAPPENED.
+ *
+ * A Supabase dump comes back ordered by whatever the query said -- for the
+ * one in DEPLOY.md, participant then seq. With `seq` restarting each
+ * session, that interleaves two sittings of the same student: two rows both
+ * numbered 9, from different afternoons, landing next to each other.
+ *
+ * That is not cosmetic. The text of an instruction and the monster it drew
+ * are on separate rows, paired by "the most recent text before this
+ * drawing" -- and out of order, a build was captioned with words typed in a
+ * different session. The sheet showed a purple monster above an instruction
+ * that described a green one, which is worse than showing no words at all.
+ * Sorting by timestamp, with seq to break ties inside a session, restores
+ * the real sequence whatever the query asked for. */
+events.sort((a, b) =>
+  String(a.ts ?? "").localeCompare(String(b.ts ?? "")) || (a.seq ?? 0) - (b.seq ?? 0));
 
 /**
  * A signature back into a scene.
@@ -139,10 +160,36 @@ const add = (code, item) => {
 };
 
 let built = 0, skipped = 0;
+/* THE WORDS THAT PRODUCED THE DRAWING, carried forward to it.
+ *
+ * `instruction_executed` records the monster but not the text -- the text is
+ * on the `instruction_submitted` (or `attempt_submitted`) row just before it.
+ * Without pairing them the sheet shows a picture with no way to tell whether
+ * the engine misread the student or the student wrote something the engine
+ * does not know, and the first guess is always that the tool is broken.
+ *
+ * It is a real distinction. "Green big human shape with alien looking ears
+ * and a big nose with spiky fur" drew two ears and a nose, floating -- which
+ * is exactly right: "human shape" and "spiky fur" name no part the machine
+ * has, and nothing in the line said where the ears or the nose go. Shown
+ * next to the drawing that reads as a lesson. Shown without it, it reads as
+ * a bug. */
+const lastText = new Map();
 for (const e of events) {
   const p = e.payload || {};
+  const text = p.text ?? p.artifact ?? null;
+  /* Keyed by SESSION. Two sittings of the same student are two threads of
+     work, and the text from one must never caption a drawing from the
+     other -- which is exactly what keying on the participant allowed. */
+  const thread = e.sessionId ?? e.participantCode;
+  if (text && (e.type === "instruction_submitted" || e.type === "attempt_submitted"))
+    lastText.set(thread, String(text));
+
   if (e.type === "instruction_executed" && p.monster) {
-    add(e.participantCode, { kind: "own", sig: p.monster, seq: e.seq, ts: e.ts });
+    add(e.participantCode, { kind: "own", sig: p.monster, seq: e.seq, ts: e.ts,
+      instruction: lastText.get(thread) || null,
+      floating: Array.isArray(p.partsFloating) ? p.partsFloating : [],
+      placed: Array.isArray(p.partsPlaced) ? p.partsPlaced : [] });
     built++;
   } else if (e.type === "engine_run_complete" && Array.isArray(p.monsters)) {
     add(e.participantCode, {
@@ -177,8 +224,18 @@ const span = stamps.length
 const sections = [...byStudent.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, items]) => {
   const body = items.map((it) => {
     if (it.kind === "own") {
+      /* Name the parts that floated, rather than only counting them. "2
+         parts with nowhere to go" next to a picture of two ears and a nose
+         invites the reader to wonder which two; saying "ears, nose" closes
+         it, and sits right under the words that did not place them. */
+      const floats = [...new Set(it.floating || [])];
       return `<div class="run"><h3>their own build <span class="seq">#${it.seq}</span></h3>
-        <div class="row">${card(it.sig, "what the steps drew")}</div></div>`;
+        ${it.instruction ? `<pre>${esc(it.instruction).replace(/ \/ /g, "\n")}</pre>` : ""}
+        <div class="row">${card(it.sig, "what the steps drew")}</div>
+        ${floats.length ? `<p class="note">Nothing in those words said where the
+          <b>${esc(floats.join(", "))}</b> go, so ${floats.length === 1 ? "it was" : "they were"}
+          drawn loose. Any word the engine does not know as a part is ignored.</p>` : ""}
+      </div>`;
     }
     const name = it.engine === "ai" ? "AI engine" : "Exact engine";
     const cards = it.sigs.map((s, i) =>
@@ -227,6 +284,8 @@ const html = `<!doctype html>
              display:flex;flex-direction:column}
   figcaption span{font-family:var(--mono);font-size:10px}
   .fl{color:var(--fail)}
+  .note{font-size:12px;color:var(--ink-2);background:#f3f1e6;border:1px solid #e2ddc4;
+        border-radius:7px;padding:7px 10px;margin:10px 0 0;line-height:1.45}
   @media print{body{background:#fff}section{break-inside:avoid}}
 </style></head><body>
 <header>
