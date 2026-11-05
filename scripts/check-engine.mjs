@@ -240,6 +240,44 @@ for (const c of CASES) {
 }
 console.log(`ok   signature round trip   ${CASES.length} monsters redrawn byte-identical from the log`);
 
+/* NOTHING IS DRAWN OUTSIDE THE FRAME.
+ *
+ * A part can be emitted perfectly and still be invisible, if the view box
+ * does not reach it. That is not hypothetical: face parts never reported
+ * their extent, so "a blue blob with green eyes" drew the eyes above the
+ * body and cropped them off, and a monster of nothing but unplaced parts --
+ * "two ears and a big nose" -- came out as an empty box with a caption
+ * about parts having nowhere to go. Both looked like the tool was broken
+ * rather than like the instruction was underspecified, which is the one
+ * confusion this tool cannot afford.
+ *
+ * Checking the emitted geometry against the view box catches the whole
+ * class, including from parts nobody has written yet. */
+const FRAME_CASES = [
+  ...CASES.map((c) => w4wRun(c.t).scene),
+  // Only unplaced parts: no monster to measure from at all.
+  w4wRun("1. Add two ears.\n2. Add a big nose.").scene,
+  // A face on a body with no head.
+  w4wRun("1. Draw a blue blob with green eyes and long orange legs.").scene,
+  // A head that is the whole creature.
+  w4wRun("1. Draw a big green head.\n2. Add one big eye to the head.").scene,
+];
+let cropped = 0;
+for (const scene of FRAME_CASES) {
+  const svg = sceneSVG(scene);
+  const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number);
+  const [, vbTop, , vbH] = vb;
+  const ys = [...svg.matchAll(/\bcy="(-?[\d.]+)"/g)].map((m) => Number(m[1]));
+  const out = ys.filter((y) => y < vbTop || y > vbTop + vbH);
+  if (out.length) {
+    cropped++;
+    fail("a part was drawn outside the view box",
+      `viewBox ${vb.join(" ")} but shapes at y=${out.map(Math.round).join(", ")}`);
+  }
+}
+if (!cropped)
+  console.log(`ok   nothing cropped       ${FRAME_CASES.length} scenes, every shape inside its frame`);
+
 console.log(failures
   ? `\n${failures} FAILURE(S)`
   : "\nThe engine does what the lines say, and says what it did.");

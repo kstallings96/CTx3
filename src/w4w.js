@@ -926,6 +926,24 @@ function layout(scene) {
   if (b && b.shape === "wide") { rx = 54 * bs; ry = 28 * bs; }
   const bodyCy = GROUND - legLen - ry;
 
+  /* A BODY WITH NO HEAD WEARS ITS FACE ON THE BODY.
+   *
+   * The mirror of the case above, and it was missing. Eyes, nose, mouth,
+   * teeth and ears are all positioned off `headCy` and `hr` -- so with no
+   * head drawn they were laid out around a head that does not exist,
+   * floating in the space above the body. For a long time that was
+   * invisible, because the view box was measured from the parts that report
+   * their extent and the face is not one of them: the eyes were clipped
+   * clean off the top of the frame and simply never appeared.
+   *
+   * "draw a blue blob with green eyes and long orange legs" is the ordinary
+   * way to ask for this, and the blob is the face. */
+  if (b && !h) {
+    const faceR = Math.min(rx, ry);
+    return { rx, ry, bodyCy, hr: faceR, headCy: bodyCy, faceOnBody: true,
+      headShape: undefined, bodyShape: b.shape, faceR };
+  }
+
   const hr = 26 * scaleOf(h);
   const neck = 16;
   const headCy = bodyCy - ry - neck - hr;
@@ -1085,11 +1103,52 @@ function paintParts(scene, L, P, reach) {
 
 }
 
+/**
+ * The highest point anything in these SVG fragments actually reaches.
+ *
+ * A SAFETY NET UNDER `reach`, not a replacement for it. Each part is meant
+ * to report how far up it goes, and seven of them never did: eyes, nose,
+ * mouth, teeth, spots, stripes and legs. In ordinary use that is invisible,
+ * because every one of them sits inside a parent whose own reach already
+ * covers it -- eyes are on a head, spots are on a body.
+ *
+ * A FLOATING part has no parent. So a monster that was ONLY unplaced parts
+ * -- "two ears and a big nose", a real thing a student typed -- reported no
+ * extent at all, the view box fell back to its empty default, and the group
+ * was drawn entirely above it. The picture came out blank, with a caption
+ * underneath saying two parts had nowhere to go. It looked like the tool
+ * had failed rather than like the instruction had.
+ *
+ * Measuring what was emitted cannot be forgotten by the next part added.
+ * It only ever lowers `top`, so it can enlarge the frame and never crop it.
+ */
+function paintedTop(fragments) {
+  let t = Infinity;
+  const take = (v) => { if (Number.isFinite(v) && v < t) t = v; };
+  for (const f of fragments) {
+    // circles and ellipses: centre minus the vertical radius
+    for (const m of f.matchAll(/<(?:circle|ellipse)[^>]*?cy="(-?[\d.]+)"[^>]*?r(?:y)?="(-?[\d.]+)"/g))
+      take(+m[1] - +m[2]);
+    for (const m of f.matchAll(/<ellipse[^>]*?ry="(-?[\d.]+)"[^>]*?cy="(-?[\d.]+)"/g))
+      take(+m[2] - +m[1]);
+    for (const m of f.matchAll(/<rect[^>]*?\sy="(-?[\d.]+)"/g)) take(+m[1]);
+    for (const m of f.matchAll(/\sy[12]="(-?[\d.]+)"/g)) take(+m[1]);
+    for (const m of f.matchAll(/points="([^"]+)"/g))
+      for (const pt of m[1].trim().split(/\s+/)) take(+pt.split(",")[1]);
+    /* Paths are relative after the first move, so only the M is read. Every
+       path here starts at the part's anchor and curves a short way out, so
+       the move is within a stroke width of the true top. */
+    for (const m of f.matchAll(/\sd="M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/g)) take(+m[2]);
+  }
+  return t;
+}
+
 export function sceneSVG(scene) {
   const P = [];
   let top = GROUND;
   const reach = (y) => { if (y < top) top = y; };
   paintParts(scene, layout(scene), P, reach);
+  reach(paintedTop(P));
 
   /* THE PARTS NOBODY PLACED.
    *
@@ -1106,12 +1165,26 @@ export function sceneSVG(scene) {
     const lReach = (y) => { if (y < lTop) lTop = y; };
     const looseScene = { parts: scene.loose, order: looseNames, loose: {}, floating: [], ignored: [] };
     paintParts(looseScene, layout(looseScene), lp, lReach);
+    lReach(paintedTop(lp));
     if (lp.length) {
-      // Lift the loose group clear of the monster, and scale it down a
-      // little so a stray pair of arms cannot dominate the drawing.
-      const lift = top - GROUND - 18;
-      P.push(`<g transform="translate(0 ${lift}) scale(0.78)" transform-origin="${CX} ${GROUND}" opacity="0.95">${lp.join("")}</g>`);
-      reach(top - 18 - (GROUND - lTop) * 0.78);
+      /* NOTHING PLACED MEANS THERE IS NOTHING TO LIFT CLEAR OF.
+       *
+       * The lift exists so a stray pair of arms sits above the monster
+       * rather than through it. With no monster, lifting pushes the only
+       * thing on the page off the top of it -- which is what turned "two
+       * ears and a big nose" into an empty box. Drawn where they lay out,
+       * they are simply the picture, which is the honest rendering of an
+       * instruction that named parts and never said where any of them go. */
+      if (!Object.keys(scene.parts).length) {
+        P.push(`<g opacity="0.95">${lp.join("")}</g>`);
+        reach(lTop);
+      } else {
+        // Lift the loose group clear of the monster, and scale it down a
+        // little so a stray pair of arms cannot dominate the drawing.
+        const lift = top - GROUND - 18;
+        P.push(`<g transform="translate(0 ${lift}) scale(0.78)" transform-origin="${CX} ${GROUND}" opacity="0.95">${lp.join("")}</g>`);
+        reach(top - 18 - (GROUND - lTop) * 0.78);
+      }
     }
   }
 
