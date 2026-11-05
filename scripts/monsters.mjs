@@ -265,6 +265,8 @@ const html = `<!doctype html>
   .when{font-family:var(--mono);font-size:12px;color:var(--ink-2);margin:0 0 8px;
         background:#eef2ea;border:1px solid var(--line);border-radius:7px;padding:7px 10px;display:inline-block}
   .when code{font-size:11px;color:var(--muted)}
+  .caveat{font-size:12.5px;color:var(--ink-2);background:#f3f1e6;border:1px solid #e2ddc4;
+          border-radius:8px;padding:9px 12px;margin:10px 0 0;line-height:1.5;max-width:1100px}
   section{max-width:1100px;margin:0 auto 26px;background:var(--surface);
           border:1px solid var(--line);border-radius:12px;padding:16px 18px}
   h2{font-family:var(--mono);font-size:17px;margin:0 0 12px;letter-spacing:.08em;
@@ -292,11 +294,26 @@ const html = `<!doctype html>
   <h1>Monsters</h1>
   <p class="when">events from <b>${esc(span)}</b> &nbsp;·&nbsp; sheet made ${new Date().toISOString().slice(0, 16).replace("T", " ")}
     &nbsp;·&nbsp; <code>${esc(file)}</code></p>
-  <p class="sub">${built} drawing${built === 1 ? "" : "s"} from ${byStudent.size} participant${byStudent.size === 1 ? "" : "s"},
-  redrawn from the event log. No pictures were stored — each one is rebuilt from its
-  signature, which <code>check-engine.mjs</code> proves redraws byte-identically.
+  <p class="sub">${built} drawing${built === 1 ? "" : "s"} from ${byStudent.size} participant${byStudent.size === 1 ? "" : "s"}.
   A red border means parts were drawn with nowhere to attach.${
     skipped ? ` <strong>${skipped} row${skipped === 1 ? "" : "s"} carried no monster</strong> — logged before monsters were recorded.` : ""}</p>
+  ${/* THE HONEST CAVEAT, not buried. No picture is stored: what is stored is
+        the SCENE the engine understood, and these are redrawn from it with
+        TODAY'S drawing code. That makes them a reconstruction, not a
+        recording, and the difference is not academic -- a rendering bug
+        fixed after a session changes what its monsters look like here. It
+        happened: eyes on a body were drawn above it and clipped out of
+        frame, so a student saw an eyeless blob and this sheet, redrawn
+        after the fix, shows the eyes. The PARSE is unchanged and faithful;
+        the pixels are current. Anyone reading this as "what the student
+        saw" needs to know which they are looking at. */ ""}
+  <p class="caveat"><b>These are redrawn, not photographed.</b> What the log stores is the
+  scene the engine understood — the parts, what each attaches to, their colour, size and
+  count — and this sheet draws that with the <i>current</i> engine. The parse is exactly
+  what the student's words produced. The picture is how today's code draws it, so a
+  rendering fix made after a session will change its monsters here. If you need what was
+  literally on screen at the time, the <code>walkthrough_step</code> rows carry the
+  engine's own description from that moment.</p>
 </header>
 ${sections || "<section><p>No monsters in this log.</p></section>"}
 </body></html>`;
