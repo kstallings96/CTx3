@@ -159,6 +159,21 @@ for (const e of events) {
   }
 }
 
+/* WHEN THIS LOG IS FROM, stated at the top.
+ *
+ * A sheet that does not say its own date looks exactly like a sheet of the
+ * wrong data: you run the tool, open the file, and see monsters you do not
+ * recognise, with nothing on the page to tell you the export is three weeks
+ * old. That happened, and the time went on doubting the script rather than
+ * re-exporting. The range makes it a one-second check. */
+const stamps = events.map((e) => e.ts).filter(Boolean).sort();
+const day = (t) => String(t).slice(0, 10);
+const span = stamps.length
+  ? (day(stamps[0]) === day(stamps[stamps.length - 1])
+      ? day(stamps[0])
+      : `${day(stamps[0])} to ${day(stamps[stamps.length - 1])}`)
+  : "no timestamps in this log";
+
 const sections = [...byStudent.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, items]) => {
   const body = items.map((it) => {
     if (it.kind === "own") {
@@ -190,6 +205,9 @@ const html = `<!doctype html>
   header{max-width:1100px;margin:0 auto 26px}
   h1{font-size:26px;margin:0 0 4px}
   .sub{color:var(--muted);font-size:13.5px}
+  .when{font-family:var(--mono);font-size:12px;color:var(--ink-2);margin:0 0 8px;
+        background:#eef2ea;border:1px solid var(--line);border-radius:7px;padding:7px 10px;display:inline-block}
+  .when code{font-size:11px;color:var(--muted)}
   section{max-width:1100px;margin:0 auto 26px;background:var(--surface);
           border:1px solid var(--line);border-radius:12px;padding:16px 18px}
   h2{font-family:var(--mono);font-size:17px;margin:0 0 12px;letter-spacing:.08em;
@@ -213,6 +231,8 @@ const html = `<!doctype html>
 </style></head><body>
 <header>
   <h1>Monsters</h1>
+  <p class="when">events from <b>${esc(span)}</b> &nbsp;·&nbsp; sheet made ${new Date().toISOString().slice(0, 16).replace("T", " ")}
+    &nbsp;·&nbsp; <code>${esc(file)}</code></p>
   <p class="sub">${built} drawing${built === 1 ? "" : "s"} from ${byStudent.size} participant${byStudent.size === 1 ? "" : "s"},
   redrawn from the event log. No pictures were stored — each one is rebuilt from its
   signature, which <code>check-engine.mjs</code> proves redraws byte-identically.

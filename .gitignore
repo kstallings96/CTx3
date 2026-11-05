@@ -10,3 +10,8 @@ admin-password.txt
 
 # Output of `npm run monsters` — regenerate it, do not commit it.
 monsters.html
+
+# Exported study data. Never commit it — this repo is public.
+log.json
+*-log.json
+log*.json
