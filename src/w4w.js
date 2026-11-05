@@ -748,6 +748,33 @@ export function w4wRun(text) {
  * undercounted exactly the variation the activity exists to show, since an
  * unplaced part is what an underspecified instruction produces.
  */
+/**
+ * The drawing itself, small enough to keep on the row that made it.
+ *
+ * `sceneSignature` records what the engine UNDERSTOOD; this records what it
+ * DREW. They are not the same claim, and the difference surfaced the hard
+ * way: a redraw from a signature uses today's rendering code, so a bug fixed
+ * after a session silently rewrites what that session's monsters look like.
+ * Eyes on a body were being clipped out of frame, so a student saw an
+ * eyeless blob and the sheet, redrawn later, showed the eyes. Both were
+ * honest about the parse. Only one was a record of the screen.
+ *
+ * Kept compact because it rides in the event queue, and the final flush on
+ * pagehide has a hard 64KB ceiling across everything in flight. Dropping
+ * the accessibility attributes (the sheet re-adds them), collapsing
+ * whitespace and rounding coordinates to a tenth of a unit takes a typical
+ * monster to about a kilobyte and the busiest eight-part one to under five.
+ * A tenth of a unit is far finer than a pixel at any size this is shown.
+ */
+export function recordSVG(scene) {
+  return sceneSVG(scene)
+    .replace(/\s+role="img"|\s+aria-label="[^"]*"/g, "")
+    .replace(/-?\d+\.\d{2,}/g, (x) => String(Math.round(Number(x) * 10) / 10))
+    .replace(/>\s+</g, "><")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export function sceneSignature(scene) {
   const row = (name, p, floating) =>
     [name, floating ? "~" : (p.on || "-"), p.count ?? 1,

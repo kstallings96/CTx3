@@ -141,13 +141,32 @@ const esc = (x) => String(x ?? "").replace(/[&<>"]/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 /** One drawing plus its caption. */
-function card(sig, caption, note) {
+/**
+ * One drawing plus its caption.
+ *
+ * THE STORED SVG WINS. From 5 November the run records the picture it put
+ * on screen, so that is the one to show: it is what the student saw, and no
+ * later fix to the drawing code can alter it. Only when a row predates that
+ * -- or somehow lost it -- is the scene rebuilt from its signature and
+ * redrawn with today's engine, which is a reconstruction of the parse
+ * rather than a record of the screen. The two are marked differently,
+ * because a sheet that mixes them silently is how "this isn't what was
+ * produced in gameplay" becomes impossible to answer.
+ */
+let recorded = 0, redrawn = 0;
+function card(sig, caption, note, storedSvg) {
   const scene = rebuild(sig);
   const floating = scene.floating.length;
-  return `<figure class="m${floating ? " floats" : ""}">
-    ${sceneSVG(scene)}
+  const real = typeof storedSvg === "string" && storedSvg.startsWith("<svg");
+  if (real) recorded++; else redrawn++;
+  const svg = real
+    ? storedSvg.replace("<svg", `<svg role="img" aria-label="${esc(caption)}"`)
+    : sceneSVG(scene);
+  return `<figure class="m${floating ? " floats" : ""}${real ? "" : " redraw"}">
+    ${svg}
     <figcaption>${esc(caption)}${note ? `<span>${esc(note)}</span>` : ""}
     ${floating ? `<span class="fl">${floating} part${floating === 1 ? "" : "s"} with nowhere to go</span>` : ""}
+    ${real ? "" : `<span class="rd" title="No picture was stored for this run; redrawn from the scene with today's engine.">redrawn</span>`}
     </figcaption></figure>`;
 }
 
@@ -187,6 +206,7 @@ for (const e of events) {
 
   if (e.type === "instruction_executed" && p.monster) {
     add(e.participantCode, { kind: "own", sig: p.monster, seq: e.seq, ts: e.ts,
+      svg: typeof p.svg === "string" ? p.svg : null,
       instruction: lastText.get(thread) || null,
       floating: Array.isArray(p.partsFloating) ? p.partsFloating : [],
       placed: Array.isArray(p.partsPlaced) ? p.partsPlaced : [] });
@@ -194,7 +214,8 @@ for (const e of events) {
   } else if (e.type === "engine_run_complete" && Array.isArray(p.monsters)) {
     add(e.participantCode, {
       kind: "engine", engine: p.engine, instruction: p.instruction,
-      sigs: p.monsters, inferred: p.inferred || [], seq: e.seq, ts: e.ts,
+      sigs: p.monsters, svgs: Array.isArray(p.svgs) ? p.svgs : [],
+      inferred: p.inferred || [], seq: e.seq, ts: e.ts,
       distinct: p.distinctMonsters,
     });
     built += p.monsters.length;
@@ -231,7 +252,7 @@ const sections = [...byStudent.entries()].sort(([a], [b]) => a.localeCompare(b))
       const floats = [...new Set(it.floating || [])];
       return `<div class="run"><h3>their own build <span class="seq">#${it.seq}</span></h3>
         ${it.instruction ? `<pre>${esc(it.instruction).replace(/ \/ /g, "\n")}</pre>` : ""}
-        <div class="row">${card(it.sig, "what the steps drew")}</div>
+        <div class="row">${card(it.sig, "what the steps drew", "", it.svg)}</div>
         ${floats.length ? `<p class="note">Nothing in those words said where the
           <b>${esc(floats.join(", "))}</b> go, so ${floats.length === 1 ? "it was" : "they were"}
           drawn loose. Any word the engine does not know as a part is ignored.</p>` : ""}
@@ -239,7 +260,9 @@ const sections = [...byStudent.entries()].sort(([a], [b]) => a.localeCompare(b))
     }
     const name = it.engine === "ai" ? "AI engine" : "Exact engine";
     const cards = it.sigs.map((s, i) =>
-      card(s, "run " + (i + 1), it.inferred[i] ? "added: " + it.inferred[i].replace(/\+/g, ", ") : "")).join("");
+      card(s, "run " + (i + 1),
+        it.inferred[i] ? "added: " + it.inferred[i].replace(/\+/g, ", ") : "",
+        it.svgs[i])).join("");
     return `<div class="run"><h3>${esc(name)} <span class="seq">#${it.seq}</span>
         <span class="tally">${it.distinct} different out of ${it.sigs.length}</span></h3>
       ${it.instruction ? `<pre>${esc(it.instruction).replace(/ \/ /g, "\n")}</pre>` : ""}
@@ -286,6 +309,8 @@ const html = `<!doctype html>
              display:flex;flex-direction:column}
   figcaption span{font-family:var(--mono);font-size:10px}
   .fl{color:var(--fail)}
+  .rd{color:#8a7a3c;font-style:italic}
+  .m.redraw svg{border-style:dashed}
   .note{font-size:12px;color:var(--ink-2);background:#f3f1e6;border:1px solid #e2ddc4;
         border-radius:7px;padding:7px 10px;margin:10px 0 0;line-height:1.45}
   @media print{body{background:#fff}section{break-inside:avoid}}
@@ -307,13 +332,18 @@ const html = `<!doctype html>
         after the fix, shows the eyes. The PARSE is unchanged and faithful;
         the pixels are current. Anyone reading this as "what the student
         saw" needs to know which they are looking at. */ ""}
-  <p class="caveat"><b>These are redrawn, not photographed.</b> What the log stores is the
-  scene the engine understood — the parts, what each attaches to, their colour, size and
-  count — and this sheet draws that with the <i>current</i> engine. The parse is exactly
-  what the student's words produced. The picture is how today's code draws it, so a
-  rendering fix made after a session will change its monsters here. If you need what was
-  literally on screen at the time, the <code>walkthrough_step</code> rows carry the
-  engine's own description from that moment.</p>
+  <p class="caveat">${recorded && !redrawn
+    ? "<b>These are recordings.</b> Each drawing is the picture that was on screen when the run happened, stored with it. Later changes to the drawing code cannot alter them."
+    : recorded
+      ? `<b>${recorded} recorded, ${redrawn} redrawn.</b> A solid border is the picture that was actually on screen, stored with the run. A <i>dashed</i> border and a "redrawn" label mean no picture was kept for that row — it predates 5 November 2026 — so the scene was rebuilt from what the engine understood and drawn with today's code. The parse is faithful; the pixels are current.`
+      : `<b>These are redrawn, not photographed.</b> Every row here predates
+        5 November 2026, when runs began keeping their own picture. What the log
+        stores for them is the scene the engine understood — the parts, what each
+        attaches to, their colour, size and count — and this sheet draws that with
+        the <i>current</i> engine. The parse is exactly what the student's words
+        produced; the pixels are today's. For what was literally on screen, the
+        <code>walkthrough_step</code> rows carry the engine's own description from
+        that moment.`}</p>
 </header>
 ${sections || "<section><p>No monsters in this log.</p></section>"}
 </body></html>`;

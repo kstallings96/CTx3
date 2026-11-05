@@ -4,7 +4,7 @@ import { GRADE, rosterIndex, normalizeCode, isInstructor } from "./roster.js";
 import { hash } from "./lib/hash.js";
 import { RULES, RULE_ORDER, TIERS, LADDER, PILLS, PILL_LABEL, HELD_OUT,
          askText, comboKey, cap, matchClaim, answerFor, sequenceFor } from "./rules.js";
-import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, sceneSignature, w4wPrecision,
+import { freshScene, w4wStep, w4wRun, w4wCheck, w4wInferred, sceneSVG, sceneSignature, recordSVG, w4wPrecision,
          buildPrompt, checkSafe, SAFE_MESSAGE, W4W_TAPE } from "./w4w.js";
 import { PASSWORDS, PASSWORD_SALT } from "./passwords.js";
 import { TILES, tileById, defaultOpen, hrefFor } from "./tiles.js";
@@ -1522,6 +1522,13 @@ function w4wPlay() {
            pipeline records -- so "what did each student make" is one query
            across both halves of the tool rather than two shapes of row. */
         monster: sceneSignature(W4W.scene),
+        /* AND THE DRAWING ITSELF. The signature says what the engine
+           understood; this says what was on the screen. A redraw from the
+           signature uses whatever the rendering code looks like on the day
+           somebody asks, so a bug fixed after a session rewrites that
+           session's pictures. Keeping the SVG makes the record immune to
+           every later fix -- including the ones not written yet. */
+        svg: recordSVG(W4W.scene),
         failurePoint: dead < 0 ? null : dead, quadrant: "solo" });
       emit("attempt_evaluated", { attemptId: id, partsPlaced: chk.placed,
         partsFloating: [...new Set(W4W.scene.floating)], ...prec,
@@ -1634,6 +1641,9 @@ async function w4wRunFive() {
     distinctMonsters: new Set(done.map((r) => sceneSignature(r.scene))).size,
     instruction: text.replace(/\n/g, " / "),
     monsters: done.map((r) => sceneSignature(r.scene)),
+    // What was actually on screen, per run. See the note on `svg` above:
+    // a redraw from a signature uses today's code, a stored SVG is the day's.
+    svgs: done.map((r) => recordSVG(r.scene)),
     inferred: done.map((r) => (r.inferred || []).join("+")) });
   W4W.running = false; renderW4W();
 }
