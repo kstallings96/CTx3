@@ -20,7 +20,7 @@
  * the monster is the student's business. What this checks is narrower and
  * mechanical: the engine must never claim two incompatible things.
  */
-import { w4wRun, w4wCheck, PARTS, sceneSignature, sceneSVG, freshScene } from "../src/w4w.js";
+import { w4wRun, w4wStep, w4wCheck, PARTS, sceneSignature, sceneSVG, freshScene } from "../src/w4w.js";
 
 let failures = 0;
 const fail = (what, detail) => {
@@ -148,6 +148,12 @@ const CASES = [
      still float -- which is the contrast the whole compare panel rests on. */
   { t: "1. Draw a body.\n2. Add two eyes to the head.",
     drew: ["body"], floats: ["eyes"] },
+
+  /* Verbatim from a warm-up. The parts it CAN act on must still land --
+     "human shape" and "spiky fur" name nothing it knows, and are now SAID
+     rather than swallowed, which is checked separately below. */
+  { t: "Green big human shape with alien looking ears and a big nose with spiky fur",
+    drew: [], floats: ["ears", "nose"] },
 ];
 
 for (const c of CASES) {
@@ -267,8 +273,23 @@ for (const scene of FRAME_CASES) {
   const svg = sceneSVG(scene);
   const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number);
   const [, vbTop, , vbH] = vb;
-  const ys = [...svg.matchAll(/\bcy="(-?[\d.]+)"/g)].map((m) => Number(m[1]));
-  const out = ys.filter((y) => y < vbTop || y > vbTop + vbH);
+  /* TRANSFORMS COUNT. The loose group is drawn inside a <g> that translates
+     and sometimes scales it, so a raw `cy` is not where the shape lands.
+     Reading the attribute and ignoring the wrapper flagged a drawing that
+     was correct -- a check that cries wolf gets deleted, so it has to do
+     the arithmetic the browser does. */
+  const ys = [];
+  const GROUP = /<g transform="translate\(0 (-?[\d.]+)\)(?: scale\(([\d.]+)\))?"(?: transform-origin="[\d.]+ (-?[\d.]+)")?[^>]*>([\s\S]*?)<\/g>/g;
+  let rest = svg, m;
+  while ((m = GROUP.exec(svg))) {
+    const [, dy, sc, oy, inner] = m;
+    const k = sc ? Number(sc) : 1, o = oy ? Number(oy) : 0;
+    for (const c of inner.matchAll(/\bcy="(-?[\d.]+)"/g))
+      ys.push((Number(c[1]) - o) * k + o + Number(dy));
+    rest = rest.replace(inner, "");
+  }
+  for (const c of rest.matchAll(/\bcy="(-?[\d.]+)"/g)) ys.push(Number(c[1]));
+  const out = ys.filter((y) => y < vbTop - 1 || y > vbTop + vbH + 1);
   if (out.length) {
     cropped++;
     fail("a part was drawn outside the view box",
@@ -277,6 +298,34 @@ for (const scene of FRAME_CASES) {
 }
 if (!cropped)
   console.log(`ok   nothing cropped       ${FRAME_CASES.length} scenes, every shape inside its frame`);
+
+/* WORDS IT DOES NOT KNOW ARE SAID, NOT SWALLOWED.
+ *
+ * Ignoring them is correct -- it can only draw the parts it has. Ignoring
+ * them silently is what made the tool look broken: a student asked for a
+ * human shape with spiky fur, got two ears and a nose, and was told
+ * nothing. The other half matters just as much: a line made entirely of
+ * words it DOES know must stay quiet, or the notice becomes wallpaper. */
+const SAYS = [
+  { t: "Green big human shape with alien looking ears and a big nose with spiky fur",
+    want: ["human", "shape", "alien", "spiky", "fur"] },
+  { t: "1. Draw a round green body.", want: [] },
+  { t: "2. Add three big red eyes to the head.", want: [] },
+  { t: "Add two tiny ears on top of the head.", want: [] },
+];
+let quiet = 0;
+for (const c of SAYS) {
+  const r = w4wStep(freshScene(), c.t);
+  const got = r.unknown || [];
+  const missing = c.want.filter((w) => !got.includes(w));
+  const extra = got.filter((w) => !c.want.includes(w));
+  if (missing.length || extra.length)
+    fail("the wrong words were reported as unknown",
+      JSON.stringify(c.t) + `\n        missing ${JSON.stringify(missing)} extra ${JSON.stringify(extra)}`);
+  else quiet++;
+}
+if (quiet === SAYS.length)
+  console.log(`ok   unknown words said    ${SAYS.length} lines, and silent when every word is known`);
 
 console.log(failures
   ? `\n${failures} FAILURE(S)`

@@ -140,6 +140,51 @@ const LOCATION = new RegExp("^(?:" + PLACE_WORDS + ")\\b");
 /* The plural forms in PARTS that do not end in "s". Kept beside the part
    list so adding an irregular word and forgetting this is one glance, not a
    silent off-by-a-lot in the count. */
+/**
+ * WORDS THE MACHINE SIMPLY DOES NOT KNOW.
+ *
+ * It ignores them, which is correct -- it can only draw the sixteen parts
+ * it has -- but it used to ignore them SILENTLY, and that is what made it
+ * look broken. "Green big human shape with alien looking ears and a big
+ * nose with spiky fur" drew two ears and a nose and said nothing about the
+ * rest, so a student who asked for a human shape with spiky fur got neither
+ * and no reason why. The honest report is short: here are the words I did
+ * not understand.
+ *
+ * Everything the engine CAN act on is excluded: parts, colours, sizes,
+ * shapes, numbers, verbs, and the words that say where something goes. What
+ * is left over is the grammar of ordinary English -- articles, pronouns,
+ * conjunctions -- which would be noise to list, so it goes too. Anything
+ * still standing is a word the student meant and the machine dropped.
+ */
+const GRAMMAR = new Set([
+  "a", "an", "the", "of", "and", "or", "but", "with", "plus", "that", "this",
+  "these", "those", "it", "its", "his", "her", "their", "there", "is", "are",
+  "be", "has", "have", "some", "any", "each", "every", "all", "both", "then",
+  "also", "please", "lets", "let", "us", "we", "you", "your", "my", "me",
+  "for", "so", "very", "really", "just", "like", "looks", "looking", "side",
+  "sides", "top", "bottom", "middle", "centre", "center", "front", "back",
+  "left", "right", "end", "tip", "each other", "one another",
+]);
+
+function unknownWords(line) {
+  const known = new Set();
+  for (const def of Object.values(PARTS)) for (const w of def.words) known.add(w);
+  for (const c of Object.keys(COLOURS)) known.add(c);
+  for (const z of Object.keys(SIZES)) known.add(z);
+  for (const z of SHAPES) known.add(z);
+  for (const n of Object.keys(NUMS)) known.add(n);
+  const out = [];
+  for (const raw of String(line).toLowerCase().split(/[^a-z]+/)) {
+    if (!raw || raw.length < 3) continue;          // a, an, of, up -- noise
+    if (known.has(raw) || GRAMMAR.has(raw)) continue;
+    if (VERBS.test(raw)) continue;
+    if (new RegExp("^(?:" + PLACE_WORDS + ")$").test(raw)) continue;
+    if (!out.includes(raw)) out.push(raw);
+  }
+  return out;
+}
+
 const IRREGULAR_PLURALS = new Set(["feet", "teeth", "antennae"]);
 const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
@@ -381,9 +426,34 @@ export function w4wStep(scene, line) {
       const named = findPart(splitAt(text).subject) || findPart(text);
       if (named) lastNamed = named;
     }
-    if (acted) return { ok: true, msg: out.join(" "), ...(anyUnplaced ? { unplaced: true } : {}) };
+    if (acted) return withUnknowns({ ok: true, msg: out.join(" "), ...(anyUnplaced ? { unplaced: true } : {}) }, t);
   }
-  return applyOne(scene, t);
+  return withUnknowns(applyOne(scene, t), t);
+}
+
+/**
+ * Append "I do not know X" to whatever the step already said.
+ *
+ * Said ONCE, at the end, and only when there is something to say. The
+ * machine's own account of what it drew comes first, because that is the
+ * answer to "what happened"; this is the answer to "why isn't the rest of
+ * it there", which is the second question and only sometimes asked.
+ *
+ * Capped at five words. A line of pure description -- "a terrifying hairy
+ * eight-armed beast from the swamp" -- would otherwise produce a sentence
+ * longer than the instruction, and a wall of text is read as an error
+ * message rather than as a list.
+ */
+function withUnknowns(result, line) {
+  const unknown = unknownWords(line);
+  if (!unknown.length) return result;
+  const shown = unknown.slice(0, 5);
+  const more = unknown.length - shown.length;
+  const words = shown.map((w) => "“" + w + "”").join(", ")
+    + (more ? " and " + more + " more" : "");
+  const say = "I do not know " + words + ", so I left "
+    + (unknown.length === 1 ? "it" : "them") + " out.";
+  return { ...result, unknown, msg: result.msg ? result.msg + " " + say : say };
 }
 
 /**
@@ -1143,6 +1213,23 @@ function paintedTop(fragments) {
   return t;
 }
 
+/** The lowest point anything in these fragments reaches. Mirror of paintedTop. */
+function paintedBottom(fragments) {
+  let b = -Infinity;
+  const take = (v) => { if (Number.isFinite(v) && v > b) b = v; };
+  for (const f of fragments) {
+    for (const m of f.matchAll(/<(?:circle|ellipse)[^>]*?cy="(-?[\d.]+)"[^>]*?r(?:y)?="(-?[\d.]+)"/g))
+      take(+m[1] + +m[2]);
+    for (const m of f.matchAll(/<ellipse[^>]*?ry="(-?[\d.]+)"[^>]*?cy="(-?[\d.]+)"/g))
+      take(+m[2] + +m[1]);
+    for (const m of f.matchAll(/\sy[12]="(-?[\d.]+)"/g)) take(+m[1]);
+    for (const m of f.matchAll(/points="([^"]+)"/g))
+      for (const pt of m[1].trim().split(/\s+/)) take(+pt.split(",")[1]);
+    for (const m of f.matchAll(/\sd="M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/g)) take(+m[2]);
+  }
+  return Number.isFinite(b) ? b : GROUND;
+}
+
 export function sceneSVG(scene) {
   const P = [];
   let top = GROUND;
@@ -1176,8 +1263,15 @@ export function sceneSVG(scene) {
        * they are simply the picture, which is the honest rendering of an
        * instruction that named parts and never said where any of them go. */
       if (!Object.keys(scene.parts).length) {
-        P.push(`<g opacity="0.95">${lp.join("")}</g>`);
-        reach(lTop);
+        /* SIT THEM ON THE GROUND. The loose layout puts face parts where a
+           head would be, so with no monster they hang near the top of a
+           tall frame with the whole body's worth of empty space beneath --
+           three small shapes marooned in a box, which looks like something
+           failed to load. Dropped to the ground line they read as what they
+           are: the parts that were named, with nothing to attach them to. */
+        const drop = GROUND - 8 - paintedBottom(lp);
+        P.push(`<g transform="translate(0 ${Math.max(0, drop)})" opacity="0.95">${lp.join("")}</g>`);
+        reach(lTop + Math.max(0, drop));
       } else {
         // Lift the loose group clear of the monster, and scale it down a
         // little so a stray pair of arms cannot dominate the drawing.
